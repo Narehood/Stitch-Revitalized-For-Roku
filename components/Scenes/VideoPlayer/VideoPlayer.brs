@@ -280,7 +280,24 @@ sub playContent()
         end if
         m.video = m.top.CreateChild("StitchVideo")
         m.video.qualityOptions = quality_options
+
+        ' CRITICAL FIX: Set low latency status from content metadata
+        latencyPreference = get_user_setting("preferred.latency", "low")
+        isLowLatencyRequested = (latencyPreference = "low")
+
+        ' Check if we actually have low latency streams
+        hasLowLatencyStreams = false
+        if m.top.content <> invalid and m.top.content.lowLatencyStreamsAvailable <> invalid
+            hasLowLatencyStreams = (m.top.content.lowLatencyStreamsAvailable > 0)
+        end if
+
+        ' Pass the actual low latency availability to StitchVideo
+        m.video.isActualLowLatency = (isLowLatencyRequested and hasLowLatencyStreams)
+
         ' ? "[VideoPlayer] Created StitchVideo component for live stream"
+        ' ? "[VideoPlayer] Low latency requested: "; isLowLatencyRequested
+        ' ? "[VideoPlayer] Low latency streams available: "; hasLowLatencyStreams
+        ' ? "[VideoPlayer] Actual low latency mode: "; m.video.isActualLowLatency
         ' StitchVideo will observe its own selectedQuality field
     else
         m.video = m.top.CreateChild("CustomVideo")

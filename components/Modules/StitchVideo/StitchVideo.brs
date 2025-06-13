@@ -74,7 +74,96 @@ function init()
     setupLiveUI()
     updateLatencyIndicator()
 
+    ' CRITICAL FIX: Configure low latency at initialization
+    configureForLowLatency()
+
     ' ? "[StitchVideo] Initialized for live stream"
+end function
+
+sub configureForLowLatency()
+    latencyPreference = get_user_setting("preferred.latency", "low")
+    isLowLatency = (latencyPreference = "low")
+
+    ? "[StitchVideo] ===== LOW LATENCY CONFIGURATION ====="
+    ? "[StitchVideo] Latency preference: "; latencyPreference
+    ? "[StitchVideo] Applying low latency config: "; isLowLatency
+
+    if isLowLatency
+        ' Check device compatibility first
+        if isLowLatencySupported()
+            ' Enable LL-HLS properties
+            m.top.enableLowLatencyHLS = true
+            m.top.hlsOptimization = "lowLatency"
+            m.top.enablePartialSegments = true
+            m.top.enablePreloadHints = true
+            m.top.enableBlockingPlaylistReload = true
+
+            ' Configure aggressive buffering for low latency
+            m.top.bufferingConfig = {
+                initialBufferingMs: 100,
+                minBufferMs: 200,
+                maxBufferMs: 800,
+                bufferForPlaybackMs: 100,
+                bufferForPlaybackAfterRebufferMs: 200,
+                rebufferMs: 100
+            }
+
+            ' Configure adaptive bitrate for low latency
+            m.top.adaptiveBitrateConfig = {
+                initialBandwidthBps: 5000000,
+                maxInitialBitrate: 8000000,
+                minDurationForQualityIncreaseMs: 30000,
+                minDurationForQualityDecreaseMs: 1000,
+                minDurationToRetainAfterDiscardMs: 500,
+                bandwidthMeterSlidingWindowMs: 2000
+            }
+
+            ' Disable decoder compatibility for better performance
+            m.top.enableDecoderCompatibility = false
+            m.top.maxVideoDecodeResolution = "1440p"
+
+            ' Set actual low latency status
+            m.top.isActualLowLatency = true
+
+            ? "[StitchVideo] ✓ Low latency configuration applied successfully"
+        else
+            ' Device doesn't support LL-HLS properly
+            m.top.isActualLowLatency = false
+            ? "[StitchVideo] ⚠️ Device doesn't support LL-HLS, using normal latency"
+        end if
+    else
+        ' User prefers normal latency
+        m.top.isActualLowLatency = false
+        ? "[StitchVideo] Normal latency mode selected"
+    end if
+    ? "[StitchVideo] ========================================"
+end sub
+
+function isLowLatencySupported() as boolean
+    di = CreateObject("roDeviceInfo")
+    model = di.GetModel()
+    version = di.GetVersion()
+
+    ' Check for minimum Roku OS version that supports LL-HLS
+    ' Roku OS 10.0+ generally has better LL-HLS support
+    versionParts = version.Split(".")
+    if versionParts.Count() > 0
+        majorVersion = Val(versionParts[0])
+        if majorVersion >= 10
+            return true
+        end if
+    end if
+
+    ' Some older high-end models may support it
+    supportedModels = ["4800", "4802", "4640", "3941", "3940"]
+    for each supportedModel in supportedModels
+        if model.InStr(supportedModel) > -1
+            return true
+        end if
+    end for
+
+    ' ? "[StitchVideo] Device model "; model; " with OS "; version; " may have limited LL-HLS support"
+    return false
 end function
 
 sub setupLiveUI()
