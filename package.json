@@ -9,7 +9,7 @@
         "@rokucommunity/bslint": "^0.8.32",
         "brighterscript-formatter": "^1.7.15",
         "ghooks": "^2.0.4",
-        "ropm": "^0.10.34"
+        "ropm": "^0.10.35"
     },
     "dependencies": {
         "@npmcli/fs": "^4.0.0",
