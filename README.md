@@ -1,5 +1,5 @@
-[![CI](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml)
-[![GitHub release](https://img.shields.io/github/release/jeremy-albinet/Stitch-Revitalized-For-Roku?include_prereleases=&sort=semver&color=blue)](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/releases/)
+[![CI](https://github.com/Narehood/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml/badge.svg)](https://github.com/Narehood/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/release/Narehood/Stitch-Revitalized-For-Roku?include_prereleases=&sort=semver&color=blue)](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/)
 
 # Stitch Revitalized
 
@@ -28,7 +28,7 @@ Add the channel directly from Roku's channel store:
 
 **Sideload (manual)**
 
-1. [Download the latest release ZIP](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/releases/latest)
+1. [Download the latest release ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/latest)
 2. Enable Developer Mode on your Roku (Settings > System > Advanced System Settings > Developer Mode)
 3. Open `http://<your-roku-ip>` in a browser and upload the ZIP
 
@@ -40,11 +40,11 @@ Streams using **Twitch Enhanced Broadcasting** deliver audio and video as two se
 
 Roku has officially confirmed they will not support this packaging shape. Twitch is aware but does not plan a server-side change. Affected streams are visible as "Enhanced Broadcasting" on the broadcaster's dashboard. Regular (non-EB) streams are unaffected.
 
-**Workaround:** the self-hosted [`fmp4-demux-proxy`](./fmp4-demux-proxy/README.md) splits the bundled segments into separate audio and video HLS renditions on the fly, producing a CMAF-conformant manifest Roku accepts. Configure under **Settings → Proxy URL** in the app. See [issue #14](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/issues/14) for the full investigation and current status.
+**Workaround:** the self-hosted [`fmp4-demux-proxy`](./fmp4-demux-proxy/README.md) splits the bundled segments into separate audio and video HLS renditions on the fly, producing a CMAF-conformant manifest Roku accepts. Configure under **Settings → Proxy URL** in the app. See [GitHub Issues](https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues) for the full investigation and current status.
 
 ## Contributing
 
-Found a bug or have a feature request? Open a [GitHub Issue](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/issues). Check for duplicates first.
+Found a bug or have a feature request? Open a [GitHub Issue](https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues). Check for duplicates first.
 
 Pull requests are welcome. All contributions must be submitted under the [Unlicense](./LICENSE).
 

@@ -67,7 +67,7 @@ docker compose logs -f
 The image is also published to GitHub Container Registry:
 
 ```bash
-docker run -p 8080:8080 ghcr.io/jeremy-albinet/fmp4-demux-proxy:main
+docker run -p 8080:8080 ghcr.io/narehood/fmp4-demux-proxy:main
 ```
 
 ### Point the Stitch Channel at the Proxy

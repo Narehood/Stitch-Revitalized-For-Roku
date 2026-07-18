@@ -14,8 +14,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku"
-"Bug Tracker" = "https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/issues"
+Repository = "https://github.com/Narehood/Stitch-Revitalized-For-Roku"
+"Bug Tracker" = "https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues"
 
 [project.optional-dependencies]
 dev = [
