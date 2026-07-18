@@ -1,4 +1,4 @@
-function updateViewersDisplay()
+sub updateViewersDisplay()
     suffix = ""
     if m.top.contentType = "LIVE"
         suffix = tr("Viewers")
@@ -13,12 +13,12 @@ function updateViewersDisplay()
         suffix = tr("Viewers")
     end if
     m.top.viewersDisplay = Substitute("{0} {1}", numberToText(m.top.viewersCount), suffix)
-end function
+end sub
 
-function updateFollowerDisplay()
+sub updateFollowerDisplay()
     suffix = tr("Followers")
     m.top.followerDisplay = Substitute("{0} {1}", numberToText(m.top.followerCount), suffix)
-end function
+end sub
 
 sub updateRelativePublishDate()
     m.top.relativePublishDate = getRelativeTimePublished(m.top.datePublished)
@@ -32,17 +32,12 @@ end sub
 sub updateType()
     if m.top.contentType = "LIVE"
         m.top.live = true
-        m.top.streamFormat = "hls"
     end if
     if m.top.contentType = "VOD"
         m.top.live = false
-        m.top.streamFormat = "hls"
     end if
     if m.top.contentType = "CLIP"
         m.top.live = false
-        m.top.streamFormat = "mp4"
-    end if
-    if m.top.contentType = "GAME"
     end if
 end sub
 

@@ -1,24 +1,21 @@
 sub init()
-    m.validateOauthToken = CreateObject("roSGNode", "TwitchApiTask")
-    m.validateOauthToken.observeField("response", "ValidateUserLogin")
-    m.validateOauthToken.functionName = "validateOauthToken"
-    m.validateOauthToken.control = "run"
-    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-    ' Anything important needs to run before this sleep.
-    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-    sleep(10000)
+    analyticsTask = CreateObject("roSGNode", "AnalyticsTask")
+    analyticsTask.control = "RUN"
+    m.global.addFields({ analyticsTask: analyticsTask })
+
+    m.validateOauthToken = createApiTask("validateOauthToken", "ValidateUserLogin")
     VersionJobs()
     m.top.backgroundUri = ""
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.activeNode = invalid
-    m.followedStreamBar = m.top.findNode("followedStreamsBar")
-    m.followedStreamBar.observeField("contentSelected", "onFollowSelected")
+    m.recentBar = m.top.findNode("recentlyWatchedBar")
+    m.recentBar.observeField("contentSelected", "onRecentSelected")
     m.menu = m.top.findNode("MenuBar")
+    m.menu.showSearchIcon = false
     m.menu.menuOptionsText = [
-        "Home",
-        "Categories",
-        "LiveChannels"
         "Following",
+        "Browse",
+        "Search",
     ]
     m.menu.observeField("buttonSelected", "onMenuSelection")
     m.menu.setFocus(true)
@@ -26,22 +23,44 @@ sub init()
         set_setting("active_user", "$default$")
     end if
     if get_user_setting("device_code") = invalid
-        m.getDeviceCodeTask = CreateObject("roSGNode", "TwitchApiTask")
-        m.getDeviceCodeTask.observeField("response", "handleDeviceCode")
-        m.getDeviceCodeTask.request = {
-            type: "getRendezvouzToken"
-        }
-        m.getDeviceCodeTask.functionName = m.getDeviceCodeTask.request.type
-        m.getDeviceCodeTask.control = "run"
+        m.getDeviceCodeTask = createApiTask("getRendezvouzToken", "handleDeviceCode")
     else
         onMenuSelection()
     end if
     m.footprints = []
 
-
+    sendAppOpenedEvents()
 end sub
 
-function cleanUserData()
+sub sendAppOpenedEvents()
+    deviceInfo = CreateObject("roDeviceInfo")
+    osVersion = deviceInfo.GetOSVersion()
+    deviceModel = deviceInfo.GetModel()
+    priorCrashReason = m.global.priorExitReason ' set by main.brs before scene creation
+
+    rokuOsVersion = osVersion.major.toStr() + "." + osVersion.minor.toStr() + "." + osVersion.revision.toStr()
+
+    appOpenProps = {
+        device_model: deviceModel,
+        roku_os_version: rokuOsVersion
+    }
+    if priorCrashReason <> invalid and priorCrashReason <> ""
+        appOpenProps.prior_exit_reason = priorCrashReason
+    end if
+
+    trackEvent("app_opened", appOpenProps)
+
+    isLoggedIn = get_setting("active_user", "$default$") <> "$default$" and get_user_setting("access_token") <> invalid
+    analyticsIdentify({
+        app_version: m.global.appInfo.Version.Version,
+        device_model: deviceModel,
+        roku_os_version: rokuOsVersion,
+        is_dev: m.global.appInfo.IsDev,
+        is_logged_in: isLoggedIn
+    })
+end sub
+
+sub cleanUserData()
     active_user = get_setting("active_user", "$default$")
     if active_user <> "$default$"
         unset_user_setting("access_token")
@@ -52,16 +71,14 @@ function cleanUserData()
         ? "active User: "; get_setting("active_user", "$default$")
     else
         for each key in getRegistryKeys("$default$")
-            if key <> "temp_device_code"
-                if key <> "device_code"
-                    unset_user_setting(key)
-                end if
+            if key <> "temp_device_code" and key <> "device_code"
+                unset_user_setting(key)
             end if
         end for
     end if
-end function
+end sub
 
-function ValidateUserLogin()
+sub ValidateUserLogin()
     if m.validateOauthToken?.response?.tokenValid <> invalid
         tokenValid = m.validateOauthToken.response.tokenValid
     else
@@ -74,7 +91,7 @@ function ValidateUserLogin()
         m.menu.updateUserIcon = true
         ? "pause"
     end if
-end function
+end sub
 
 function focusedMenuItem()
     focusedItem = ""
@@ -84,73 +101,186 @@ function focusedMenuItem()
     return focusedItem
 end function
 
-function VersionJobs()
+sub VersionJobs()
     if m.global.appinfo.version.major.toInt() = 2 and m.global.appinfo.version.minor.toInt() = 3
         ' Clean Up Job for switching default profile name to "$default$" as "default" is technically a possible twitch user.
         if get_setting("active_user") <> invalid and get_setting("active_user") = "default"
             set_setting("active_user", "$default$")
         end if
     end if
-end function
 
-function refreshFollowBar()
-    m.followedStreamBar.refreshFollowBar = true
-end function
+    lastSeenVersion = get_setting("last_seen_version")
 
-function handleDeviceCode()
+    changelog = getChangelog()
+    sortedVersions = getSortedChangelogVersions(changelog)
+
+    ' Collect changelog entries newer than lastSeenVersion.
+    ' When lastSeenVersion is invalid (first install), all entries are shown.
+    pendingLines = []
+    for each v in sortedVersions
+        isNew = (lastSeenVersion = invalid) or (compareVersions(v, lastSeenVersion) > 0)
+        if isNew and changelog[v] <> invalid
+            if pendingLines.count() > 0
+                pendingLines.push("")
+            end if
+            pendingLines.push("v" + v)
+            for each line in changelog[v]
+                pendingLines.push("  - " + line)
+            end for
+        end if
+    end for
+
+    if pendingLines.count() > 0
+        m.pendingChangelog = pendingLines
+    end if
+end sub
+
+sub showChangelogDialog()
+    if m.pendingChangelog = invalid or m.pendingChangelog.count() = 0 then return
+
+    lines = m.pendingChangelog
+    lines.push("")
+    lines.push("Found a bug or have a suggestion? Visit bit.ly/roku-twitch")
+
+    dialog = createObject("roSGNode", "StandardMessageDialog")
+    dialog.title = "What's New"
+    dialog.message = lines
+    dialog.width = 1100
+    dialog.maxWidth = 1100
+    dialog.buttons = ["Got it"]
+    dialog.observeField("buttonSelected", "onChangelogDialogButtonSelected")
+    dialog.observeField("wasClosed", "onChangelogDialogClosed")
+
+    scene = m.top.getScene()
+    if scene <> invalid
+        scene.dialog = dialog
+        m.changelogDialog = dialog
+    end if
+    m.pendingChangelog = invalid
+end sub
+
+' Fired when the user clicks "Got it" — persist version and close.
+sub onChangelogDialogButtonSelected()
+    set_setting("last_seen_version", m.global.appInfo.Version.Version)
+    if m.changelogDialog <> invalid
+        m.changelogDialog.unobserveField("buttonSelected")
+        m.changelogDialog.unobserveField("wasClosed")
+        m.changelogDialog.close = true
+        m.changelogDialog = invalid
+    end if
+end sub
+
+' Fired when the dialog is dismissed via Back without clicking "Got it".
+' Persists last_seen_version so the dialog is not reshown for this version.
+sub onChangelogDialogClosed()
+    set_setting("last_seen_version", m.global.appInfo.Version.Version)
+    if m.changelogDialog <> invalid
+        m.changelogDialog.unobserveField("buttonSelected")
+        m.changelogDialog.unobserveField("wasClosed")
+        m.changelogDialog = invalid
+    end if
+end sub
+
+sub handleDeviceCode()
     if m.getDeviceCodeTask <> invalid
         response = m.getDeviceCodeTask.response
+        if response = invalid then return
         set_user_setting("device_code", response.device_code)
-        m.followedStreamBar.callFunc("refreshFollowBar")
     end if
     onMenuSelection()
-end function
+end sub
 
 function buildNode(name)
-    if name <> invalid
-        newNode = createObject("roSGNode", name)
-        newNode.id = name
-        newNode.translation = "[0, 0]"
-        newNode.observeField("backPressed", "onBackPressed")
-        newNode.observeField("contentSelected", "onContentSelected")
-        if name <> "GamePage" and name <> "ChannelPage" and name <> "VideoPlayer" and name <> "StreamerChannelPage"
-            m.top.insertChild(newNode, 1)
-        else
-            m.top.appendChild(newNode)
-        end if
-        if name = "LoginPage" or name = "StreamerChannelPage"
-            newNode.observeField("finished", "onLoginFinished")
-        end if
-        return newNode
+    if name = invalid then return invalid
+
+    ' Dispatch to scene-specific factory
+    if name = "Following"
+        newNode = build_Following()
+    else if name = "Browse"
+        newNode = build_Browse()
+    else if name = "Search"
+        newNode = build_Search()
+    else if name = "Settings"
+        newNode = build_Settings()
+    else if name = "LoginPage"
+        newNode = build_LoginPage()
+    else if name = "ChannelPage"
+        newNode = build_ChannelPage()
+    else if name = "GamePage"
+        newNode = build_GamePage()
+    else if name = "VideoPlayer"
+        newNode = build_VideoPlayer()
+    else
+        return invalid
     end if
+
+    if newNode = invalid then return invalid
+
+    ' Shared observer wiring
+    newNode.observeField("backPressed", "onBackPressed")
+    newNode.observeField("contentSelected", "onContentSelected")
+
+    ' Tree placement
+    if name = "GamePage" or name = "ChannelPage" or name = "VideoPlayer"
+        m.top.appendChild(newNode)
+    else
+        m.top.insertChild(newNode, 1)
+    end if
+
+    return newNode
 end function
+
+' Tear down activeNode and any footprints (back-stack) so login/logout
+' transitions don't leave stale, detached scenes wired up with observers.
+sub teardownAllScenes()
+    if m.activeNode <> invalid
+        m.activeNode.unobserveField("backPressed")
+        m.activeNode.unobserveField("contentSelected")
+        m.activeNode.unobserveField("finished")
+        m.top.removeChild(m.activeNode)
+        m.activeNode = invalid
+    end if
+    for each node in m.footprints
+        if node <> invalid
+            node.unobserveField("backPressed")
+            node.unobserveField("contentSelected")
+            node.unobserveField("finished")
+            m.top.removeChild(node)
+        end if
+    end for
+    m.footprints = []
+end sub
 
 sub onLoginFinished()
     m.menu.updateUserIcon = true
     if get_user_setting("device_code") = invalid
-        m.getDeviceCodeTask = CreateObject("roSGNode", "TwitchApiTask")
-        m.getDeviceCodeTask.observeField("response", "handleDeviceCode")
-        m.getDeviceCodeTask.request = {
-            type: "getRendezvouzToken"
-        }
-        m.getDeviceCodeTask.functionName = m.getDeviceCodeTask.request.type
-        m.getDeviceCodeTask.control = "run"
-    else
-        m.followedStreamBar.callFunc("refreshFollowBar")
+        m.getDeviceCodeTask = createApiTask("getRendezvouzToken", "handleDeviceCode")
     end if
-    ' if get_setting("active_user", "$default$") <> "$default$"
-    '     if m.activeNode.id.toStr() = "LoginPage" or "StreamerChannelPage"
-    '         m.top.removeChild(m.activeNode)
-    '         m.activeNode = invalid
-    '         onMenuSelection()
-    '     end if
-    ' end if
+    teardownAllScenes()
+    m.activeNode = buildNode("Following")
+    if m.activeNode <> invalid
+        m.activeNode.setFocus(true)
+    end if
 end sub
 
-function onMenuSelection()
-    ' refreshFollowBar()
+sub onLogoutFinished()
+    m.menu.updateUserIcon = true
+    teardownAllScenes()
+    ' Rebuild Settings so the logout option disappears
+    m.activeNode = buildNode("Settings")
+    if m.activeNode <> invalid
+        m.activeNode.setFocus(true)
+    end if
+end sub
+
+sub onMenuSelection()
+    menuItem = focusedMenuItem()
+    if menuItem <> ""
+        trackEvent("tab_visited", { tab: menuItem })
+    end if
+    isFirstLoad = (m.activeNode = invalid)
     ' If user is already logged in, show them their user page
-    if focusedMenuItem() = "LoginPage" and get_setting("active_user", "$default$") <> "$default$"
+    if menuItem = "LoginPage" and get_setting("active_user", "$default$") <> "$default$"
         content = createObject("roSGNode", "TwitchContentNode")
         content.streamerDisplayName = get_user_setting("display_name")
         content.streamerLogin = get_user_setting("login")
@@ -159,37 +289,51 @@ function onMenuSelection()
         content.contentType = "STREAMER"
         m.activeNode.contentSelected = content
     else
-        if m.menu.focusedChild <> invalid
-            if m.activeNode <> invalid
-                if m.activeNode.id.toStr() <> focusedMenuItem()
-                    m.top.removeChild(m.activeNode)
-                    m.activeNode = invalid
-                end if
-            end if
+        if m.menu.focusedChild = invalid then return
+        if m.activeNode <> invalid and m.activeNode.id.toStr() <> menuItem
+            m.top.removeChild(m.activeNode)
+            m.activeNode = invalid
         end if
         if m.activeNode = invalid
-            m.activeNode = buildNode(focusedMenuItem())
+            m.activeNode = buildNode(menuItem)
+            if m.activeNode = invalid then return
         end if
         m.activeNode.setfocus(true)
+        if isFirstLoad
+            showChangelogDialog()
+        end if
     end if
-end function
+end sub
 
-sub onFollowSelected()
-    content = m.followedStreamBar.contentSelected
+sub onRecentSelected()
+    content = m.recentBar.contentSelected
+    if content = invalid then return
+
+    ' Ensure bar focus state is cleared regardless of which code path triggered this
+    m.recentBar.itemHasFocus = false
+
     if m.activeNode <> invalid
+        ' Save focus before pushing
+        focused = lastFocusedChild(m.activeNode)
+        if focused <> invalid and focused.id <> m.activeNode.id
+            m.activeNode.lastFocus = focused
+        else
+            m.activeNode.lastFocus = invalid
+        end if
         m.footprints.push(m.activeNode)
         m.activeNode = invalid
     end if
-    if m.activeNode = invalid
-        m.activeNode = buildNode("ChannelPage")
-    end if
+    m.activeNode = buildNode("ChannelPage")
+    if m.activeNode = invalid then return
     m.activeNode.contentRequested = content
-    m.activeNode.setfocus(true)
+    m.activeNode.setFocus(true)
 end sub
 
 sub onContentSelected()
+    if m.activeNode = invalid or m.activeNode.contentSelected = invalid then return
+    id = invalid
     if m.activeNode.contentSelected.contentType = "STREAMER"
-        id = "StreamerChannelPage"
+        id = "ChannelPage"
     else if m.activeNode.contentSelected.contentType = "GAME"
         id = "GamePage"
     else if m.activeNode.contentSelected.contentType = "LIVE" or m.activeNode.contentSelected.contentType = "VOD" or m.activeNode.contentSelected.contentType = "USER"
@@ -202,82 +346,109 @@ sub onContentSelected()
     content = createObject("roSGNode", "TwitchContentNode")
     setTwitchContentFields(content, holdContent)
     if m.activeNode <> invalid
+        ' Save focus before pushing
+        focused = lastFocusedChild(m.activeNode)
+        if focused <> invalid and focused.id <> m.activeNode.id
+            m.activeNode.lastFocus = focused
+        else
+            m.activeNode.lastFocus = invalid
+        end if
         m.footprints.push(m.activeNode)
         m.activeNode = invalid
     end if
     if m.activeNode = invalid
         m.activeNode = buildNode(id)
+        if m.activeNode = invalid then return
     end if
     m.activeNode.contentRequested = content
     m.activeNode.setfocus(true)
 end sub
 
 sub onBackPressed()
-    ? "backpress detected from: "; m.activeNode.id
-    fmi = focusedMenuItem()
-    if m.activeNode.backPressed <> invalid and m.activeNode.backPressed
-        ? "fmi ping"
-        if m.activeNode.id = "StreamerChannelPage"
-            if m.footprints[0].id = "LoginPage"
-                m.footprints.pop()
-            end if
+    if m.activeNode.backPressed = invalid or not m.activeNode.backPressed then return
+    if m.footprints.Count() > 0
+        if m.activeNode <> invalid
             m.top.removeChild(m.activeNode)
-            m.menu.buttonFocus = 0
         end if
-        if m.footprints.Count() > 0
-            m.top.removeChild(m.activeNode)
-            m.activeNode = m.footprints.pop()
-            m.activeNode.setFocus(false)
-            if focusedMenuItem() = "LoginPage"
-                ' if m.menu.buttonFocused = 5
-                m.menu.setFocus(true)
-            end if
+        m.activeNode = m.footprints.pop()
+        ' Restore focus to previously focused child if available
+        if m.activeNode.lastFocus <> invalid
+            m.activeNode.lastFocus.setFocus(true)
         else
+            m.activeNode.setFocus(true)
+        end if
+        if focusedMenuItem() = "LoginPage"
             m.menu.setFocus(true)
         end if
+    else
+        m.menu.setFocus(true)
     end if
 end sub
 
 function onKeyEvent(key, press) as boolean
-    if press
-        ? "Hero Scene Key Event: "; key
-        if key = "replay"
-            ? "----------- Currently Focused Child ----------" + chr(34); m.top.focusedChild
-            ? "----------- Last Focused Child ----------" + chr(34); lastFocusedChild(m.top.focusedChild)
+    if not press then return false
+    if m.activeNode = invalid then return false
+
+    if key = "replay"
+        return true
+    end if
+
+    if key = "up"
+        if m.activeNode.id <> "GamePage" and m.activeNode.id <> "ChannelPage" and m.activeNode.id <> "VideoPlayer"
+            m.recentBar.itemHasFocus = false
+            m.menu.setFocus(true)
+        end if
+        return true
+    end if
+
+    if key = "down"
+        m.activeNode.setFocus(true)
+        return true
+    end if
+
+    if key = "left"
+        if m.activeNode.id <> "GamePage" and m.activeNode.id <> "ChannelPage" and m.activeNode.id <> "VideoPlayer"
+            m.recentBar.setFocus(true)
+            m.recentBar.itemHasFocus = true
             return true
         end if
-        if key = "up"
-            if m.activeNode.id <> "GamePage" and m.activeNode.id <> "ChannelPage" and m.activeNode.id <> "VideoPlayer"
-                m.followedStreamBar.itemHasFocus = false
-                m.menu.setFocus(true)
-            end if
-        end if
-        if key = "down"
+    end if
+
+    if key = "right"
+        if m.recentBar.itemHasFocus = true
+            m.recentBar.itemHasFocus = false
             m.activeNode.setFocus(true)
-        end if
-        if key = "left"
-            if m.activeNode.id <> "GamePage" and m.activeNode.id <> "ChannelPage" and m.activeNode.id <> "VideoPlayer"
-                if get_user_setting("FollowBarOption", "true") = "true"
-                    m.activeNode.setFocus(false)
-                    m.followedStreamBar.setFocus(true)
-                    m.followedStreamBar.itemHasFocus = true
-                    return true
-                end if
-            end if
-        end if
-        if key = "right"
-            if get_user_setting("FollowBarOption", "true") = "true"
-                m.followedStreamBar.itemHasFocus = false
-                m.activeNode.setFocus(true)
-                return true
-            end if
+            return true
         end if
     end if
-    ' if key = "up"
-    '     m.top.setFocus(true)
-    '     return true
-    ' end if
-    if not press return false
-    ? "KEY EVENT: "; key press
+
+    return false
 end function
 
+sub onDestroy()
+    if m.changelogDialog <> invalid
+        m.changelogDialog.unobserveField("buttonSelected")
+        m.changelogDialog.unobserveField("wasClosed")
+        m.changelogDialog = invalid
+    end if
+    if m.recentBar <> invalid
+        m.recentBar.unobserveField("contentSelected")
+    end if
+    if m.menu <> invalid
+        m.menu.unobserveField("buttonSelected")
+    end if
+    if m.activeNode <> invalid
+        m.activeNode.unobserveField("backPressed")
+        m.activeNode.unobserveField("contentSelected")
+        m.activeNode.unobserveField("finished")
+    end if
+    for each node in m.footprints
+        if node <> invalid
+            node.unobserveField("backPressed")
+            node.unobserveField("contentSelected")
+            node.unobserveField("finished")
+        end if
+    end for
+    m.validateOauthToken = destroyTask(m.validateOauthToken, "response")
+    m.getDeviceCodeTask = destroyTask(m.getDeviceCodeTask, "response")
+end sub

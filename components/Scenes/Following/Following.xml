@@ -1,27 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="Following" extends="SceneManagerGroup" initialFocus="exampleRowList">
+<component name="Following" extends="SceneManagerGroup" initialFocus="homeRowList">
     <interface>
         <field id="doOffline" type="bool" value="false" />
     </interface>
     <script type="text/brightscript" uri="Following.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <children>
         <RowList
-            id="exampleRowList"
+            id="homeRowList"
             rowLabelOffset="[[0,10]]"
             rowLabelFont="font:LargeBoldSystemFont"
-            translation="[ 130, 120 ]"
+            translation="[94, 80]"
             itemComponentName="VideoItem"
-            numRows="50"
             rowItemSize="[[320,180]]"
-            rowItemSpacing="[[30,0]]"
+            rowItemSpacing="[[30,30]]"
             itemSize="[1280,295]"
             itemSpacing="[0,0]"
             showRowLabel="[ true ]"
-            focusBitmapUri="pkg:/images/focusIndicator.9.png"
+            focusBitmapUri="pkg:/images/focusindicator.9.png"
             vertFocusAnimationStyle="fixedFocus"
-            rowFocusAnimationStyle="floatingFocus"
+            rowFocusAnimationStyle="fixedFocus"
         />
     </children>
 

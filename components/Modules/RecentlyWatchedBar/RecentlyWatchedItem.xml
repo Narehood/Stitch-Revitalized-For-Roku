@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="RecentlyWatchedItem" extends="Group">
+    <interface>
+        <!-- Set all item data at once via a single AA field -->
+        <field id="itemData" type="assocarray" onChange="onDataChanged" />
+        <!-- Parent bar drives focus state -->
+        <field id="focused" type="bool" value="false" onChange="onFocusChanged" />
+        <!-- Set by RecentlyWatchedBar after live status fetch -->
+        <field id="isLive" type="bool" value="false" onChange="onIsLiveChanged" />
+    </interface>
+
+    <script type="text/brightscript" uri="RecentlyWatchedItem.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+
+    <children>
+        <Group id="root">
+            <CirclePoster
+                id="avatar"
+                width="54"
+                height="54"
+                outlinecolor="0x00000000"
+                backgroundVisible="false"
+            />
+            <!-- Focus ring rendered after avatar so it paints on top -->
+            <Poster
+                id="selectionIndicator"
+                uri="pkg:/images/focus_ring.png"
+                blendColor="0xA970FFFF"
+                visible="false"
+                width="54"
+                height="54"
+                translation="[0, 0]"
+            />
+            <!-- Live indicator dot — sibling of CirclePoster (not nested) because
+                 CirclePoster masks its children to a circle, clipping the dot. -->
+            <Poster
+                id="liveDot"
+                uri="pkg:/images/live_dot.png"
+                width="16"
+                height="16"
+                translation="[38, 38]"
+                visible="false"
+            />
+        </Group>
+    </children>
+</component>

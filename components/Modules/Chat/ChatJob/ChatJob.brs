@@ -1,27 +1,34 @@
-function init()
+sub init()
     m.top.functionName = "main"
     m.delay = 29
-end function
+end sub
 
-function loginToChat(tcpListen)
+sub loginToChat(tcpListen)
     tcpListen.SendStr("CAP REQ :twitch.tv/tags twitch.tv/commands" + Chr(13) + Chr(10))
     user_auth_token = get_user_setting("access_token")
-    m.loggedinUserName = get_user_setting("login")
-    if m.loggedInUsername <> "" and user_auth_token <> invalid and user_auth_token <> ""
-        '? "PASS "
+    m.loggedInUsername = get_user_setting("login")
+    if m.loggedInUsername <> invalid and m.loggedInUsername <> "" and user_auth_token <> invalid and user_auth_token <> ""
         tcpListen.SendStr("PASS oauth:" + user_auth_token + Chr(13) + Chr(10))
-        '? "USER "
-        tcpListen.SendStr("USER " + m.loggedinUsername + " 8 * :" + m.loggedinUsername + Chr(13) + Chr(10))
-        '? "NICK "
-        tcpListen.SendStr("NICK " + m.loggedinUsername + Chr(13) + Chr(10))
+        tcpListen.SendStr("USER " + m.loggedInUsername + " 8 * :" + m.loggedInUsername + Chr(13) + Chr(10))
+        tcpListen.SendStr("NICK " + m.loggedInUsername + Chr(13) + Chr(10))
     else
         tcpListen.SendStr("PASS SCHMOOPIIE" + Chr(13) + Chr(10))
         tcpListen.SendStr("NICK justinfan32006" + Chr(13) + Chr(10))
     end if
+end sub
+
+function reconnectToChat(tcpListen, addr) as object
+    tcpListen.Close()
+    tcpListen = createObject("roStreamSocket")
+    tcpListen.SetSendToAddress(addr)
+    tcpListen.notifyReadable(true)
+    tcpListen.Connect()
+    loginToChat(tcpListen)
+    tcpListen.SendStr("JOIN #" + m.top.channel + Chr(13) + Chr(10))
+    return tcpListen
 end function
 
-function main()
-    ? "[ChatJob] - main"
+sub main()
     if m.top.channel <> ""
         receivedNewMessage = false
         tcpListen = createObject("roStreamSocket")
@@ -36,7 +43,6 @@ function main()
         tcpListen.IsWritable()
         tcpListen.IsException()
         tcpListen.eSuccess()
-        ? "[ChatJob] - JOIN - "; m.top.channel
         tcpListen.SendStr("JOIN #" + m.top.channel + Chr(13) + Chr(10))
         queue = createObject("roArray", 300, true)
         waitingComment = ""
@@ -54,11 +60,7 @@ function main()
                 end while
             end if
             if tcpListen.GetCountRcvBuf() = 0 and tcpListen.IsReadable()
-                tcpListen = createObject("roStreamSocket")
-                tcpListen.SetSendToAddress(addr)
-                tcpListen.Connect()
-                loginToChat(tcpListen)
-                tcpListen.SendStr("JOIN #" + m.top.channel + Chr(13) + Chr(10))
+                tcpListen = reconnectToChat(tcpListen, addr)
             end if
             if not received = ""
                 if Left(received, 4) = "PING"
@@ -75,54 +77,66 @@ function main()
                 if _parsedMessage?.command?.command <> invalid
                     command = _parsedMessage.command.command
                     if command <> "PRIVMSG" and command <> "USERNOTICE" and command <> "USERSTATE"
-                        ? "Chat Command: "; FormatJson(_parsedMessage, 256)
+                        ' ? "Chat Command: "; FormatJson(_parsedMessage, 256)
                     end if
                     if command = "USERNOTICE" or command = "USERSTATE"
-                        ? "pauseable event"
                         sleep(5)
+                    else if command = "RECONNECT"
+                        ? getLogTimestamp(); " [ChatJob] Server requested reconnect, reconnecting..."
+                        tcpListen = reconnectToChat(tcpListen, addr)
+                        queue.clear()
+                    else if command = "CLEARMSG" or command = "CLEARCHAT"
+                        ' Discard moderation events — no display_name/message for the renderer
+                        queue.pop()
                     end if
                 end if
-                currentTimestamp = CreateObject("roDateTime").AsSeconds()
-                if _parsedMessage?.tags?.tmi_sent_ts <> invalid
-                    commentTimeStamp = Val(_parsedMessage.tags.tmi_sent_ts.left(10), 10)
-                    commentAge = currentTimestamp - commentTimestamp
-                    if m.top.forceLive = true
-                        sendWaitingMessage = false
-                        m.top.nextCommentObj = MessageParser(queue.pop())
-                    else if commentAge > m.delay ' measured in seconds
-                        m.top.nextCommentObj = MessageParser(queue.pop())
-                    end if
-                    if sendWaitingMessage <> invalid
-                        if sendWaitingMessage = true
-                            if commentAge >= m.delay
-                                sendWaitingMessage = false
-                                ' m.top.nextCommentObj = MessageParser("display-name=System;user-type= :test!test@test.tmi.twitch.tv PRIVMSG #test :ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream  ")
-                            else
-                                if queue[0] <> invalid
-                                    if receivedNewMessage
-                                        m.top.nextCommentObj = MessageParser(queue[0])
-                                        receivedNewMessage = false
+                if queue.count() = 0
+                    ' Skip timestamp processing after RECONNECT cleared the queue
+                    m.top.readyForNextComment = true
+                end if
+                if queue.count() > 0
+                    currentTimestamp = CreateObject("roDateTime").AsSeconds()
+                    if _parsedMessage?.tags?.tmi_sent_ts <> invalid
+                        commentTimeStamp = Val(_parsedMessage.tags.tmi_sent_ts.left(10), 10)
+                        commentAge = currentTimestamp - commentTimeStamp
+                        if m.top.forceLive = true
+                            sendWaitingMessage = false
+                            m.top.nextCommentObj = MessageParser(queue.pop())
+                        else if commentAge > m.delay ' measured in seconds
+                            m.top.nextCommentObj = MessageParser(queue.pop())
+                        end if
+                        if sendWaitingMessage <> invalid
+                            if sendWaitingMessage = true
+                                if commentAge >= m.delay
+                                    sendWaitingMessage = false
+                                    ' m.top.nextCommentObj = MessageParser("display-name=System;user-type= :test!test@test.tmi.twitch.tv PRIVMSG #test :ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream || ReSyncing Chat To Stream  ")
+                                else
+                                    if queue[0] <> invalid
+                                        if receivedNewMessage
+                                            m.top.nextCommentObj = MessageParser(queue[0])
+                                            receivedNewMessage = false
+                                        end if
                                     end if
                                 end if
                             end if
                         end if
+                    else
+                        ' This will discard anything in the queue that doesn't have "tmi-sent-ts"
+                        queue.pop()
                     end if
-                else
-                    ' This will discard anything in the queue that doesn't have "tmi-sent-ts"
-                    queue.pop()
                 end if
             end if
         end while
     end if
-end function
+end sub
 
 
 function MessageParser(message)
     try
         parsedMessage = {
-            tags: {}
-            source: {}
-            command: {}
+            tags: {},
+            source: {},
+            command: {},
             parameters: ""
         }
         rawTagsComponent = invalid
@@ -146,13 +160,13 @@ function MessageParser(message)
         end if
 
         endIdx = message.InStr(idx, ":")
-        if (endIdx = -1)
+        if endIdx = -1
             endIdx = message.len()
         end if
 
         rawCommandComponent = message.mid(idx, endIdx).trim()
 
-        if (endidx <> message.len())
+        if endIdx <> message.len()
             idx = endIdx + 1
             rawParametersComponent = message.mid(idx)
         end if
@@ -184,7 +198,7 @@ end function
 
 function parseTags(tags)
     tagsToIgnore = {
-        "client-nonce": invalid
+        "client-nonce": invalid,
         "flags": invalid
     }
     dictParsedtags = {}
@@ -207,7 +221,7 @@ function parseTags(tags)
                 end for
                 dictParsedtags[parsedTag[0].replace("-", "_")] = dict
             else
-                dictParsedTags[parsedTag[0].replace("-", "_")] = invalid
+                dictParsedtags[parsedTag[0].replace("-", "_")] = invalid
             end if
         else if parsedTag[0] = "emotes"
             if tagValue <> invalid
@@ -220,7 +234,7 @@ function parseTags(tags)
                     for each position in positions
                         positionParts = position.split("-")
                         textPositions.push({
-                            startPosition: positionParts[0]
+                            startPosition: positionParts[0],
                             endPosition: positionParts[1]
                         })
                     end for
@@ -233,7 +247,7 @@ function parseTags(tags)
         else if parsedTag[0] = "emote-sets"
             if tagValue <> invalid
                 emoteSetIds = tagValue.split(",")
-                dictParsedTags[parsedTag[0].replace("-", "_")] = emoteSetIds
+                dictParsedtags[parsedTag[0].replace("-", "_")] = emoteSetIds
             end if
         else
             if tagsToIgnore.DoesExist(parsedTag[0])
@@ -251,7 +265,7 @@ function parseParameters(rawParameterscomponent, command)
     idx = 0
     commandParts = rawParameterscomponent.mid((idx + 1)).trim()
     paramsidx = commandParts.InStr(" ")
-    if paramsIdx = -1
+    if paramsidx = -1
         command.botCommand = commandParts.mid(0)
     else
         command.botCommand = commandParts.mid(0, paramsidx)
@@ -271,7 +285,7 @@ function parseSource(rawSourceComponent)
             host = sourceParts[0]
         end if
         return {
-            nick: nick
+            nick: nick,
             host: host.trim()
         }
     else
@@ -286,13 +300,13 @@ function parseCommand(rawCommandComponent)
     commandParts = rawCommandComponent.split(" ")
     if commandParts[0] = "JOIN" or commandParts[0] = "PART" or commandParts[0] = "NOTICE" or commandParts[0] = "HOSTTARGET" or commandParts[0] = "PRIVMSG"
         parsedCommand = {
-            command: commandParts[0]
+            command: commandParts[0],
             channel: commandParts[1]
         }
     else if commandParts[0] = "USERNOTICE"
         ' User Subscribed Event
         parsedCommand = {
-            command: commandParts[0]
+            command: commandParts[0],
             channel: commandParts[1]
         }
     else if commandParts[0] = "PING"
@@ -305,7 +319,7 @@ function parseCommand(rawCommandComponent)
             capRequestEnabled = true
         end if
         parsedCommand = {
-            command: commandParts[0]
+            command: commandParts[0],
             isCapRequestEnabled: capRequestEnabled
         }
     else if commandParts[0] = "GLOBALUSERSTATE"
@@ -314,8 +328,8 @@ function parseCommand(rawCommandComponent)
         }
     else if commandParts[0] = "USERSTATE" or commandParts[0] = "ROOMSTATE"
         parsedCommand = {
-            command: commandParts[0]
-            channel: commandPArts[1]
+            command: commandParts[0],
+            channel: commandParts[1]
         }
     else if commandParts[0] = "RECONNECT"
         ? "The Twitch IRC server is about to terminate the connection for maintenance."
@@ -323,7 +337,11 @@ function parseCommand(rawCommandComponent)
             command: commandParts[0]
         }
     else if commandParts[0] = "CLEARMSG" or commandParts[0] = "CLEARCHAT"
-        ? "Twitch is requesting a message to be cleared"; formatJSON(commandParts, 256)
+        ' ? "Twitch is requesting a message to be cleared"; formatJSON(commandParts, 256)
+        parsedCommand = {
+            command: commandParts[0],
+            channel: commandParts[1]
+        }
     else if commandParts[0] = "WHISPER"
         ? "WhisperReceived"; formatJSON(commandParts, 256)
     else if commandParts[0] = "421"
@@ -332,11 +350,11 @@ function parseCommand(rawCommandComponent)
     else if commandParts[0] = "001"
         ' Welcome Message
         parsedCommand = {
-            command: commandParts[0]
+            command: commandParts[0],
             channel: commandParts[1]
         }
     else if commandParts[0] = "002" or commandParts[0] = "003" or commandParts[0] = "004" or commandParts[0] = "353" or commandParts[0] = "366" or commandParts[0] = "372" or commandParts[0] = "375" or commandParts[0] = "376"
-        ? "Numeric Message: "; formatJSON(commandParts, 256)
+        ' ? "Numeric Message: "; formatJSON(commandParts, 256)
         return invalid
     else
         ? "Unexpected Command: ";formatJSON(commandParts, 256)

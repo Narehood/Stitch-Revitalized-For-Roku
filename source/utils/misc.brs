@@ -69,6 +69,7 @@ function formatTime(time) as string
 end function
 
 function div_ceiling(a as integer, b as integer) as integer
+    if a = 0 then return 0
     if a < b then return 1
     if int(a / b) = a / b
         return a / b
@@ -257,21 +258,23 @@ function inArray(haystack, needle) as boolean
     return false
 end function
 
-function toString(input, replaceInvalid = false) as string
+function toString(input) as string
     if LCase(type(input)) = "rostring" or LCase(type(input)) = "string"
         return input
     end if
 
-    if replaceInvalid
-        if input = invalid
-            return ""
-        end if
+    if input = invalid
+        return ""
     end if
+
     return str(input)
 end function
 
 function select(arr, start = invalid, finish = invalid, step_ = 1):
-    if step_ = 0 then print "ValueError: slice step cannot be zero" : stop
+    if step_ = 0
+        ? "ValueError: slice step cannot be zero"
+        return []
+    end if
     if start = invalid then if step_ > 0 then start = 0 else start = arr.count() - 1
     if finish = invalid then if step_ > 0 then finish = arr.count() - 1 else finish = 0
     if start < 0 then start = arr.count() + start 'negative counts backwards from the end
@@ -288,8 +291,24 @@ function TimeStamp()
     return date.AsSeconds()
 end function
 
+' Returns local-time wall clock as "MM-DD HH:MM:SS.mmm" - matches the format
+' used by Roku's own beacon/sdkl debug lines. Use to prefix tagged debug
+' prints when timing matters. roDateTime is UTC by default; ToLocalTime() is
+' not idempotent so it's only called once per fresh object.
+function getLogTimestamp() as string
+    date = CreateObject("roDateTime")
+    date.ToLocalTime()
+    mm = leftPad(date.GetMonth().toStr(), "0", 2)
+    dd = leftPad(date.GetDayOfMonth().toStr(), "0", 2)
+    hh = leftPad(date.GetHours().toStr(), "0", 2)
+    nn = leftPad(date.GetMinutes().toStr(), "0", 2)
+    ss = leftPad(date.GetSeconds().toStr(), "0", 2)
+    ms = leftPad(date.GetMilliseconds().toStr(), "0", 3)
+    return mm + "-" + dd + " " + hh + ":" + nn + ":" + ss + "." + ms
+end function
 
-function setTwitchContentFields(twitchContentNode, fields)
+
+sub setTwitchContentFields(twitchContentNode, fields)
     if fields.contentId <> invalid
         twitchContentNode.contentId = fields.contentId
     end if
@@ -323,9 +342,6 @@ function setTwitchContentFields(twitchContentNode, fields)
     if fields.streamerProfileImageUrl <> invalid
         twitchContentNode.streamerProfileImageUrl = fields.streamerProfileImageUrl
     end if
-    if fields.followerCount <> invalid
-        twitchContentNode.followerCount = fields.followerCount
-    end if
     if fields.gameDisplayName <> invalid
         twitchContentNode.gameDisplayName = fields.gameDisplayName
     end if
@@ -347,10 +363,10 @@ function setTwitchContentFields(twitchContentNode, fields)
     if fields.datePublished <> invalid
         twitchContentNode.datePublished = fields.datePublished
     end if
-end function
+end sub
 
 ' Helper function to add and set fields of a content node
-function AddAndSetFields(node as object, aa as object)
+sub AddAndSetFields(node as object, aa as object)
     'This gets called for every content node -- no logging since it's pretty verbose
     addFields = {}
     setFields = {}
@@ -363,7 +379,7 @@ function AddAndSetFields(node as object, aa as object)
     end for
     node.setFields(setFields)
     node.addFields(addFields)
-end function
+end sub
 
 
 'Create a row of content
@@ -404,7 +420,7 @@ function createGrid(list as object)
 end function
 
 
-sub numberToText(number as object) as object
+function numberToText(number as object) as object
     result = ""
     if number < 1000
         result = number.toStr()
@@ -414,12 +430,12 @@ sub numberToText(number as object) as object
         r = CreateObject("roRegex", "([0-9]+\.[1-9])|([0-9]+)", "")
         result = r.Match(n)[0] + "K"
     else
-        n = (number / 1000 * 1000).toStr()
+        n = (number / 1000000).toStr()
         r = CreateObject("roRegex", "([0-9]+\.[1-9])|([0-9]+)", "")
         result = r.Match(n)[0] + "M"
     end if
     return result
-end sub
+end function
 
 
 function getRelativeTimePublished(timePublished as string) as string
@@ -471,4 +487,20 @@ function getRelativeTimePublished(timePublished as string) as string
         return elapsedTime.ToStr() + " years ago"
     end if
 
+end function
+
+' Validates a deep property chain exists and is valid
+' Returns true if root is valid and all keys in path exist and resolve to valid values
+' Uses case-insensitive key lookup (LookupCI)
+function isChainValid(root as dynamic, path as string) as boolean
+    if not isValid(root) then return false
+    if path = "" then return true
+    parts = path.Split(".")
+    node = root
+    for each p in parts
+        if not isValid(node) then return false
+        if type(node) <> "roAssociativeArray" then return false
+        node = node.LookupCI(p)
+    end for
+    return isValid(node)
 end function

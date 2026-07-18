@@ -1,0 +1,103 @@
+' Query live status for a list of logins (up to 12).
+' Returns an AA mapping login (lowercase) -> true if live, false otherwise.
+' Returns an empty AA on network/GQL failure — callers treat missing keys as offline.
+' Works without auth (device_code only).
+' m.top.request.params.logins must be an array of login strings.
+function getLiveStatusForLogins() as object
+    logins = m.top.request.params.logins
+    if logins = invalid or logins.Count() = 0
+        m.top.response = {}
+        m.top.control = TaskControl.STOP
+        return invalid
+    end if
+
+    ' Build a raw GQL query with one alias per login.
+    ' e.g.  u0: user(login: "somelogin") { stream { id } }
+    ' Logins are validated against Twitch's allowed charset before embedding.
+    fields = ""
+    loginPattern = CreateObject("roRegex", "^[A-Za-z0-9_]+$", "")
+    for i = 0 to logins.Count() - 1
+        login = logins[i]
+        if not loginPattern.IsMatch(login) then continue for
+        fields = fields + "u" + i.toStr() + ": user(login: """ + login + """) { login stream { id } } "
+    end for
+    if fields = ""
+        m.top.response = {}
+        m.top.control = TaskControl.STOP
+        return invalid
+    end if
+    gqlQuery = "{ " + fields + "}"
+
+    rsp = TwitchGraphQLRequest({ query: gqlQuery })
+
+    result = {}
+    if rsp <> invalid and rsp.data <> invalid
+        for i = 0 to logins.Count() - 1
+            key = "u" + i.toStr()
+            login = LCase(logins[i])
+            userData = rsp.data[key]
+            if userData <> invalid
+                result[login] = userData.stream <> invalid
+            else
+                result[login] = false
+            end if
+        end for
+    end if
+
+    m.top.response = result
+    m.top.control = TaskControl.STOP
+    return invalid
+end function
+
+sub getTwitchBookmarks()
+    if get_setting("active_user", "$default$") <> "$default$"
+        rsp = TwitchGraphQLRequest({
+            "operationName": "queryUserViewedVideo",
+            "variables": {},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "e249447c070b095eb599cceec239bbca567e30080795789f85bc25db3f7a27ad"
+                }
+            }
+        })
+        if rsp?.data?.currentUser?.viewedVideos?.edges <> invalid
+            videoBookmarks = {}
+            for each edge in rsp.data.currentUser.viewedVideos.edges
+                if edge.node = invalid then continue for
+                videoId = edge.node.id
+                positionSecs = edge.history.position
+                videoBookmarks[videoId] = Int(positionSecs).toStr()
+            end for
+            try
+                set_user_setting("VideoBookmarks", FormatJson(videoBookmarks, 256))
+            catch e
+                ?"Error Saving Bookmarks "; e
+            end try
+        end if
+    end if
+    m.top.control = TaskControl.STOP
+end sub
+
+sub updateUserViewedVideo()
+    if get_setting("active_user", "$default$") <> "$default$"
+        TwitchGraphQLRequest({
+            "operationName": "updateUserViewedVideo",
+            "variables": {
+                "input": {
+                    "userID": m.top.request.userId,
+                    "position": m.top.request.position,
+                    "videoID": m.top.request.videoId,
+                    "videoType": m.top.request.videoType 'LIVE or VOD
+                }
+            },
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "bb58b1bd08a4ca0c61f2b8d323381a5f4cd39d763da8698f680ef1dfaea89ca1"
+                }
+            }
+        })
+    end if
+    m.top.control = TaskControl.STOP
+end sub

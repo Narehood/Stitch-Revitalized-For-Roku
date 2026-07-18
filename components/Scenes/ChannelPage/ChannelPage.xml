@@ -7,7 +7,9 @@
     </interface>
     <script type="text/brightscript" uri="ChannelPage.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <children>
         <rectangle id="background" width="1280" height="720" />
         <Group id="banner" translation="[0, 0]"></Group>
@@ -15,45 +17,26 @@
         <Group id="container" translation="[ 20, 10 ]">
             <Group id="profile" translation="[0,140]">
                 <CirclePoster id="avatar" width="150" height="150" />
-                <!-- <MaskGroup id="profileImageMask" maskuri="pkg:/images/profile-mask-150.png"
-                    maskSize="[226,226]" maskOffset="[0,0]">
-                    <Poster id="avatar" width="150" height="150" />
-                </MaskGroup> -->
                 <SimpleLabel
                     id="username"
                     fontSize="24"
-                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf"
+                    fontUri="pkg:/fonts/Archivo-Bold.otf"
                     translation="[160,60]" />
                 <SimpleLabel
                     id="followers"
                     fontSize="16"
-                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf"
+                    fontUri="pkg:/fonts/Archivo-Regular.otf"
                     translation="[160,85]" />
-
             </Group>
             <Group id="about" translation="[450,25]">
                 <InfoPane
                     visible="false"
                     id="description"
                     width="600"
-                    fontSize="24"
-                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf"
                     translation="[20,0]" />
             </Group>
-            <!-- <Button
-                id="exampleButton"
-                text=""
-                textColor=""
-                focusedTextColor=""
-                iconUri="pkg:/images/icons/heart-o.png"
-                focusedIconUri="pkg:/images/icons/heart-o.png"
-                showFocusFootprint="true"
-                height="24"
-                focusable="true"
-                maxWidth="24"
-                translation="[300,160]" /> -->
             <RowList
-                id="exampleRowList"
+                id="homeRowList"
                 rowLabelOffset="[[0,5]]"
                 rowLabelFont="font:LargeBoldSystemFont"
                 translation="[ 30,350 ]"
@@ -64,7 +47,7 @@
                 itemSize="[1980, 295]"
                 itemSpacing="[ 0, 40 ]"
                 showRowLabel="[ true ]"
-                focusBitmapUri="pkg:/images/focusIndicator.9.png"
+                focusBitmapUri="pkg:/images/focusindicator.9.png"
                 vertFocusAnimationStyle="fixedFocus"
                 rowFocusAnimationStyle="fixedFocus"
             />

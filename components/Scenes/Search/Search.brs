@@ -2,19 +2,21 @@ sub init()
     m.top.observeField("focusedChild", "onGetfocus")
     m.recents = m.top.findnode("recents")
     ' m.recents.buttons = ["Ammo", "paymoneywubby", "three"]
-    m.recents.TextColor = m.global.constants.colors.muted.ice
-    m.recents.FocusedTextColor = m.global.constants.colors.twitch.purple10
-    m.recents.observeField("buttonSelected", "onRecentItemSelected")
+    if m.recents <> invalid
+        m.recents.TextColor = m.global.constants.colors.muted.ice
+        m.recents.FocusedTextColor = m.global.constants.colors.twitch.purple10
+        m.recents.observeField("buttonSelected", "onRecentItemSelected")
+    end if
     m.kb = m.top.findNode("keyboard")
     m.kb.textEditBox.hintText = tr("Enter Search Query")
     m.kb.textEditBox.voiceEnabled = true
     m.kb.observefield("text", "handleTextInput")
-    m.rowlist = m.top.findNode("exampleRowList")
+    m.rowlist = m.top.findNode("homeRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
     updateRecents()
 end sub
 
-function updateRecents(appendItem = invalid)
+sub updateRecents(appendItem = invalid)
     oldRecents = ParseJson(get_user_setting("recents", "[]"))
     if oldRecents = invalid
         oldRecents = []
@@ -34,7 +36,7 @@ function updateRecents(appendItem = invalid)
     set_user_setting("recents", FormatJson(newRecents, 256))
     m.recents.buttons = ParseJson(get_user_setting("recents", "[]"))
     adjustPositionForRecents()
-end function
+end sub
 
 sub onRecentItemSelected()
     selectedText = m.recents.buttons[m.recents.buttonSelected].tostr()
@@ -63,33 +65,22 @@ sub handleTextInput()
     if m.kb.text <> invalid and m.kb.text <> ""
         m.rowlist.visible = false
         m.rowlist.content = invalid
-        m.GetContentTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
-        ' observe content so we can know when feed content will be parsed
-        m.GetContentTask.observeField("response", "handleRecommendedSections")
-        m.GetContentTask.request = {
-            query: m.kb.text.toStr()
-        }
-        m.getcontentTask.functionName = "getSearchQuery"
-        m.getcontentTask.control = "run"
+        m.GetContentTask = createApiTask("getSearchQuery", "handleRecommendedSections", { query: m.kb.text.toStr() })
     end if
 end sub
 
 sub handleRecommendedSections()
-    if m.GetContentTask?.response?.data <> invalid
-        ' ?"data: "; m.GetContentTask.response.data
-        if m.GetContentTask?.response?.data?.searchFor <> invalid
-            ' ? "searchFor: "m.GetContentTask.response.data.searchFor
-            contentCollection = buildContentNodeFromShelves(m.GetContentTask.response.data.searchFor)
-        end if
-    end if
+    rsp = m.GetContentTask.response
+    if rsp = invalid then return
+    buildContentNodeFromShelves(rsp)
 end sub
 
-function buildContentNodeFromShelves(shelves)
+sub buildContentNodeFromShelves(shelves)
     LiveChannels = []
     Users = []
     Games = []
     Vods = []
-    for each item in shelves.channels.items
+    for each item in shelves.channels
         rowItem = {}
         if item.stream <> invalid
             rowItem.contentType = "LIVE"
@@ -97,10 +88,11 @@ function buildContentNodeFromShelves(shelves)
             rowItem.contentType = "USER"
         end if
         if rowItem.contentType = "LIVE"
+            if item.stream.broadcaster = invalid then continue for
             rowItem.contentId = item.stream.Id
             rowItem.createdAt = item.stream.createdAt
-            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.stream.broadcaster.login, "320", "180")
-            rowItem.contentTitle = item.stream.broadcaster.broadcastSettings.title
+            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.stream.broadcaster.login, "1280", "720")
+            rowItem.contentTitle = item.stream.broadcaster.broadcastSettings?.title
             rowItem.viewersCount = item.stream.viewersCount
             rowItem.streamerDisplayName = item.stream.broadcaster.displayName
             rowItem.streamerLogin = item.stream.broadcaster.login
@@ -116,7 +108,7 @@ function buildContentNodeFromShelves(shelves)
         end if
         if rowItem.contentType = "USER"
             rowItem.contentId = item.Id
-            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.login, "320", "180")
+            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.login, "1280", "720")
             rowItem.contentTitle = item.displayName
             rowItem.followerCount = item.followers.totalCount
             rowItem.streamerDisplayName = item.displayName
@@ -126,7 +118,7 @@ function buildContentNodeFromShelves(shelves)
             Users.push(rowItem)
         end if
     end for
-    for each game in shelves.games.items
+    for each game in shelves.games
         rowItem = {}
         rowItem.contentId = game.Id
         rowItem.contentType = "GAME"
@@ -138,7 +130,7 @@ function buildContentNodeFromShelves(shelves)
         rowItem.gameName = game.name
         Games.push(rowItem)
     end for
-    for each VOD in shelves.videos.items
+    for each VOD in shelves.videos
         rowItem = {}
         rowItem.contentType = "VOD"
         rowItem.contentId = VOD.Id
@@ -194,7 +186,7 @@ function buildContentNodeFromShelves(shelves)
     rowHeights = []
     if firstRow.getChildCount() > 0
         rowItemSize.push([320, 180])
-        rowheights.push(275)
+        rowHeights.push(275)
         AllContent.appendChild(firstRow)
     end if
     if secondRow.getchildCount() > 0
@@ -209,7 +201,7 @@ function buildContentNodeFromShelves(shelves)
     end if
     if fourthRow.getchildCount() > 0
         rowItemSize.push([320, 180])
-        rowheights.push(275)
+        rowHeights.push(275)
         AllContent.appendchild(fourthRow)
     end if
     m.rowlist.visible = false
@@ -217,7 +209,7 @@ function buildContentNodeFromShelves(shelves)
     m.rowlist.rowHeights = rowHeights
     m.rowlist.rowItemSize = rowItemSize
     m.rowlist.visible = true
-end function
+end sub
 
 
 sub handleItemSelected()
@@ -225,6 +217,7 @@ sub handleItemSelected()
         updateRecents(m.kb.text)
     end if
     selectedRow = m.rowlist.content.getchild(m.rowlist.rowItemSelected[0])
+    if selectedRow = invalid then return
     selectedItem = selectedRow.getChild(m.rowlist.rowItemSelected[1])
     m.top.contentSelected = selectedItem
 end sub
@@ -232,18 +225,29 @@ end sub
 
 sub onGetFocus()
     if m.rowlist.focusedchild <> invalid
-        if m.rowlist.focusedChild.id = "exampleRowList"
+        if m.rowlist.focusedChild.id = "homeRowList"
             m.rowlist.focusedChild.setFocus(true)
         end if
     else if m.top.focusedChild <> invalid
         if m.top.focusedChild.id = "Search"
             m.kb.setFocus(true)
-        else if m.top.focusedChild.id = "exampleRowList"
+        else if m.top.focusedChild.id = "homeRowList"
             m.rowlist.setfocus(true)
         end if
     else
         m.top.setfocus(true)
     end if
+    updateRowListFocusFeedback()
+end sub
+
+' Hide the RowList focus rectangle when focus leaves the scene; restore on return.
+sub updateRowListFocusFeedback()
+    if m.rowlist = invalid then return
+    hasFocus = false
+    if m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
+        hasFocus = true
+    end if
+    m.rowlist.drawFocusFeedback = hasFocus
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -257,7 +261,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             end if
         end if
         if key = "left"
-            if m.top.focusedChild.id = "exampleRowList"
+            if m.top.focusedChild.id = "homeRowList"
                 m.rowlist.setfocus(false)
                 m.kb.setfocus(true)
                 return true
@@ -283,4 +287,13 @@ function onKeyEvent(key as string, press as boolean) as boolean
             end if
         end if
     end if
+    return false
 end function
+
+sub onDestroy()
+    m.top.unobserveField("focusedChild")
+    m.recents.unobserveField("buttonSelected")
+    m.kb.unobserveField("text")
+    m.rowlist.unobserveField("itemSelected")
+    m.GetContentTask = destroyTask(m.GetContentTask, "response")
+end sub

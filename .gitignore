@@ -5,21 +5,33 @@ out/
 template.env
 .dev
 node_modules
-
-# Local Roku device credentials / deploy config (never commit)
-bsconfig.json
-bsconfig.local.json
-bsconfig.*.json
-!bsconfig.json.example
-
-# Environment variables and secrets
+# Environment variables
 .env
-.env.*
-!.env.example
-env
-*.pem
-*.key
-secrets/
-.secrets/
-credentials.json
-credentials.*.json
+.env.local
+.env.*.local
+
+# Dev tool
+opencode.json
+
+# Roku device specific configs (credentials, IP addresses)
+bsconfig.dev.json
+bsconfig.local.json
+
+# Local developer docs (device credentials, personal config)
+DEV.md
+
+# VS Code launch config contains device credentials — keep local only
+.vscode/launch.json
+
+# AI tooling config (local model selection, not project config)
+opencode.json
+
+# Python (fmp4-demux-proxy)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
