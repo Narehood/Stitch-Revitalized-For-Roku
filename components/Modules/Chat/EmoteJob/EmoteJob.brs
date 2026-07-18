@@ -6,7 +6,9 @@ function getGlobalTwitchEmotes()
     emoteCache = m.global.emoteCache
     try
         ? "[EmoteJob] - getGlobalTwitchEmotes"
-        if get_user_setting("access_token") <> invalid
+        ids = TwitchClientIds()
+        access_token = ""
+        if get_user_setting("access_token", "") <> ""
             access_token = "Bearer " + get_user_setting("access_token")
         end if
         link = "https://api.twitch.tv/helix/chat/emotes/global"
@@ -15,17 +17,21 @@ function getGlobalTwitchEmotes()
             headers: {
                 "Accept": "*/*"
                 "Authorization": access_token
-                "Client-Id": "cf9fbjz6j9i6k6guz3dwh6qff5dluz"
+                "Client-Id": ids.helix
             }
             method: "GET"
+            timeout: 15000
+            retries: 2
         })
-        response_string = ParseJSON(req.send())
-
-        if response_string?.data <> invalid
-            for each emote in response_string.data
-                uri = emote.images.url_1x
-                emoteCache[emote.name] = uri
-            end for
+        body = req.send()
+        if body <> invalid
+            response_string = ParseJSON(body)
+            if response_string?.data <> invalid
+                for each emote in response_string.data
+                    uri = emote.images.url_1x
+                    emoteCache[emote.name] = uri
+                end for
+            end if
         end if
     catch e
         ? "Error grabbing channelttv badges"
@@ -37,7 +43,9 @@ function getChannelTwitchEmotes(channel_id)
     emoteCache = m.global.emoteCache
     try
         ? "[EmoteJob] - getChannelTwitchEmotes"
-        if get_user_setting("access_token") <> invalid
+        ids = TwitchClientIds()
+        access_token = ""
+        if get_user_setting("access_token", "") <> ""
             access_token = "Bearer " + get_user_setting("access_token")
         end if
         link = "https://api.twitch.tv/helix/chat/emotes?broadcaster_id=" + channel_id
@@ -46,17 +54,21 @@ function getChannelTwitchEmotes(channel_id)
             headers: {
                 "Accept": "*/*"
                 "Authorization": access_token
-                "Client-Id": "cf9fbjz6j9i6k6guz3dwh6qff5dluz"
+                "Client-Id": ids.helix
             }
             method: "GET"
+            timeout: 15000
+            retries: 2
         })
-        response_string = ParseJSON(req.send())
-
-        if response_string?.data <> invalid
-            for each emote in response_string.data
-                uri = emote.images.url_1x
-                emoteCache[emote.name] = uri
-            end for
+        body = req.send()
+        if body <> invalid
+            response_string = ParseJSON(body)
+            if response_string?.data <> invalid
+                for each emote in response_string.data
+                    uri = emote.images.url_1x
+                    emoteCache[emote.name] = uri
+                end for
+            end if
         end if
     catch e
         ? "Error grabbing channelttv badges"
@@ -68,23 +80,13 @@ function getTwitchBadges()
     ? "[EmoteJob] - getTwitchBadges"
     badgelist = {}
     try
-        access_token = ""
-        device_code = ""
-        ' doubled up here in stead of defaulting to "" because access_token is dependent on device_code
-        if get_user_setting("device_code") <> invalid
-            device_code = get_user_setting("device_code")
-        end if
+        reqHeaders = TwitchDefaultHeaders("androidTv")
         req = HttpRequest({
             url: "https://gql.twitch.tv/gql"
-            headers: {
-                "Accept": "*/*"
-                "Authorization": access_token
-                "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa"
-                "Device-ID": device_code
-                "Origin": "https://android.tv.twitch.tv"
-                "Referer": "https://android.tv.twitch.tv/"
-            }
+            headers: reqHeaders
             method: "POST"
+            timeout: 15000
+            retries: 2
             data: {
                 "operationName": "ChatList_Badges",
                 "variables": {

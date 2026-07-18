@@ -39,6 +39,8 @@
     <script type="text/brightscript" uri="StitchVideo.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/http.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/twitchClient.brs" />
     <children>
         <!-- your existing children stay the same -->
         <!-- Modern Control Overlay for Live Streams -->

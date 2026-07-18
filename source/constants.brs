@@ -4,16 +4,22 @@ sub setConstants()
     appInfo = CreateObject("roAppInfo")
     uiResolutionWidth = deviceInfo.GetUIResolution().width
     scaleFactor = uiResolutionWidth / 1280
-    maxResolution = invalid
+    maxGraphicsResolution = invalid
     for each res in deviceInfo.GetSupportedGraphicsResolutions()
-        if maxResolution <> invalid
-            if res.height > maxResolution
-                maxResolution = res.height
+        if maxGraphicsResolution <> invalid
+            if res.height > maxGraphicsResolution
+                maxGraphicsResolution = res.height
             end if
         else
-            maxResolution = res.height
+            maxGraphicsResolution = res.height
         end if
     end for
+
+    ' Video decode capability is independent of UI graphics resolution.
+    ' Use this for stream variant filtering (1440p/4K), not graphics caps.
+    maxVideoDecodeHeight = getMaxVideoDecodeHeight()
+    maxVideoDecodeResolution = getMaxVideoDecodeResolutionLabel()
+
     ' Set Global Constants
     m.global.addFields({
         appID: "StitchRevitalizedForRoku"
@@ -29,7 +35,9 @@ sub setConstants()
                 build: appInfo.GetValue("build_version")
             }
         }
-        supportedGraphicsResolution: maxResolution
+        supportedGraphicsResolution: maxGraphicsResolution
+        maxVideoDecodeHeight: maxVideoDecodeHeight
+        maxVideoDecodeResolution: maxVideoDecodeResolution
         emoteCache: {}
         globalTTVEmotes: {}
         channelTTVEmotes: {}

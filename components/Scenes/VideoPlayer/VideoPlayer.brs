@@ -57,46 +57,51 @@ sub initChat()
     end if
 end sub
 
-function onQualityChangeRequested()
-    ' ? "[Video Wrapper] - Quality Change Requested: "; m.video.qualityChangeRequest
+sub onQualityChangeRequested()
+    idx = m.video.qualityChangeRequest
+    if m.top.metadata = invalid or idx = invalid or idx < 0 or idx >= m.top.metadata.Count()
+        return
+    end if
+    selected = m.top.metadata[idx]
     new_content = CreateObject("roSGNode", "TwitchContentNode")
-    new_content.setFields(m.top.contentRequested.getFields()) ' Preserve original request fields
-    new_content.setFields(m.top.metadata[m.video.qualityChangeRequest]) ' Apply new quality fields
-    m.top.content = new_content ' Update the main content node for VideoPlayer
+    new_content.setFields(m.top.contentRequested.getFields())
+    ' Apply only ContentNode-safe playback fields from the chosen rung
+    if selected.QualityID <> invalid then new_content.QualityID = selected.QualityID
+    if selected.StreamUrls <> invalid and selected.StreamUrls.Count() > 0
+        new_content.url = selected.StreamUrls[0]
+        new_content.StreamUrls = selected.StreamUrls
+    end if
+    if selected.StreamQualities <> invalid then new_content.StreamQualities = selected.StreamQualities
+    if selected.StreamContentIds <> invalid
+        new_content.StreamContentIds = selected.StreamContentIds
+    else if selected.StreamContentIDs <> invalid
+        new_content.StreamContentIds = selected.StreamContentIDs
+    end if
+    if selected.StreamBitrates <> invalid then new_content.StreamBitrates = selected.StreamBitrates
+    if selected.StreamStickyHttpRedirects <> invalid then new_content.StreamStickyHttpRedirects = selected.StreamStickyHttpRedirects
+    if selected.isLowLatency <> invalid then new_content.isLowLatency = selected.isLowLatency
+    if selected.lowLatencyStreamsAvailable <> invalid then new_content.lowLatencyStreamsAvailable = selected.lowLatencyStreamsAvailable
+    m.top.content = new_content
     m.allowBreak = false
-    exitPlayer() ' This will clean up the old video
-    playContent() ' This will play the new m.top.content
+    exitPlayer()
+    playContent()
     m.allowBreak = true
-end function
+end sub
 
 sub configureVideoForLatency(video as object, isLive as boolean)
     latencyPreference = get_user_setting("preferred.latency", "low")
     isLowLatency = (latencyPreference = "low")
+    decodeLabel = getMaxVideoDecodeResolutionLabel()
 
-    ' ? "[VideoPlayer] ===== BUFFERING CONFIGURATION ====="
-    ' ? "[VideoPlayer] Latency preference: "; latencyPreference
-    ' ? "[VideoPlayer] Is low latency: "; isLowLatency
-    ' ? "[VideoPlayer] Is live content: "; isLive
-    ' ? "[VideoPlayer] Video component type: "; video.subtype()
-
-    if video.isSubtype("StitchVideo")
-        ' ? "[VideoPlayer] StitchVideo handles its own low-latency configuration"
-        ' ? "[VideoPlayer] ========================================="
-        return
-    end if
-
-    ' Original configuration for regular Video components only
     if isLive and isLowLatency
-        ' Enable LL-HLS for regular Video components
         try
             video.enableLowLatencyHLS = true
             video.hlsOptimization = "lowLatency"
             video.enablePartialSegments = true
             video.enablePreloadHints = true
             video.enableBlockingPlaylistReload = true
-            ' ? "[VideoPlayer] ✓ Regular Video LL-HLS settings applied"
         catch e
-            ' ? "[VideoPlayer] ⚠️ LL-HLS not fully supported on this device"
+            ' Older firmware may not expose all LL-HLS fields.
         end try
 
         video.bufferingConfig = {
@@ -109,7 +114,7 @@ sub configureVideoForLatency(video as object, isLive as boolean)
         }
 
         video.enableDecoderCompatibility = false
-        video.maxVideoDecodeResolution = "1440p"
+        video.maxVideoDecodeResolution = decodeLabel
 
         video.adaptiveBitrateConfig = {
             initialBandwidthBps: 5000000,
@@ -119,10 +124,13 @@ sub configureVideoForLatency(video as object, isLive as boolean)
             minDurationToRetainAfterDiscardMs: 1000,
             bandwidthMeterSlidingWindowMs: 3000
         }
-
-        ' ? "[VideoPlayer] ✓ Regular Video configured for LL-HLS"
     else if isLive
-        ' Normal latency configuration for live streams
+        try
+            video.enableLowLatencyHLS = false
+            video.hlsOptimization = ""
+        catch e
+        end try
+
         video.bufferingConfig = {
             initialBufferingMs: 2000,
             minBufferMs: 5000,
@@ -133,6 +141,7 @@ sub configureVideoForLatency(video as object, isLive as boolean)
         }
 
         video.enableDecoderCompatibility = true
+        video.maxVideoDecodeResolution = decodeLabel
 
         video.adaptiveBitrateConfig = {
             initialBandwidthBps: 3000000,
@@ -142,10 +151,7 @@ sub configureVideoForLatency(video as object, isLive as boolean)
             minDurationToRetainAfterDiscardMs: 5000,
             bandwidthMeterSlidingWindowMs: 10000
         }
-
-        ' ? "[VideoPlayer] Regular Video configured for NORMAL LATENCY mode"
     else
-        ' VOD configuration
         video.bufferingConfig = {
             initialBufferingMs: 3000,
             minBufferMs: 10000,
@@ -156,9 +162,8 @@ sub configureVideoForLatency(video as object, isLive as boolean)
         }
 
         video.enableDecoderCompatibility = true
-        ' ? "[VideoPlayer] Regular Video configured for VOD playback"
+        video.maxVideoDecodeResolution = decodeLabel
     end if
-    ' ? "[VideoPlayer] ========================================="
 end sub
 
 sub measureStreamDelay()
@@ -292,48 +297,30 @@ sub playContent()
     httpAgent.InitClientCertificates()
     httpAgent.enableCookies()
 
+    latencyPreference = get_user_setting("preferred.latency", "low")
     if isClipContent
-        httpAgent.addheader("Accept", "video/mp4,video/webm,video/*,*/*")
-        httpAgent.addheader("Accept-Encoding", "identity")
-        httpAgent.addheader("Accept-Language", "en-US,en;q=0.9")
-        httpAgent.addheader("Cache-Control", "no-cache")
-        httpAgent.addheader("Connection", "keep-alive")
-        httpAgent.addheader("DNT", "1")
-        httpAgent.addheader("Origin", "https://www.twitch.tv")
-        httpAgent.addheader("Pragma", "no-cache")
-        httpAgent.addheader("Referer", "https://www.twitch.tv/")
-        httpAgent.addheader("Sec-Ch-Ua", chr(34) + "Not_A Brand" + chr(34) + ";v=" + chr(34) + "8" + chr(34) + ", " + chr(34) + "Chromium" + chr(34) + ";v=" + chr(34) + "120" + chr(34) + ", " + chr(34) + "Google Chrome" + chr(34) + ";v=" + chr(34) + "120" + chr(34))
-        httpAgent.addheader("Sec-Ch-Ua-Mobile", "?0")
-        httpAgent.addheader("Sec-Ch-Ua-Platform", chr(34) + "Windows" + chr(34))
-        httpAgent.addheader("Sec-Fetch-Dest", "video")
-        httpAgent.addheader("Sec-Fetch-Mode", "cors")
-        httpAgent.addheader("Sec-Fetch-Site", "cross-site")
-        httpAgent.addheader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        httpAgent.addheader("Client-ID", "kimne78kx3ncx6brgo4mv6wki5h1ko")
-        httpAgent.addheader("X-Device-Id", CreateObject("roDeviceInfo").GetRandomUUID())
-        authToken = get_user_setting("auth_token", "")
-        if authToken <> ""
-            httpAgent.addheader("Authorization", "Bearer " + authToken)
-        end if
-        ' ? "[VideoPlayer] Configured HTTP agent for clip with enhanced headers"
-    else ' Live/VOD
-        httpAgent.addheader("Accept", "*/*")
-        httpAgent.addheader("Origin", "https://android.tv.twitch.tv")
-        httpAgent.addheader("Referer", "https://android.tv.twitch.tv/")
-        httpAgent.addheader("User-Agent", "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 85.0.4183.93/6.0 TV Safari/537.36")
-        httpAgent.addheader("Client-ID", "kimne78kx3ncx6brgo4mv6wki5h1ko")
-        latencyPreference = get_user_setting("preferred.latency", "low")
-        if isLiveContent and latencyPreference = "low"
-            httpAgent.addheader("Cache-Control", "no-cache")
-            httpAgent.addheader("Connection", "keep-alive")
-            httpAgent.addheader("X-Low-Latency", "1")
-            ' ? "[VideoPlayer] Added low-latency headers to HTTP agent"
-        end if
+        headers = TwitchClipPlaybackHeaders()
+    else
+        headers = TwitchWebPlaybackHeaders(isLiveContent and latencyPreference = "low")
     end if
+    for each key in headers
+        httpAgent.addheader(key, headers[key])
+    end for
     m.video.setHttpAgent(httpAgent)
 
-    ' Configure video player properties (buffering, ABR config, etc.)
+    ' Configure video player properties (buffering, ABR config, decode caps)
     configureVideoForLatency(m.video, isLiveContent)
+
+    ' Truthful LL indicator for StitchVideo overlays
+    if isLiveContent and m.video.isSubtype("StitchVideo")
+        actualLL = false
+        if m.top.content <> invalid and m.top.content.isLowLatency = true
+            actualLL = true
+        else if m.top.content <> invalid and m.top.content.lowLatencyStreamsAvailable <> invalid
+            actualLL = m.top.content.lowLatencyStreamsAvailable > 0
+        end if
+        m.video.isActualLowLatency = actualLL
+    end if
 
     m.video.notificationInterval = 1
 
