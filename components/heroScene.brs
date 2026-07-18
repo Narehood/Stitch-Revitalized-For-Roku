@@ -61,20 +61,23 @@ function cleanUserData()
     end if
 end function
 
-function ValidateUserLogin()
-    if m.validateOauthToken?.response?.tokenValid <> invalid
-        tokenValid = m.validateOauthToken.response.tokenValid
-    else
-        tokenValid = false
+sub ValidateUserLogin()
+    ' Only act on an explicit validate result. Unset response means the check
+    ' was skipped/failed transiently — keep the existing session.
+    if m.validateOauthToken?.response?.tokenValid = invalid
+        return
     end if
+
+    tokenValid = m.validateOauthToken.response.tokenValid
     if tokenValid
         ? "User Token Seems Valid"
+        m.menu.updateUserIcon = true
     else
         cleanUserData()
         m.menu.updateUserIcon = true
         ? "pause"
     end if
-end function
+end sub
 
 function focusedMenuItem()
     focusedItem = ""

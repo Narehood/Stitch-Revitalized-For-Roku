@@ -23,15 +23,12 @@ function getGlobalTwitchEmotes()
             timeout: 15000
             retries: 2
         })
-        body = req.send()
-        if body <> invalid
-            response_string = ParseJSON(body)
-            if response_string?.data <> invalid
-                for each emote in response_string.data
-                    uri = emote.images.url_1x
-                    emoteCache[emote.name] = uri
-                end for
-            end if
+        response_string = TwitchParseJsonResponse(req.send())
+        if response_string?.data <> invalid
+            for each emote in response_string.data
+                uri = emote.images.url_1x
+                emoteCache[emote.name] = uri
+            end for
         end if
     catch e
         ? "Error grabbing channelttv badges"
@@ -60,15 +57,12 @@ function getChannelTwitchEmotes(channel_id)
             timeout: 15000
             retries: 2
         })
-        body = req.send()
-        if body <> invalid
-            response_string = ParseJSON(body)
-            if response_string?.data <> invalid
-                for each emote in response_string.data
-                    uri = emote.images.url_1x
-                    emoteCache[emote.name] = uri
-                end for
-            end if
+        response_string = TwitchParseJsonResponse(req.send())
+        if response_string?.data <> invalid
+            for each emote in response_string.data
+                uri = emote.images.url_1x
+                emoteCache[emote.name] = uri
+            end for
         end if
     catch e
         ? "Error grabbing channelttv badges"
@@ -100,12 +94,14 @@ function getTwitchBadges()
                 }
             }
         })
-        rsp = ParseJSON(req.send())
-        for each badge in rsp.data.badges
-            identifier = badge.setID + "/" + badge.version
-            badgelist[identifier] = badge.image2x
-        end for
-        if rsp.data.user <> invalid
+        rsp = TwitchParseJsonResponse(req.send())
+        if rsp?.data?.badges <> invalid
+            for each badge in rsp.data.badges
+                identifier = badge.setID + "/" + badge.version
+                badgelist[identifier] = badge.image2x
+            end for
+        end if
+        if rsp?.data?.user <> invalid
             if rsp.data.user.broadcastBadges <> invalid
                 for each badge in rsp.data.user.broadcastBadges
                     identifier = badge.setID + "/" + badge.version
@@ -131,9 +127,7 @@ function invokerest(link as string) as object
         }
         method: "GET"
     })
-    response_string = ParseJSON(req.send())
-    ' ? "responseString: "; response_string
-    return response_string
+    return TwitchParseJsonResponse(req.send())
 end function
 
 sub getChannel7tvEmotes(channel_id)

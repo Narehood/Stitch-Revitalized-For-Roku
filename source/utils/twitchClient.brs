@@ -100,6 +100,35 @@ function TwitchClipPlaybackHeaders() as object
     return headers
 end function
 
+' HttpRequest.send() returns roUrlEvent — always extract the body string first.
+function TwitchResponseBody(event as dynamic) as dynamic
+    if event = invalid
+        return invalid
+    end if
+    if GetInterface(event, "ifString") <> invalid
+        if event = ""
+            return invalid
+        end if
+        return event
+    end if
+    if type(event) = "roUrlEvent"
+        body = event.getString()
+        if body = invalid or body = ""
+            return invalid
+        end if
+        return body
+    end if
+    return invalid
+end function
+
+function TwitchParseJsonResponse(event as dynamic) as dynamic
+    body = TwitchResponseBody(event)
+    if body = invalid
+        return invalid
+    end if
+    return ParseJSON(body)
+end function
+
 ' GraphQL helper with retries. Returns parsed JSON object or invalid.
 function TwitchGraphQLRequest(data as object, retries = 3 as integer) as dynamic
     deviceCode = get_user_setting("device_code", "")
@@ -119,18 +148,15 @@ function TwitchGraphQLRequest(data as object, retries = 3 as integer) as dynamic
             timeout: 15000
             retries: 1
         })
-        rspData = req.send()
-        if rspData <> invalid
-            rsp = ParseJSON(rspData)
-            if rsp <> invalid
-                if rsp.errors <> invalid and rsp.errors.Count() > 0
-                    ' Retry transient failures; surface last response if all attempts fail
-                    if attempt >= retries
-                        return rsp
-                    end if
-                else
+        rsp = TwitchParseJsonResponse(req.send())
+        if rsp <> invalid
+            if rsp.errors <> invalid and rsp.errors.Count() > 0
+                ' Retry transient failures; surface last response if all attempts fail
+                if attempt >= retries
                     return rsp
                 end if
+            else
+                return rsp
             end if
         end if
         sleep(250 * attempt)
@@ -149,8 +175,8 @@ function TwitchHttpGet(url as string, headers as object, retries = 3 as integer)
             timeout: 15000
             retries: 1
         })
-        body = req.send()
-        if body <> invalid and body <> ""
+        body = TwitchResponseBody(req.send())
+        if body <> invalid
             return body
         end if
         sleep(200 * attempt)
@@ -160,42 +186,62 @@ end function
 
 function canDecodeVideoAt(width as integer, height as integer, codec = "h264" as string) as boolean
     di = CreateObject("roDeviceInfo")
-    result = di.CanDecodeVideo({
-        Codec: codec
-        Width: width
-        Height: height
-    })
+    result = invalid
+    try
+        result = di.CanDecodeVideo({
+            Codec: codec
+            Width: width
+            Height: height
+        })
+    catch e
+        return false
+    end try
     if result <> invalid and result.Result = true
         return true
     end if
     return false
 end function
 
-' Max video decode height the device can handle (not UI graphics resolution).
+' Cached max decode height. Keep probes cheap — heavy CanDecodeVideo loops have
+' stalled playback startup on some Roku firmwares.
 function getMaxVideoDecodeHeight() as integer
-    di = CreateObject("roDeviceInfo")
-    codecs = ["hevc", "h264"]
-    heights = [
-        { w: 3840, h: 2160 }
-        { w: 2560, h: 1440 }
-        { w: 1920, h: 1080 }
-        { w: 1280, h: 720 }
-    ]
-
-    for each sizeInfo in heights
-        for each codec in codecs
-            if canDecodeVideoAt(sizeInfo.w, sizeInfo.h, codec)
-                return sizeInfo.h
-            end if
-        end for
-    end for
-
-    ' Fallback: display size, never below 720 for modern Twitch clients
-    display = di.GetDisplaySize()
-    if display <> invalid and display.h <> invalid and display.h >= 720
-        return display.h
+    if m.global <> invalid and m.global.maxVideoDecodeHeight <> invalid
+        return m.global.maxVideoDecodeHeight
     end if
-    return 1080
+
+    height = 1080
+    try
+        ' Prefer a single h264 ladder probe; avoid AV1/HEVC startup probes.
+        if canDecodeVideoAt(1920, 1080, "h264")
+            if canDecodeVideoAt(2560, 1440, "h264")
+                height = 1440
+                if canDecodeVideoAt(3840, 2160, "h264")
+                    height = 2160
+                end if
+            else
+                height = 1080
+            end if
+        else if canDecodeVideoAt(1280, 720, "h264")
+            height = 720
+        else
+            di = CreateObject("roDeviceInfo")
+            display = di.GetDisplaySize()
+            if display <> invalid and display.h <> invalid and display.h >= 720
+                height = display.h
+            end if
+        end if
+    catch e
+        height = 1080
+    end try
+
+    if m.global <> invalid
+        if m.global.hasField("maxVideoDecodeHeight")
+            m.global.maxVideoDecodeHeight = height
+        else
+            m.global.addFields({ maxVideoDecodeHeight: height })
+        end if
+    end if
+    return height
 end function
 
 function getMaxVideoDecodeResolutionLabel() as string
@@ -210,22 +256,9 @@ function getMaxVideoDecodeResolutionLabel() as string
     return "720p"
 end function
 
-' Codecs string for Usher supported_codecs (comma-separated FourCC-ish tokens Twitch accepts).
+' Codecs string for Usher supported_codecs. Stick to avc1 for compatibility.
 function getSupportedStreamCodecs() as string
-    di = CreateObject("roDeviceInfo")
-    parts = ["avc1"]
-    if di.CanDecodeVideo({ Codec: "hevc" }).Result = true
-        parts.Push("hvc1")
-        parts.Push("hev1")
-    end if
-    if di.CanDecodeVideo({ Codec: "av1" }).Result = true
-        parts.Push("av01")
-    end if
-    result = parts[0]
-    for i = 1 to parts.Count() - 1
-        result = result + "," + parts[i]
-    end for
-    return result
+    return "avc1"
 end function
 
 function isStreamHeightPlayable(height as integer) as boolean

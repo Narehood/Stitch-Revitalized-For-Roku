@@ -86,7 +86,7 @@ sub setupLiveUI()
 end sub
 
 sub updateLatencyIndicator()
-    latencySetting = get_user_setting("preferred.latency", "low")
+    latencySetting = get_user_setting("preferred.latency", "normal")
     userPrefersLowLatency = (latencySetting = "low")
     isActuallyLowLatency = m.top.isActualLowLatency ' This field is set from VideoPlayer.brs
 

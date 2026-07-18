@@ -18,12 +18,19 @@ function handleItemSelected()
     m.PlayVideo.control = "run"
 end function
 
-function onResponse()
-    ' content.ignoreStreamErrors = true
-    m.top.content = m.PlayVideo.response
+sub onResponse()
+    response = m.PlayVideo.response
+    if response = invalid or response.url = invalid or response.url = ""
+        ? "[VideoPlayer] Playback content missing or has no URL — aborting start"
+        m.allowBreak = true
+        m.top.state = "done"
+        m.top.backpressed = true
+        return
+    end if
+    m.top.content = response
     m.top.metadata = m.PlayVideo.metadata
     playContent()
-end function
+end sub
 
 sub taskStateChanged(event as object)
     ' print "Player: taskStateChanged(), id = "; event.getNode(); ", "; event.getField(); " = "; event.getData()
@@ -89,48 +96,32 @@ sub onQualityChangeRequested()
 end sub
 
 sub configureVideoForLatency(video as object, isLive as boolean)
-    latencyPreference = get_user_setting("preferred.latency", "low")
+    latencyPreference = get_user_setting("preferred.latency", "normal")
     isLowLatency = (latencyPreference = "low")
-    decodeLabel = getMaxVideoDecodeResolutionLabel()
+
+    ' StitchVideo owns its live player UX/config. Do not poke experimental
+    ' LL-HLS / buffering fields on it from here — that path wedged playback.
+    if video.isSubtype("StitchVideo")
+        if isLive
+            actualLL = false
+            if m.top.content <> invalid and m.top.content.isLowLatency = true
+                actualLL = true
+            end if
+            video.isActualLowLatency = actualLL
+        end if
+        return
+    end if
 
     if isLive and isLowLatency
-        try
-            video.enableLowLatencyHLS = true
-            video.hlsOptimization = "lowLatency"
-            video.enablePartialSegments = true
-            video.enablePreloadHints = true
-            video.enableBlockingPlaylistReload = true
-        catch e
-            ' Older firmware may not expose all LL-HLS fields.
-        end try
-
         video.bufferingConfig = {
-            initialBufferingMs: 200,
-            minBufferMs: 500,
-            maxBufferMs: 1500,
-            bufferForPlaybackMs: 200,
-            bufferForPlaybackAfterRebufferMs: 500,
-            rebufferMs: 200
-        }
-
-        video.enableDecoderCompatibility = false
-        video.maxVideoDecodeResolution = decodeLabel
-
-        video.adaptiveBitrateConfig = {
-            initialBandwidthBps: 5000000,
-            maxInitialBitrate: 8000000,
-            minDurationForQualityIncreaseMs: 60000,
-            maxDurationForQualityDecreaseMs: 2000,
-            minDurationToRetainAfterDiscardMs: 1000,
-            bandwidthMeterSlidingWindowMs: 3000
+            initialBufferingMs: 1000,
+            minBufferMs: 2000,
+            maxBufferMs: 6000,
+            bufferForPlaybackMs: 1000,
+            bufferForPlaybackAfterRebufferMs: 2000,
+            rebufferMs: 1000
         }
     else if isLive
-        try
-            video.enableLowLatencyHLS = false
-            video.hlsOptimization = ""
-        catch e
-        end try
-
         video.bufferingConfig = {
             initialBufferingMs: 2000,
             minBufferMs: 5000,
@@ -138,18 +129,6 @@ sub configureVideoForLatency(video as object, isLive as boolean)
             bufferForPlaybackMs: 2000,
             bufferForPlaybackAfterRebufferMs: 5000,
             rebufferMs: 2000
-        }
-
-        video.enableDecoderCompatibility = true
-        video.maxVideoDecodeResolution = decodeLabel
-
-        video.adaptiveBitrateConfig = {
-            initialBandwidthBps: 3000000,
-            maxInitialBitrate: 6000000,
-            minDurationForQualityIncreaseMs: 10000,
-            maxDurationForQualityDecreaseMs: 25000,
-            minDurationToRetainAfterDiscardMs: 5000,
-            bandwidthMeterSlidingWindowMs: 10000
         }
     else
         video.bufferingConfig = {
@@ -160,9 +139,6 @@ sub configureVideoForLatency(video as object, isLive as boolean)
             bufferForPlaybackAfterRebufferMs: 8000,
             rebufferMs: 3000
         }
-
-        video.enableDecoderCompatibility = true
-        video.maxVideoDecodeResolution = decodeLabel
     end if
 end sub
 
@@ -297,11 +273,11 @@ sub playContent()
     httpAgent.InitClientCertificates()
     httpAgent.enableCookies()
 
-    latencyPreference = get_user_setting("preferred.latency", "low")
     if isClipContent
         headers = TwitchClipPlaybackHeaders()
     else
-        headers = TwitchWebPlaybackHeaders(isLiveContent and latencyPreference = "low")
+        ' Keep playback headers minimal/stable — LL-specific agent headers are optional.
+        headers = TwitchWebPlaybackHeaders(false)
     end if
     for each key in headers
         httpAgent.addheader(key, headers[key])
@@ -310,17 +286,6 @@ sub playContent()
 
     ' Configure video player properties (buffering, ABR config, decode caps)
     configureVideoForLatency(m.video, isLiveContent)
-
-    ' Truthful LL indicator for StitchVideo overlays
-    if isLiveContent and m.video.isSubtype("StitchVideo")
-        actualLL = false
-        if m.top.content <> invalid and m.top.content.isLowLatency = true
-            actualLL = true
-        else if m.top.content <> invalid and m.top.content.lowLatencyStreamsAvailable <> invalid
-            actualLL = m.top.content.lowLatencyStreamsAvailable > 0
-        end if
-        m.video.isActualLowLatency = actualLL
-    end if
 
     m.video.notificationInterval = 1
 
@@ -352,40 +317,30 @@ sub playContent()
         ' ? "[VideoPlayer] Latency Preference: "; get_user_setting("preferred.latency", "low")
 
         if isLiveContent
-            contentNodeToPlay.ignoreStreamErrors = false ' Important for HLS error reporting
+            contentNodeToPlay.ignoreStreamErrors = false
+            contentNodeToPlay.streamFormat = "hls"
+            contentNodeToPlay.live = true
 
-            latencyPreference = get_user_setting("preferred.latency", "low")
-            isLowLatencyMode = (latencyPreference = "low")
-
-            currentQualityID = contentNodeToPlay.QualityID
-            isAutomaticQuality = (currentQualityID.Instr("Automatic") > -1)
-
-            if isLowLatencyMode and not isAutomaticQuality and currentQualityID <> ""
-                contentNodeToPlay.switchingStrategy = "no-adaptation"
-                ' ? "[VideoPlayer] Low latency with specific quality ('";currentQualityID;"'): ABR disabled (no-adaptation)."
-            else
-                contentNodeToPlay.switchingStrategy = "full-adaptation"
-                ' if isLowLatencyMode and isAutomaticQuality
-                '     ? "[VideoPlayer] Low latency with 'Automatic' quality ('";currentQualityID;"'): ABR enabled (full-adaptation, conservative config)."
-                ' else if isLiveContent ' Normal latency live
-                '     ? "[VideoPlayer] Normal latency live ('";currentQualityID;"'): ABR enabled (full-adaptation, standard config)."
-                ' end if
+            currentQualityID = ""
+            if contentNodeToPlay.QualityID <> invalid
+                currentQualityID = contentNodeToPlay.QualityID
             end if
+            isAutomaticQuality = (currentQualityID <> "" and currentQualityID.Instr("Automatic") > -1)
 
-            ' Log if we have low-latency streams available
-            ' if contentNodeToPlay.lowLatencyStreamsAvailable <> invalid
-            '     ? "[VideoPlayer] Low latency streams available: "; contentNodeToPlay.lowLatencyStreamsAvailable
-            ' end if
+            if isAutomaticQuality
+                contentNodeToPlay.switchingStrategy = "full-adaptation"
+            else
+                contentNodeToPlay.switchingStrategy = "no-adaptation"
+            end if
         else if isClipContent
             contentNodeToPlay.ignoreStreamErrors = true
             contentNodeToPlay.switchingStrategy = "no-adaptation"
             contentNodeToPlay.streamFormat = "mp4"
             contentNodeToPlay.enableTrickPlay = false
-            ' ? "[VideoPlayer] Configured content for clip playback ('";contentNodeToPlay.QualityID;"')"
         else ' VOD
-            contentNodeToPlay.ignoreStreamErrors = true ' Or false, depending on desired strictness
-            contentNodeToPlay.switchingStrategy = "full-adaptation" ' Typically ABR for VODs
-            ' ? "[VideoPlayer] Configured content for VOD playback ('";contentNodeToPlay.QualityID;"')"
+            contentNodeToPlay.ignoreStreamErrors = true
+            contentNodeToPlay.streamFormat = "hls"
+            contentNodeToPlay.switchingStrategy = "full-adaptation"
         end if
 
         m.video.content = contentNodeToPlay

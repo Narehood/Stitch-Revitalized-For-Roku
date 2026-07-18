@@ -10,7 +10,7 @@ end function
 function validateOauthToken() as object
     deviceCode = get_user_setting("device_code", "")
     if deviceCode = ""
-        m.top.response = { "tokenValid": false }
+        ' No device identity yet — leave response unset so startup does not wipe session state.
         m.top.control = "STOP"
         return false
     end if
@@ -23,21 +23,25 @@ function validateOauthToken() as object
         timeout: 15000
         retries: 2
     })
-    body = req.send()
+    body = TwitchResponseBody(req.send())
     if body = invalid
-        m.top.response = { "tokenValid": false }
+        ' Transient network failure: do not emit tokenValid=false (that clears login).
         m.top.control = "STOP"
         return false
     end if
 
     rsp = ParseJSON(body)
+    if rsp = invalid
+        m.top.control = "STOP"
+        return false
+    end if
+
     if rsp?.status <> invalid and rsp.status = 401
         m.top.response = { "tokenValid": false }
     else if rsp?.expires_in <> invalid
         m.top.response = { "tokenValid": true }
-    else
-        m.top.response = { "tokenValid": false }
     end if
+    ' Ambiguous payloads leave response unset so ValidateUserLogin keeps the session.
     m.top.control = "STOP"
 end function
 
@@ -1347,16 +1351,11 @@ function getRendezvouzToken()
         timeout: 15000
         retries: 2
     })
-    body = req.send()
-    if body = invalid
-        m.top.response = { "response": invalid }
+    rsp = TwitchParseJsonResponse(req.send())
+    if rsp <> invalid
+        m.top.response = rsp
     else
-        rsp = ParseJSON(body)
-        if rsp <> invalid
-            m.top.response = rsp
-        else
-            m.top.response = { "response": invalid }
-        end if
+        m.top.response = { "response": invalid }
     end if
     m.top.control = "STOP"
 end function
@@ -1381,12 +1380,9 @@ function getOauthToken()
     rsp = invalid
     while attempts < 60
         attempts += 1
-        body = req.send()
-        if body <> invalid
-            rsp = ParseJSON(body)
-            if rsp <> invalid and rsp.DoesExist("access_token")
-                exit while
-            end if
+        rsp = TwitchParseJsonResponse(req.send())
+        if rsp <> invalid and rsp.DoesExist("access_token")
+            exit while
         end if
         sleep(5000)
     end while
@@ -1755,16 +1751,11 @@ function TwitchHelixApiRequest()
         requestParams["data"] = m.top.request.params.data
     end if
     req = HttpRequest(requestParams)
-    body = req.send()
-    if body = invalid
-        m.top.response = { "response": invalid }
+    rsp = TwitchParseJsonResponse(req.send())
+    if rsp <> invalid
+        m.top.response = rsp
     else
-        rsp = ParseJSON(body)
-        if rsp <> invalid
-            m.top.response = rsp
-        else
-            m.top.response = { "response": invalid }
-        end if
+        m.top.response = { "response": invalid }
     end if
     m.top.control = "STOP"
 end function

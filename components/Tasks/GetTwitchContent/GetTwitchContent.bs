@@ -1,10 +1,19 @@
+sub failContent(reason = "" as string)
+    if reason <> ""
+        ? "[GetTwitchContent] "; reason
+    end if
+    m.top.metadata = []
+    ' Emit an empty node so VideoPlayer's observer fires and aborts cleanly.
+    m.top.response = CreateObject("roSGNode", "TwitchContentNode")
+end sub
+
 sub main()
     if m.top.contentRequested.contentType = "CLIP"
         buildClipContent()
         return
     end if
 
-    latencyPreference = get_user_setting("preferred.latency", "low")
+    latencyPreference = get_user_setting("preferred.latency", "normal")
     lowLatencyEnabled = (latencyPreference = "low") and (m.top.contentRequested.contentType = "LIVE")
     maxDecodeHeight = getMaxVideoDecodeHeight()
 
@@ -25,29 +34,26 @@ sub main()
             variables: {
                 "login": m.top.contentRequested.streamerLogin
                 "platform": "web_tv"
-                "playerType": "roku"
+                "playerType": "pulsar"
                 "skipPlayToken": false
             }
         })
     end if
 
     if rsp = invalid or rsp.data = invalid
-        m.top.metadata = []
-        m.top.response = CreateObject("roSGNode", "TwitchContentNode")
+        failContent("token query failed")
         return
     end if
 
     usherUrl = buildUsherUrl(rsp, m.top.contentRequested.contentType, lowLatencyEnabled)
     if usherUrl = invalid or usherUrl = ""
-        m.top.metadata = []
-        m.top.response = CreateObject("roSGNode", "TwitchContentNode")
+        failContent("usher url build failed")
         return
     end if
 
-    usher_rsp = TwitchHttpGet(usherUrl, TwitchWebPlaybackHeaders(lowLatencyEnabled), 3)
+    usher_rsp = TwitchHttpGet(usherUrl, TwitchWebPlaybackHeaders(false), 3)
     if usher_rsp = invalid
-        m.top.metadata = []
-        m.top.response = CreateObject("roSGNode", "TwitchContentNode")
+        failContent("usher playlist fetch failed")
         return
     end if
 
@@ -61,9 +67,21 @@ sub main()
     stream_sticky = parsed.stream_sticky
     lowLatencyStreamsFound = parsed.lowLatencyStreamsFound
 
+    ' If decode filtering removed everything, retry with an unfiltered parse.
     if streams.Count() = 0
-        m.top.metadata = []
-        m.top.response = CreateObject("roSGNode", "TwitchContentNode")
+        parsed = parseUsherPlaylist(usher_rsp, lowLatencyEnabled, 2160)
+        streams = parsed.streams
+        metadata = parsed.metadata
+        stream_bitrates = parsed.stream_bitrates
+        stream_urls = parsed.stream_urls
+        stream_qualities = parsed.stream_qualities
+        stream_content_ids = parsed.stream_content_ids
+        stream_sticky = parsed.stream_sticky
+        lowLatencyStreamsFound = parsed.lowLatencyStreamsFound
+    end if
+
+    if streams.Count() = 0
+        failContent("no playable variants in usher playlist")
         return
     end if
 
@@ -78,28 +96,32 @@ sub main()
         end if
     end if
 
-    ' Automatic ABR entry: only playable rungs (already filtered by decode height)
+    ' Automatic uses the Usher master playlist URL so Roku ABR works reliably.
     metadata.Unshift({
         QualityID: automaticQualityLabel
         StreamBitrates: stream_bitrates
         streams: streams
-        StreamUrls: stream_urls
+        StreamUrls: [usherUrl]
         StreamQualities: stream_qualities
         StreamContentIDs: stream_content_ids
-        StreamStickyHttpRedirects: stream_sticky
+        StreamStickyHttpRedirects: [false]
         lowLatencyStreamsAvailable: lowLatencyStreamsFound
         isLowLatency: lowLatencyEnabled and (lowLatencyStreamsFound > 0)
+        useMasterPlaylist: true
     })
 
     content = CreateObject("roSGNode", "TwitchContentNode")
     content.setFields(m.top.contentRequested)
 
-    useLowLatencyFormat = lowLatencyEnabled and (lowLatencyStreamsFound > 0)
     if m.top.contentRequested.contentType = "LIVE"
-        content.streamFormat = useLowLatencyFormat ? "lhls" : "hls"
+        ' Roku only supports streamFormat "hls" here — "lhls" is not a valid format
+        ' and can leave the Video node wedged with focus trapped.
+        content.streamFormat = "hls"
         content.live = true
         content.lowLatencyStreamsAvailable = lowLatencyStreamsFound
-        content.isLowLatency = useLowLatencyFormat
+        content.isLowLatency = lowLatencyEnabled and (lowLatencyStreamsFound > 0)
+    else if m.top.contentRequested.contentType = "VOD"
+        content.streamFormat = "hls"
     end if
 
     userQualityPreference = get_user_setting("playback.video.quality", "auto")
@@ -113,6 +135,12 @@ sub main()
     end if
 
     applySelectedMetadata(content, selectedMetadata)
+
+    if content.url = invalid or content.url = ""
+        failContent("selected metadata produced empty url")
+        return
+    end if
+
     m.top.metadata = metadata
     m.top.response = content
 end sub
@@ -123,7 +151,7 @@ function buildUsherUrl(rsp as object, contentType as string, lowLatencyEnabled a
             return invalid
         end if
         token = rsp.data.video.playbackAccessToken
-        return "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&supported_codecs=" + getSupportedStreamCodecs().EncodeUriComponent() + "&nauth=" + token.value.EncodeUri() + "&nauthsig=" + token.signature
+        return "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&nauth=" + token.value.EncodeUri() + "&nauthsig=" + token.signature
     end if
 
     if contentType <> "LIVE"
@@ -138,21 +166,29 @@ function buildUsherUrl(rsp as object, contentType as string, lowLatencyEnabled a
     usherUrl += "?allow_source=true"
     usherUrl += "&token=" + token.value.EncodeUriComponent()
     usherUrl += "&sig=" + token.signature.EncodeUriComponent()
-    usherUrl += "&playlist_include_framerate=true"
-    usherUrl += "&player_backend=mediaplayer"
-    usherUrl += "&reassignments_supported=true"
-    usherUrl += "&allow_audio_only=false"
-    usherUrl += "&p=" + CreateObject("roDeviceInfo").GetRandomUUID()
-    usherUrl += "&supported_codecs=" + getSupportedStreamCodecs().EncodeUriComponent()
 
     if lowLatencyEnabled
+        ' Match the v2.1 LL Usher contract that devices already play successfully.
         usherUrl += "&low_latency=true"
+        usherUrl += "&supported_codecs=avc1"
+        usherUrl += "&p=" + CreateObject("roDeviceInfo").GetRandomUUID()
+        usherUrl += "&player_backend=mediaplayer"
+        usherUrl += "&reassignments_supported=true"
+        usherUrl += "&playlist_include_framerate=true"
         usherUrl += "&fast_bread=true"
+        usherUrl += "&force_fast=true"
         usherUrl += "&segment_preference=2"
+        usherUrl += "&transcode_type=fast"
+        usherUrl += "&allow_audio_only=false"
+        usherUrl += "&allow_spectre=false"
         usherUrl += "&player_type=roku_tv"
+        usherUrl += "&enable_low_latency=true"
+        usherUrl += "&low_latency_variant=true"
+        usherUrl += "&target_latency_ms=2000"
     else
+        usherUrl += "&playlist_include_framerate=true"
+        usherUrl += "&player_backend=mediaplayer"
         usherUrl += "&segment_preference=4"
-        usherUrl += "&player_type=pulsar"
     end if
 
     return usherUrl
@@ -202,10 +238,15 @@ function parseUsherPlaylist(usher_rsp as string, lowLatencyEnabled as boolean, m
 
             ' Gate on VIDEO DECODE height, not UI graphics resolution.
             ' Always keep lower playable rungs even when Source/chunked is 1440p+.
-            if not isStreamHeightPlayable(height)
+            ' Soft-fail: if the probe looks wrong, keep 1080p-and-under rungs.
+            effectiveMaxHeight = maxDecodeHeight
+            if effectiveMaxHeight <= 0
+                effectiveMaxHeight = 1080
+            end if
+            if height > effectiveMaxHeight and height > 1080
                 continue for
             end if
-            if height > maxDecodeHeight
+            if height > effectiveMaxHeight and not isStreamHeightPlayable(height)
                 continue for
             end if
 
@@ -284,19 +325,17 @@ function parseUsherPlaylist(usher_rsp as string, lowLatencyEnabled as boolean, m
 end function
 
 function detectLowLatencyStream(streamUrl as string, lowLatencyEnabled as boolean) as boolean
-    if not lowLatencyEnabled
+    if not lowLatencyEnabled or streamUrl = invalid or streamUrl = ""
         return false
     end if
 
-    llIndicators = ["llhls", "ll-hls", "low_latency", "fast", "_fast", "ll-", "lowlatency", "_2s", "fast_", "ll_"]
+    llIndicators = ["llhls", "ll-hls", "low_latency", "fast_bread", "transcode_type=fast", "/ll/", "_ll_", "lowlatency"]
     for each indicator in llIndicators
-        if streamUrl.InStr(indicator) > -1
+        if LCase(streamUrl).InStr(indicator) > -1
             return true
         end if
     end for
-
-    ' When LL was requested and Twitch returned the playlist, treat variants as LL-capable.
-    return true
+    return false
 end function
 
 sub sortStreamsByBitrateDesc(streams as object, metadata as object, stream_bitrates as object, stream_urls as object, stream_qualities as object, stream_content_ids as object, stream_sticky as object)
