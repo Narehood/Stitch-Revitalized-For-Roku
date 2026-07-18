@@ -93,6 +93,24 @@ sub configureVideoForLatency(video as object, isLive as boolean)
     isLowLatency = (latencyPreference = "low")
     decodeLabel = getMaxVideoDecodeResolutionLabel()
 
+    ' StitchVideo owns live player UX; only stamp decode/latency flags there.
+    if video.isSubtype("StitchVideo")
+        video.maxVideoDecodeResolution = decodeLabel
+        if isLive
+            video.isActualLowLatency = isLowLatency
+            try
+                video.enableLowLatencyHLS = isLowLatency
+                if isLowLatency
+                    video.hlsOptimization = "lowLatency"
+                else
+                    video.hlsOptimization = ""
+                end if
+            catch e
+            end try
+        end if
+        return
+    end if
+
     if isLive and isLowLatency
         try
             video.enableLowLatencyHLS = true

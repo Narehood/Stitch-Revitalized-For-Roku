@@ -123,7 +123,7 @@ function buildUsherUrl(rsp as object, contentType as string, lowLatencyEnabled a
             return invalid
         end if
         token = rsp.data.video.playbackAccessToken
-        return "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&supported_codecs=" + getSupportedStreamCodecs().EncodeUriComponent() + "&nauth=" + token.value.EncodeUri() + "&nauthsig=" + token.signature
+        return "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&nauth=" + token.value.EncodeUri() + "&nauthsig=" + token.signature
     end if
 
     if contentType <> "LIVE"
@@ -138,21 +138,29 @@ function buildUsherUrl(rsp as object, contentType as string, lowLatencyEnabled a
     usherUrl += "?allow_source=true"
     usherUrl += "&token=" + token.value.EncodeUriComponent()
     usherUrl += "&sig=" + token.signature.EncodeUriComponent()
-    usherUrl += "&playlist_include_framerate=true"
-    usherUrl += "&player_backend=mediaplayer"
-    usherUrl += "&reassignments_supported=true"
-    usherUrl += "&allow_audio_only=false"
-    usherUrl += "&p=" + CreateObject("roDeviceInfo").GetRandomUUID()
-    usherUrl += "&supported_codecs=" + getSupportedStreamCodecs().EncodeUriComponent()
 
     if lowLatencyEnabled
+        ' Match the v2.1 LL Usher contract that devices already play successfully.
         usherUrl += "&low_latency=true"
+        usherUrl += "&supported_codecs=avc1"
+        usherUrl += "&p=" + CreateObject("roDeviceInfo").GetRandomUUID()
+        usherUrl += "&player_backend=mediaplayer"
+        usherUrl += "&reassignments_supported=true"
+        usherUrl += "&playlist_include_framerate=true"
         usherUrl += "&fast_bread=true"
+        usherUrl += "&force_fast=true"
         usherUrl += "&segment_preference=2"
+        usherUrl += "&transcode_type=fast"
+        usherUrl += "&allow_audio_only=false"
+        usherUrl += "&allow_spectre=false"
         usherUrl += "&player_type=roku_tv"
+        usherUrl += "&enable_low_latency=true"
+        usherUrl += "&low_latency_variant=true"
+        usherUrl += "&target_latency_ms=2000"
     else
+        usherUrl += "&playlist_include_framerate=true"
+        usherUrl += "&player_backend=mediaplayer"
         usherUrl += "&segment_preference=4"
-        usherUrl += "&player_type=pulsar"
     end if
 
     return usherUrl
@@ -202,10 +210,15 @@ function parseUsherPlaylist(usher_rsp as string, lowLatencyEnabled as boolean, m
 
             ' Gate on VIDEO DECODE height, not UI graphics resolution.
             ' Always keep lower playable rungs even when Source/chunked is 1440p+.
-            if not isStreamHeightPlayable(height)
+            ' Soft-fail: if the probe looks wrong, keep 1080p-and-under rungs.
+            effectiveMaxHeight = maxDecodeHeight
+            if effectiveMaxHeight <= 0
+                effectiveMaxHeight = 1080
+            end if
+            if height > effectiveMaxHeight and height > 1080
                 continue for
             end if
-            if height > maxDecodeHeight
+            if height > effectiveMaxHeight and not isStreamHeightPlayable(height)
                 continue for
             end if
 

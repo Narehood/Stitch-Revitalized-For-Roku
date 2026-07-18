@@ -368,7 +368,7 @@ sub updateFollowBar()
                 }
             }
         })
-        rsp = ParseJSON(req.send())
+        rsp = TwitchParseJsonResponse(req.send())
         contentCollection = []
         if rsp?.data?.user?.followedLiveUsers <> invalid
             for each stream in rsp.data.user.followedLiveUsers.edges

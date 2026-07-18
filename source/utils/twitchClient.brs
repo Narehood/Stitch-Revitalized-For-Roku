@@ -100,6 +100,35 @@ function TwitchClipPlaybackHeaders() as object
     return headers
 end function
 
+' HttpRequest.send() returns roUrlEvent — always extract the body string first.
+function TwitchResponseBody(event as dynamic) as dynamic
+    if event = invalid
+        return invalid
+    end if
+    if GetInterface(event, "ifString") <> invalid
+        if event = ""
+            return invalid
+        end if
+        return event
+    end if
+    if type(event) = "roUrlEvent"
+        body = event.getString()
+        if body = invalid or body = ""
+            return invalid
+        end if
+        return body
+    end if
+    return invalid
+end function
+
+function TwitchParseJsonResponse(event as dynamic) as dynamic
+    body = TwitchResponseBody(event)
+    if body = invalid
+        return invalid
+    end if
+    return ParseJSON(body)
+end function
+
 ' GraphQL helper with retries. Returns parsed JSON object or invalid.
 function TwitchGraphQLRequest(data as object, retries = 3 as integer) as dynamic
     deviceCode = get_user_setting("device_code", "")
@@ -119,18 +148,15 @@ function TwitchGraphQLRequest(data as object, retries = 3 as integer) as dynamic
             timeout: 15000
             retries: 1
         })
-        rspData = req.send()
-        if rspData <> invalid
-            rsp = ParseJSON(rspData)
-            if rsp <> invalid
-                if rsp.errors <> invalid and rsp.errors.Count() > 0
-                    ' Retry transient failures; surface last response if all attempts fail
-                    if attempt >= retries
-                        return rsp
-                    end if
-                else
+        rsp = TwitchParseJsonResponse(req.send())
+        if rsp <> invalid
+            if rsp.errors <> invalid and rsp.errors.Count() > 0
+                ' Retry transient failures; surface last response if all attempts fail
+                if attempt >= retries
                     return rsp
                 end if
+            else
+                return rsp
             end if
         end if
         sleep(250 * attempt)
@@ -149,8 +175,8 @@ function TwitchHttpGet(url as string, headers as object, retries = 3 as integer)
             timeout: 15000
             retries: 1
         })
-        body = req.send()
-        if body <> invalid and body <> ""
+        body = TwitchResponseBody(req.send())
+        if body <> invalid
             return body
         end if
         sleep(200 * attempt)
