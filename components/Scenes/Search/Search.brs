@@ -9,7 +9,7 @@ sub init()
     m.kb.textEditBox.hintText = tr("Enter Search Query")
     m.kb.textEditBox.voiceEnabled = true
     m.kb.observefield("text", "handleTextInput")
-    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist = m.top.findNode("exampleRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
     updateRecents()
 end sub
@@ -99,7 +99,7 @@ function buildContentNodeFromShelves(shelves)
         if rowItem.contentType = "LIVE"
             rowItem.contentId = item.stream.Id
             rowItem.createdAt = item.stream.createdAt
-            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.stream.broadcaster.login, "1280", "720")
+            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.stream.broadcaster.login, "320", "180")
             rowItem.contentTitle = item.stream.broadcaster.broadcastSettings.title
             rowItem.viewersCount = item.stream.viewersCount
             rowItem.streamerDisplayName = item.stream.broadcaster.displayName
@@ -116,7 +116,7 @@ function buildContentNodeFromShelves(shelves)
         end if
         if rowItem.contentType = "USER"
             rowItem.contentId = item.Id
-            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.login, "1280", "720")
+            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", item.login, "320", "180")
             rowItem.contentTitle = item.displayName
             rowItem.followerCount = item.followers.totalCount
             rowItem.streamerDisplayName = item.displayName
@@ -232,13 +232,13 @@ end sub
 
 sub onGetFocus()
     if m.rowlist.focusedchild <> invalid
-        if m.rowlist.focusedChild.id = "homeRowList"
+        if m.rowlist.focusedChild.id = "exampleRowList"
             m.rowlist.focusedChild.setFocus(true)
         end if
     else if m.top.focusedChild <> invalid
         if m.top.focusedChild.id = "Search"
             m.kb.setFocus(true)
-        else if m.top.focusedChild.id = "homeRowList"
+        else if m.top.focusedChild.id = "exampleRowList"
             m.rowlist.setfocus(true)
         end if
     else
@@ -257,7 +257,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             end if
         end if
         if key = "left"
-            if m.top.focusedChild.id = "homeRowList"
+            if m.top.focusedChild.id = "exampleRowList"
                 m.rowlist.setfocus(false)
                 m.kb.setfocus(true)
                 return true

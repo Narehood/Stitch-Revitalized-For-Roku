@@ -24,25 +24,6 @@
                 height="25"
                 width="50"
                 translation="[5,5]" />
-            <Rectangle
-                id="lowLatencyBg"
-                color="0x9146FF"
-                width="24"
-                height="16"
-                translation="[60,5]"
-                visible="false" />
-            <Label
-                id="lowLatencyIcon"
-                text="LL"
-                color="0xFFFFFF"
-                translation="[62,5]"
-                width="20"
-                height="16"
-                horizAlign="center"
-                vertAlign="center"
-                visible="false">
-                <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="10" />
-            </Label>
         </Poster>
         <CirclePoster id="circlePoster" height="150" width="150" visible="false" />
         <Rectangle
@@ -59,7 +40,7 @@
             maxWidth="320"
             color="0xFFFFFFFF"
             translation="[0, 200]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf" size="20" />
         </EmojiLabel>
         <Label
             id="itemSubtitle"
@@ -68,7 +49,7 @@
             horizAlign="left"
             color="0xFFFFFFFF"
             translation="[0, 210]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf" size="16" />
         </Label>
         <Label
             id="itemThirdTitle"
@@ -77,7 +58,7 @@
             horizAlign="left"
             color="0xFFFFFFFF"
             translation="[0, 230]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf" size="16" />
         </Label>
         <Poster
             id="viewsRect"
@@ -89,7 +70,7 @@
             horizAlign="left"
             color="0xFFFFFFFF"
             translation="[7,157]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="14" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf" size="14" />
         </Label>
         <Poster
             id="runtimeRect"
@@ -102,7 +83,7 @@
             horizAlign="left"
             color="0xFFFFFFFF"
             translation="[7,23]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="14" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf" size="14" />
         </Label>
         <Poster
             id="timestampRect"
@@ -114,8 +95,9 @@
             horizAlign="left"
             color="0xFFFFFFFF"
             translation="[7,23]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="14" />
+            <Font role="font" uri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf" size="14" />
         </Label>
+
 
     </children>
 

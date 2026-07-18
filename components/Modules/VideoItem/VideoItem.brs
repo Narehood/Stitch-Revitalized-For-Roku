@@ -1,3 +1,4 @@
+
 sub init()
     m.itemlabel = m.top.findNode("itemLabel")
     m.itemmask = m.top.findNode("itemMask")
@@ -15,8 +16,6 @@ sub showcontent()
     m.viewsRect = m.top.findNode("viewsRect")
     m.runtimeRect = m.top.findNode("runtimeRect")
     m.runtimeLabel = m.top.findNode("runtimeLabel")
-    m.lowLatencyIcon = m.top.findNode("lowLatencyIcon")
-    m.lowLatencyBg = m.top.findNode("lowLatencyBg")
     GlobalSettings()
     if m.top.itemContent.contentType = "GAME"
         GameSettings()
@@ -34,14 +33,6 @@ end sub
 sub GlobalSettings()
     m.itemSubtitle.color = m.global.constants.colors.hinted.grey9
     m.itemThirdTitle.color = m.global.constants.colors.hinted.grey9
-
-    ' Hide low latency indicator by default
-    if m.lowLatencyIcon <> invalid
-        m.lowLatencyIcon.visible = false
-    end if
-    if m.lowLatencyBg <> invalid
-        m.lowLatencyBg.visible = false
-    end if
 end sub
 
 sub GameSettings()
@@ -75,18 +66,6 @@ sub LiveSettings()
     m.itemlabel.text = m.top.itemContent.contentTitle
     m.timestampLabel.visible = false
     m.timestampRect.visible = false
-
-    ' Show low latency indicator for live streams if user has low latency enabled
-    if m.lowLatencyIcon <> invalid and m.lowLatencyBg <> invalid
-        latencyPreference = LCase(get_user_setting("preferred.latency", "low"))
-        if latencyPreference = "low"
-            m.lowLatencyIcon.visible = true
-            m.lowLatencyBg.visible = true
-        else
-            m.lowLatencyIcon.visible = false
-            m.lowLatencyBg.visible = false
-        end if
-    end if
 end sub
 
 sub VodSettings()
@@ -137,6 +116,7 @@ sub UserSettings()
     m.timestampRect.visible = false
     m.itemlabel.text = m.top.itemContent.contentTitle
 end sub
+
 
 sub onGetFocus()
     if m.top.itemHasFocus

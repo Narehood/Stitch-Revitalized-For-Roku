@@ -22,12 +22,12 @@
                 <SimpleLabel
                     id="username"
                     fontSize="24"
-                    fontUri="pkg:/fonts/Archivo-Bold.otf"
+                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf"
                     translation="[160,60]" />
                 <SimpleLabel
                     id="followers"
                     fontSize="16"
-                    fontUri="pkg:/fonts/Archivo-Regular.otf"
+                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf"
                     translation="[160,85]" />
 
             </Group>
@@ -36,6 +36,8 @@
                     visible="false"
                     id="description"
                     width="600"
+                    fontSize="24"
+                    fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf"
                     translation="[20,0]" />
             </Group>
             <!-- <Button
@@ -51,7 +53,7 @@
                 maxWidth="24"
                 translation="[300,160]" /> -->
             <RowList
-                id="homeRowList"
+                id="exampleRowList"
                 rowLabelOffset="[[0,5]]"
                 rowLabelFont="font:LargeBoldSystemFont"
                 translation="[ 30,350 ]"

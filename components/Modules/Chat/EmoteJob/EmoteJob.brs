@@ -6,9 +6,7 @@ function getGlobalTwitchEmotes()
     emoteCache = m.global.emoteCache
     try
         ? "[EmoteJob] - getGlobalTwitchEmotes"
-        ids = TwitchClientIds()
-        access_token = ""
-        if get_user_setting("access_token", "") <> ""
+        if get_user_setting("access_token") <> invalid
             access_token = "Bearer " + get_user_setting("access_token")
         end if
         link = "https://api.twitch.tv/helix/chat/emotes/global"
@@ -17,13 +15,12 @@ function getGlobalTwitchEmotes()
             headers: {
                 "Accept": "*/*"
                 "Authorization": access_token
-                "Client-Id": ids.helix
+                "Client-Id": "cf9fbjz6j9i6k6guz3dwh6qff5dluz"
             }
             method: "GET"
-            timeout: 15000
-            retries: 2
         })
-        response_string = TwitchParseJsonResponse(req.send())
+        response_string = ParseJSON(req.send())
+
         if response_string?.data <> invalid
             for each emote in response_string.data
                 uri = emote.images.url_1x
@@ -40,9 +37,7 @@ function getChannelTwitchEmotes(channel_id)
     emoteCache = m.global.emoteCache
     try
         ? "[EmoteJob] - getChannelTwitchEmotes"
-        ids = TwitchClientIds()
-        access_token = ""
-        if get_user_setting("access_token", "") <> ""
+        if get_user_setting("access_token") <> invalid
             access_token = "Bearer " + get_user_setting("access_token")
         end if
         link = "https://api.twitch.tv/helix/chat/emotes?broadcaster_id=" + channel_id
@@ -51,13 +46,12 @@ function getChannelTwitchEmotes(channel_id)
             headers: {
                 "Accept": "*/*"
                 "Authorization": access_token
-                "Client-Id": ids.helix
+                "Client-Id": "cf9fbjz6j9i6k6guz3dwh6qff5dluz"
             }
             method: "GET"
-            timeout: 15000
-            retries: 2
         })
-        response_string = TwitchParseJsonResponse(req.send())
+        response_string = ParseJSON(req.send())
+
         if response_string?.data <> invalid
             for each emote in response_string.data
                 uri = emote.images.url_1x
@@ -74,13 +68,23 @@ function getTwitchBadges()
     ? "[EmoteJob] - getTwitchBadges"
     badgelist = {}
     try
-        reqHeaders = TwitchDefaultHeaders("androidTv")
+        access_token = ""
+        device_code = ""
+        ' doubled up here in stead of defaulting to "" because access_token is dependent on device_code
+        if get_user_setting("device_code") <> invalid
+            device_code = get_user_setting("device_code")
+        end if
         req = HttpRequest({
             url: "https://gql.twitch.tv/gql"
-            headers: reqHeaders
+            headers: {
+                "Accept": "*/*"
+                "Authorization": access_token
+                "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa"
+                "Device-ID": device_code
+                "Origin": "https://android.tv.twitch.tv"
+                "Referer": "https://android.tv.twitch.tv/"
+            }
             method: "POST"
-            timeout: 15000
-            retries: 2
             data: {
                 "operationName": "ChatList_Badges",
                 "variables": {
@@ -94,14 +98,12 @@ function getTwitchBadges()
                 }
             }
         })
-        rsp = TwitchParseJsonResponse(req.send())
-        if rsp?.data?.badges <> invalid
-            for each badge in rsp.data.badges
-                identifier = badge.setID + "/" + badge.version
-                badgelist[identifier] = badge.image2x
-            end for
-        end if
-        if rsp?.data?.user <> invalid
+        rsp = ParseJSON(req.send())
+        for each badge in rsp.data.badges
+            identifier = badge.setID + "/" + badge.version
+            badgelist[identifier] = badge.image2x
+        end for
+        if rsp.data.user <> invalid
             if rsp.data.user.broadcastBadges <> invalid
                 for each badge in rsp.data.user.broadcastBadges
                     identifier = badge.setID + "/" + badge.version
@@ -127,7 +129,9 @@ function invokerest(link as string) as object
         }
         method: "GET"
     })
-    return TwitchParseJsonResponse(req.send())
+    response_string = ParseJSON(req.send())
+    ' ? "responseString: "; response_string
+    return response_string
 end function
 
 sub getChannel7tvEmotes(channel_id)

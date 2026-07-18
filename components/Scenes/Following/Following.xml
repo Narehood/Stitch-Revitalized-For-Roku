@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="Following" extends="SceneManagerGroup" initialFocus="homeRowList">
+<component name="Following" extends="SceneManagerGroup" initialFocus="exampleRowList">
     <interface>
         <field id="doOffline" type="bool" value="false" />
     </interface>
@@ -7,26 +7,15 @@
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <children>
-        <Label
-            id="countLabel"
-            text=""
-            translation="[130, 90]"
-            width="1000"
-            height="30"
-            color="0xC8C8D0FF"
-            horizAlign="left"
-            vertAlign="center">
-            <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="22" />
-        </Label>
         <RowList
-            id="homeRowList"
+            id="exampleRowList"
             rowLabelOffset="[[0,10]]"
             rowLabelFont="font:LargeBoldSystemFont"
-            translation="[ 130, 140 ]"
+            translation="[ 130, 120 ]"
             itemComponentName="VideoItem"
             numRows="50"
             rowItemSize="[[320,180]]"
-            rowItemSpacing="[[30,30]]"
+            rowItemSpacing="[[30,0]]"
             itemSize="[1280,295]"
             itemSpacing="[0,0]"
             showRowLabel="[ true ]"

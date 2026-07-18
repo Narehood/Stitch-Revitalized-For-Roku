@@ -32,7 +32,7 @@ end sub
 sub updateType()
     if m.top.contentType = "LIVE"
         m.top.live = true
-        m.top.streamFormat = "lhls"
+        m.top.streamFormat = "hls"
     end if
     if m.top.contentType = "VOD"
         m.top.live = false

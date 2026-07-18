@@ -20,10 +20,6 @@
 ' OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ' SOFTWARE.
 
-'
-'   array.brs
-'
-'
 function ArrayUtil() as object
 
     util = {
@@ -85,53 +81,24 @@ function ArrayUtil() as object
             return slicedArr
         end function
 
-        fill: function(arr as object, value as dynamic, startIndex = 0 as integer, endIndex = invalid as dynamic)
-            if not m.isArray(arr) then return invalid
-
-            size = arr.count()
-            lastIndex = size - 1
-            filledArr = []
-
-            if size = 0 then return arr
-
-            if startIndex < 0 then startIndex = 0
-            if startIndex > lastIndex then startIndex = lastIndex
-            if endIndex = invalid then endIndex = lastIndex
-            if endIndex < startIndex then endIndex = startIndex
-
-            for i = 0 to lastIndex
-                if i >= startIndex and i <= endIndex then
-                    filledArr.push(value)
-                else
-                    filledArr.push(arr[i])
-                end if
-            end for
-
-            return filledArr
-        end function
-
-        flat: function(arr as object, depth = 1 as integer)
+        ' Only flattens to depth 1
+        flat: function(arr as object)
             if not m.isArray(arr) then return invalid
 
             size = arr.count()
 
             if size = 0 then return arr
 
-            flattenArr = []
-
-            for each item in arr
-                if m.isArray(item) then
-                    if depth > 1 then
-                        flattenArr.append(m.flat(item, depth - 1))
-                    else
-                        flattenArr.append(item)
-                    end if
+            reduceFunc = function(acc, element, index, arr)
+                if type(element) = "roArray" then
+                    acc.append(element)
                 else
-                    flattenArr.push(item)
+                    acc.push(element)
                 end if
-            end for
+                return acc
+            end function
 
-            return flattenArr
+            return m.reduce(arr, reduceFunc, [])
         end function
 
         map: function(arr as object, func as function)
@@ -203,84 +170,6 @@ function ArrayUtil() as object
             return invalid
         end function
 
-        findIndex: function(arr as object, func as function) as integer
-            if not m.isArray(arr) then return -1
-
-            size = arr.count()
-
-            if size = 0 then return -1
-
-            for i = 0 to size - 1
-                if func(arr[i], i, arr) then
-                    return i
-                end if
-            end for
-
-            return -1
-        end function
-
-        every: function(arr as object, func as function) as boolean
-            if not m.isArray(arr) then return true
-
-            size = arr.count()
-
-            if size = 0 then return true
-
-            for i = 0 to size - 1
-                if func(arr[i], i, arr) = false then
-                    return false
-                end if
-            end for
-
-            return true
-        end function
-
-        some: function(arr as object, func as function) as boolean
-            if not m.isArray(arr) then return false
-
-            size = arr.count()
-
-            if size = 0 then return false
-
-            for i = 0 to size - 1
-                if func(arr[i], i, arr) then
-                    return true
-                end if
-            end for
-
-            return false
-        end function
-
-        groupBy: function(arr as object, key as string)
-            if not m.isArray(arr) then return invalid
-
-            size = arr.count()
-            accumulator = {}
-
-            if size = 0 then return accumulator
-
-            for i = 0 to size - 1
-                element = arr[i]
-
-                if element = invalid then continue for
-
-                keyValue = element[key]
-
-                if keyValue = invalid then continue for
-
-                groupName = keyValue.toStr()
-                groupArray = accumulator[groupName]
-
-                if m.isArray(groupArray) then
-                    groupArray.push(element)
-                else
-                    accumulator[groupName] = []
-                    accumulator[groupName].push(element)
-                end if
-            end for
-
-            return accumulator
-        end function
     }
 
     return util

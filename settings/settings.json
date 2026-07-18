@@ -1,55 +1,24 @@
 [
     {
-        "title": "Preferred Video Quality",
-        "description": "Determines the default behavior of video quality selection when starting a stream.",
-        "settingName": "playback.video.quality",
-        "type": "radio",
-        "default": "auto",
-        "options": [
-            {
-                "title": "Automatic (Adjust based on network conditions)",
-                "id": "auto"
-            },
-            {
-                "title": "Highest (Choose highest possible option)",
-                "id": "highest"
-            },
-            {
-                "title": "Lowest (Minimal latency for live streams)",
-                "id": "lowest"
-            }
-        ]
-    },
-    {
-        "title": "Stream Latency",
-        "description": "Configures the latency mode for live streams. Low latency reduces delay but may increase buffering.",
-        "settingName": "preferred.latency",
-        "type": "radio",
-        "default": "normal",
-        "options": [
-            {
-                "title": "Low Latency (Lowest possible latency)",
-                "id": "low"
-            },
-            {
-                "title": "Normal Latency (Stable playback)",
-                "id": "normal"
-            }
-        ]
-    },
-    {
         "title": "Chat On-By-Default",
         "description": "Determines default state of chat window when opening a stream",
         "settingName": "ChatOption",
         "type": "bool",
-        "default": "false"
+        "default": "true"
+    },
+    {
+        "title": "Enable Following Bar",
+        "description": "Enables or Disables streams from appearing in the following bar.",
+        "settingName": "FollowBarOption",
+        "type": "bool",
+        "default": "true"
     },
     {
         "title": "Enable Chat Job",
         "description": "This disables the chat window from sending/receiving web requests.",
         "settingName": "ChatWebOption",
         "type": "bool",
-        "default": "false"
+        "default": "true"
     },
     {
         "title": "Chat Font Size",
@@ -84,7 +53,7 @@
             }
         ]
     },
-    {
+        {
         "title": "FS Chat Font Size",
         "description": "Base font size for chat on Your Profile Page when in fullscreen. Emotes/Badges/Etc scale based on this value.",
         "settingName": "FullScreenChatFontSize",
@@ -118,16 +87,16 @@
         ]
     },
     {
-        "title": "BetterTTV Emotes",
-        "description": "Enables or Disables BetterTTV Emotes",
-        "settingName": "BetterTTVEmote",
+        "title": "7TV Emotes",
+        "description": "Enables or Disables 7TV Emotes",
+        "settingName": "7tvEmote",
         "type": "bool",
         "default": "true"
     },
     {
-        "title": "7TV Emotes",
-        "description": "Enables or Disables 7TV Emotes",
-        "settingName": "7tvEmote",
+        "title": "BetterTTV Emotes",
+        "description": "Enables or Disables BetterTTV Emotes",
+        "settingName": "BetterTTVEmote",
         "type": "bool",
         "default": "true"
     },
@@ -181,6 +150,23 @@
             {
                 "title": "Followers (Low to High)",
                 "id": "ASC_followerCount"
+            }
+        ]
+    },
+        {
+        "title": "Preferred Video Quality",
+        "description": "Determines the default behavior of video quality selection when starting a stream.",
+        "settingName": "playback.video.quality",
+        "type": "radio",
+        "default": "auto",
+        "options": [
+            {
+                "title": "Automatic (Adjust based on network conditions)",
+                "id": "auto"
+            },
+            {
+                "title": "Highest (Choose highest possible option)",
+                "id": "highest"
             }
         ]
     }

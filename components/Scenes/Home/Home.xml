@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="Discover" extends="SceneManagerGroup" initialFocus="homeRowList">
-    <script type="text/brightscript" uri="Discover.brs" />
+<component name="Home" extends="SceneManagerGroup" initialFocus="exampleRowList">
+    <script type="text/brightscript" uri="Home.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <children>
         <RowList
-            id="homeRowList"
+            id="exampleRowList"
             rowLabelOffset="[[0,10]]"
             rowLabelFont="font:LargeBoldSystemFont"
             translation="[ 130, 120 ]"

@@ -21,7 +21,7 @@
             buttonheight="30"
             translation="[100,120]" />
         <RowList
-            id="homeRowList"
+            id="exampleRowList"
             translation="[500, 120]"
             rowLabelOffset="[[0,10]]"
             rowLabelFont="font:LargeBoldSystemFont"

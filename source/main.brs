@@ -9,18 +9,18 @@ sub Main(input as dynamic)
     ' the content details, or right data from feed for id
     if input <> invalid
         print "Received Input -- write code here to check it!"
-        if input.instant_on_run_mode <> invalid
-            print "Instant On Run Mode: "; input.instant_on_run_mode
-        end if
-        if input.lastExitOrTerminationReason <> invalid
-            print "Last Exit or Termination Reason: "; input.lastExitOrTerminationReason
-        end if
-        if input.source <> invalid
-            print "Source: "; input.source
-        end if
-        if input.splashTime <> invalid
-            print "Splash Time: "; input.splashTime
-        end if
+        ' if input.instant_on_run_mode <> invalid
+        '     print "Instant On Run Mode: "; input.instant_on_run_mode
+        ' end if
+        ' if input.lastExitOrTerminationReason <> invalid
+        '     print "Last Exit or Termination Reason: "; input.lastExitOrTerminationReason
+        ' end if
+        ' if input.source <> invalid
+        '     print "Source: "; input.source
+        ' end if
+        ' if input.splashTime <> invalid
+        '     print "Splash Time: "; input.splashTime
+        ' end if
         if input.reason <> invalid
             if input.reason = "ad" then
                 print "Channel launched from ad click"
@@ -33,31 +33,19 @@ sub Main(input as dynamic)
             'launch/prep the content mapped to the contentID here
         end if
     end if
-
-    ' Initialize roSGScreen and roMessagePort
     screen = CreateObject("roSGScreen")
     m.port = CreateObject("roMessagePort")
     ' Set global constants
     m.global = screen.getGlobalNode()
-    setConstants() ' Assuming this sets necessary global constants
-
-    ' Set the message port for screen
+    setConstants()
     screen.setMessagePort(m.port)
-
-    ' Ensure the scene is properly created
     m.scene = screen.CreateScene("HeroScene")
-
-    ' The main function that runs when the application is launched
+    ' The main function that runs when the application is launched.
     screen.show()
-
-    ' Signal beacons after the scene is fully initialized
-    m.scene.signalBeacon("AppDialogInitiate")
-    m.scene.signalBeacon("AppDialogComplete")
-    m.scene.signalBeacon("AppLaunchComplete")
-
+    ' vscode_rdb_on_device_component_entry
     m.scene.observeField("exitApp", m.port)
     m.scene.setFocus(true)
-
+    ' m.global = m.screen.getGlobalNode()
     while (true)
         msg = wait(0, m.port)
         msgType = type(msg)

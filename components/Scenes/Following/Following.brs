@@ -2,7 +2,7 @@ sub init()
     m.top.observeField("focusedChild", "onGetfocus")
     ? "init"; TimeStamp()
     ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist = m.top.findNode("exampleRowList")
     ' m.allChannels = m.top.findNode("allChannels")
     ' m.allChannels.observeField("itemSelected", "handleItemSelected")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
@@ -61,7 +61,7 @@ sub handleDefaultSections()
                             rowItem.contentId = stream.node.Id
                             rowItem.createdAt = stream.node.createdAt
                             rowItem.contentType = "LIVE"
-                            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
+                            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
                             rowItem.contentTitle = stream.node.broadcaster.broadcastSettings.title
                             rowItem.viewersCount = stream.node.viewersCount
                             rowItem.streamerDisplayName = stream.node.broadcaster.displayName
@@ -117,7 +117,7 @@ sub handleRecommendedSections()
                         rowItem.contentId = stream.Id
                         rowItem.createdAt = stream.createdAt
                         rowItem.contentType = "LIVE"
-                        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.broadcaster.login, "1280", "720")
+                        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.broadcaster.login, "320", "180")
                         rowItem.contentTitle = stream.broadcaster.broadcastSettings.title
                         rowItem.viewersCount = stream.viewersCount
                         rowItem.streamerDisplayName = stream.broadcaster.displayName
@@ -175,7 +175,7 @@ sub handleRecommendedSections()
                         rowItem = {}
                         rowItem.contentId = stream.node.Id
                         rowItem.contentType = "USER"
-                        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.login, "1280", "720")
+                        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.login, "320", "180")
                         rowItem.contentTitle = stream.node.displayName
                         rowItem.followerCount = stream.node.followers.totalCount
                         rowItem.streamerDisplayName = stream.node.displayName
@@ -297,7 +297,7 @@ end sub
 sub onGetFocus()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
+    else if m.rowlist.focusedchild.id = "exampleRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
 end sub

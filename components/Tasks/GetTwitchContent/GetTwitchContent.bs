@@ -1,610 +1,204 @@
-sub failContent(reason = "" as string)
-    if reason <> ""
-        ? "[GetTwitchContent] "; reason
-    end if
-    m.top.metadata = []
-    ' Emit an empty node so VideoPlayer's observer fires and aborts cleanly.
-    m.top.response = CreateObject("roSGNode", "TwitchContentNode")
-end sub
-
 sub main()
     if m.top.contentRequested.contentType = "CLIP"
-        buildClipContent()
-        return
-    end if
-
-    latencyPreference = get_user_setting("preferred.latency", "normal")
-    lowLatencyEnabled = (latencyPreference = "low") and (m.top.contentRequested.contentType = "LIVE")
-    maxDecodeHeight = getMaxVideoDecodeHeight()
-
-    rsp = invalid
-    if m.top.contentRequested.contentType = "VOD"
-        rsp = TwitchGraphQLRequest({
-            query: "query VodPlayerWrapper_Query($videoId: ID!, $platform: String!, $playerType: String!, $skipPlayToken: Boolean!) { ...VodPlayerWrapper_token } fragment VodPlayerWrapper_token on Query { video(id: $videoId) @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } id __typename } }"
-            variables: {
-                "videoId": m.top.contentRequested.contentId
-                "platform": "web_tv"
-                "playerType": "pulsar"
-                "skipPlayToken": false
-            }
-        })
-    else if m.top.contentRequested.contentType = "LIVE"
-        rsp = TwitchGraphQLRequest({
-            query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { ...StreamPlayer_token } fragment StreamPlayer_token on Query { user(login: $login) { login stream @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } id __typename } id __typename } }"
-            variables: {
-                "login": m.top.contentRequested.streamerLogin
-                "platform": "web_tv"
-                "playerType": "pulsar"
-                "skipPlayToken": false
-            }
-        })
-    end if
-
-    if rsp = invalid or rsp.data = invalid
-        failContent("token query failed")
-        return
-    end if
-
-    usherUrl = buildUsherUrl(rsp, m.top.contentRequested.contentType, lowLatencyEnabled)
-    if usherUrl = invalid or usherUrl = ""
-        failContent("usher url build failed")
-        return
-    end if
-
-    usher_rsp = TwitchHttpGet(usherUrl, TwitchWebPlaybackHeaders(false), 3)
-    if usher_rsp = invalid
-        failContent("usher playlist fetch failed")
-        return
-    end if
-
-    parsed = parseUsherPlaylist(usher_rsp, lowLatencyEnabled, maxDecodeHeight)
-    streams = parsed.streams
-    metadata = parsed.metadata
-    stream_bitrates = parsed.stream_bitrates
-    stream_urls = parsed.stream_urls
-    stream_qualities = parsed.stream_qualities
-    stream_content_ids = parsed.stream_content_ids
-    stream_sticky = parsed.stream_sticky
-    lowLatencyStreamsFound = parsed.lowLatencyStreamsFound
-
-    ' If decode filtering removed everything, retry with an unfiltered parse.
-    if streams.Count() = 0
-        parsed = parseUsherPlaylist(usher_rsp, lowLatencyEnabled, 2160)
-        streams = parsed.streams
-        metadata = parsed.metadata
-        stream_bitrates = parsed.stream_bitrates
-        stream_urls = parsed.stream_urls
-        stream_qualities = parsed.stream_qualities
-        stream_content_ids = parsed.stream_content_ids
-        stream_sticky = parsed.stream_sticky
-        lowLatencyStreamsFound = parsed.lowLatencyStreamsFound
-    end if
-
-    if streams.Count() = 0
-        failContent("no playable variants in usher playlist")
-        return
-    end if
-
-    sortStreamsByBitrateDesc(streams, metadata, stream_bitrates, stream_urls, stream_qualities, stream_content_ids, stream_sticky)
-
-    automaticQualityLabel = "Automatic"
-    if lowLatencyEnabled
-        if lowLatencyStreamsFound > 0
-            automaticQualityLabel = "Automatic (Low Latency)"
-        else
-            automaticQualityLabel = "Automatic (LL Requested)"
-        end if
-    end if
-
-    ' Automatic uses the Usher master playlist URL so Roku ABR works reliably.
-    metadata.Unshift({
-        QualityID: automaticQualityLabel
-        StreamBitrates: stream_bitrates
-        streams: streams
-        StreamUrls: [usherUrl]
-        StreamQualities: stream_qualities
-        StreamContentIDs: stream_content_ids
-        StreamStickyHttpRedirects: [false]
-        lowLatencyStreamsAvailable: lowLatencyStreamsFound
-        isLowLatency: lowLatencyEnabled and (lowLatencyStreamsFound > 0)
-        useMasterPlaylist: true
-    })
-
-    content = CreateObject("roSGNode", "TwitchContentNode")
-    content.setFields(m.top.contentRequested)
-
-    if m.top.contentRequested.contentType = "LIVE"
-        ' Roku only supports streamFormat "hls" here — "lhls" is not a valid format
-        ' and can leave the Video node wedged with focus trapped.
-        content.streamFormat = "hls"
-        content.live = true
-        content.lowLatencyStreamsAvailable = lowLatencyStreamsFound
-        content.isLowLatency = lowLatencyEnabled and (lowLatencyStreamsFound > 0)
-    else if m.top.contentRequested.contentType = "VOD"
-        content.streamFormat = "hls"
-    end if
-
-    userQualityPreference = get_user_setting("playback.video.quality", "auto")
-    selectedMetadata = invalid
-    if userQualityPreference = "highest" and metadata.Count() > 1
-        selectedMetadata = metadata[1]
-    else if userQualityPreference = "lowest" and metadata.Count() > 0
-        selectedMetadata = metadata[metadata.Count() - 1]
+        content = CreateObject("roSGNode", "TwitchContentNode")
+        content.setFields(m.top.contentRequested)
+        content.url = Left(m.top.contentRequested.previewImageUrl, Len(m.top.contentRequested.previewImageUrl) - 20) + ".mp4"
+        content.StreamUrls = [content.url]
+        content.streamQualities = ["HD"]
+        content.streamContentIds = ["Original"]
     else
-        selectedMetadata = metadata[0]
-    end if
+        if m.top.contentRequested.contentType = "VOD"
+            rsp = TwitchGraphQLRequest({
+                query: `query VodPlayerWrapper_Query(
+            $videoId: ID!
+            $platform: String!
+            $playerType: String!
+            $skipPlayToken: Boolean!
+            ) {
+            ...VodPlayerWrapper_token
+            }
+            fragment VodPlayerWrapper_token on Query {
+            video(id: $videoId) @skip(if: $skipPlayToken) {
+                playbackAccessToken(params: {platform: $platform, playerType: $playerType}) {
+                    signature
+                   value
+                }
+                id
+                __typename
+            }
+        }`
+                variables: {
+                    "videoId": m.top.contentRequested.contentId
+                    "platform": "web_tv"
+                    "playerType": "pulsar"
+                    "skipPlayToken": false
+                }
+            })
 
-    applySelectedMetadata(content, selectedMetadata)
-
-    if content.url = invalid or content.url = ""
-        failContent("selected metadata produced empty url")
-        return
-    end if
-
-    m.top.metadata = metadata
-    m.top.response = content
-end sub
-
-function buildUsherUrl(rsp as object, contentType as string, lowLatencyEnabled as boolean) as dynamic
-    if contentType = "VOD"
-        if rsp.data.video = invalid or rsp.data.video.playbackAccessToken = invalid
-            return invalid
         end if
-        token = rsp.data.video.playbackAccessToken
-        return "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&nauth=" + token.value.EncodeUri() + "&nauthsig=" + token.signature
-    end if
+        if m.top.contentRequested.contentType = "LIVE"
+            rsp = TwitchGraphQLRequest({
+                query: `query StreamPlayer_Query(
+            $login: String!
+            $playerType: String!
+            $platform: String!
+            $skipPlayToken: Boolean!
+            ) {
+            ...StreamPlayer_token
+            }
 
-    if contentType <> "LIVE"
-        return invalid
-    end if
-    if rsp.data.user = invalid or rsp.data.user.stream = invalid or rsp.data.user.stream.playbackAccessToken = invalid
-        return invalid
-    end if
+            fragment StreamPlayer_token on Query {
+            user(login: $login) {
+                login
+                stream @skip(if: $skipPlayToken) {
+                    playbackAccessToken(params: {platform: $platform, playerType: $playerType}) {
+                        signature
+                        value
+                    }
+                    id
+                    __typename
+                }
+                id
+                __typename
+            }
+        }`
+                variables: {
+                    "login": m.top.contentRequested.streamerLogin
+                    "platform": "web_tv"
+                    "playerType": "roku"
+                    "skipPlayToken": false
+                }
+            })
+        end if
 
-    token = rsp.data.user.stream.playbackAccessToken
-    usherUrl = "https://usher.ttvnw.net/api/channel/hls/" + rsp.data.user.login + ".m3u8"
-    usherUrl += "?allow_source=true"
-    usherUrl += "&token=" + token.value.EncodeUriComponent()
-    usherUrl += "&sig=" + token.signature.EncodeUriComponent()
 
-    if lowLatencyEnabled
-        ' Match the v2.1 LL Usher contract that devices already play successfully.
-        usherUrl += "&low_latency=true"
-        usherUrl += "&supported_codecs=avc1"
-        usherUrl += "&p=" + CreateObject("roDeviceInfo").GetRandomUUID()
-        usherUrl += "&player_backend=mediaplayer"
-        usherUrl += "&reassignments_supported=true"
-        usherUrl += "&playlist_include_framerate=true"
-        usherUrl += "&fast_bread=true"
-        usherUrl += "&force_fast=true"
-        usherUrl += "&segment_preference=2"
-        usherUrl += "&transcode_type=fast"
-        usherUrl += "&allow_audio_only=false"
-        usherUrl += "&allow_spectre=false"
-        usherUrl += "&player_type=roku_tv"
-        usherUrl += "&enable_low_latency=true"
-        usherUrl += "&low_latency_variant=true"
-        usherUrl += "&target_latency_ms=2000"
-    else
-        usherUrl += "&playlist_include_framerate=true"
-        usherUrl += "&player_backend=mediaplayer"
-        usherUrl += "&segment_preference=4"
-    end if
+        if m.top.contentRequested.contentType = "VOD"
+            usherUrl = "https://usher.ttvnw.net/vod/" + rsp.data.video.id + ".m3u8?playlist_include_framerate=true&allow_source=true&player_type=pulsar&player_backend=mediaplayer&reassignments_supported=true&nauth=" + rsp.data.video.playbackAccessToken.value.EncodeUri() + "&nauthsig=" + rsp.data.video.playbackAccessToken.signature
+        else if m.top.contentRequested.contentType = "LIVE"
+            usherUrl = "https://usher.ttvnw.net/api/channel/hls/" + rsp.data.user.login + ".m3u8?allow_source=true&token=" + rsp.data.user.stream.playbackaccesstoken.value.EncodeUriComponent() + "&sig=" + rsp.data.user.stream.playbackaccesstoken.signature.EncodeUriComponent()
+            ' "https://usher.ttvnw.net/api/channel/hls/ironmouse.m3u8?token=%7B%22adblock%22:false,%22authorization%22:%7B%22forbidden%22:false,%22reason%22:%22%22%7D,%22blackout_enabled%22:false,%22channel%22:%22ironmouse%22,%22channel_id%22:175831187,%22chansub%22:%7B%22restricted_bitrates%22:%5B%5D,%22view_until%22:1924905600%7D,%22ci_gb%22:false,%22geoblock_reason%22:%22%22,%22device_id%22:%22oN9A4HDHKYyKaVJYHhyPnD2gpXrEESEnw9v24aL9%22,%22expires%22:1690923984,%22extended_history_allowed%22:false,%22game%22:%22%22,%22hide_ads%22:true,%22https_required%22:true,%22mature%22:false,%22partner%22:false,%22platform%22:%22web_tv%22,%22player_type%22:%22pulsar%22,%22private%22:%7B%22allowed_to_view%22:true%7D,%22privileged%22:false,%22role%22:%22%22,%22server_ads%22:true,%22show_ads%22:false,%22subscriber%22:false,%22turbo%22:true,%22user_id%22:116527123,%22user_ip%22:%2276.196.110.129%22,%22version%22:2%7D&sig=f8fe10963eee2c38b982c463fc552bcde6fb5aad"
+        end if
+        req = HttpRequest({
+            url: usherUrl
+            headers: {
+                "Accept": "*/*"
+                "Origin": "https://android.tv.twitch.tv"
+                "Referer": "https://android.tv.twitch.tv/"
+            }
+            method: "GET"
+        })
+        while true
+            usher_rsp = req.send().getString()
+            if usher_rsp <> invalid
+                exit while
+            end if
+            sleep(10)
+        end while
 
-    return usherUrl
-end function
 
-function parseUsherPlaylist(usher_rsp as string, lowLatencyEnabled as boolean, maxDecodeHeight as integer) as object
-    list = usher_rsp.Split(chr(10))
-    stream_objects = []
-
-    for line = 0 to list.Count() - 1
-        if list[line].InStr("#EXT-X-STREAM-INF:") = 0
-            stream_info = list[line].Split(",")
+        list = usher_rsp.Split(chr(10))
+        first_stream_link = ""
+        last_stream_link = ""
+        link = ""
+        cnt = 0
+        fps = invalid
+        ' streamitems_all = []
+        stream_objects = []
+        for line = 2 to list.Count() - 1
+            stream_info = list[line + 1].Split(",")
             streamobject = {}
             for info = 0 to stream_info.Count() - 1
                 info_parsed = stream_info[info].Split("=")
-                if info_parsed.Count() >= 2
-                    key = info_parsed[0].Replace("#EXT-X-STREAM-INF:", "")
-                    value = toString(info_parsed[1], true).Replace(chr(34), "")
-                    streamobject[key] = value
-                end if
+                streamobject[info_parsed[0].replace("#EXT-X-STREAM-INF:", "")] = toString(info_parsed[1], true).replace(chr(34), "")
             end for
-
-            if line + 1 < list.Count() and Left(list[line + 1], 1) <> "#"
-                streamobject["URL"] = list[line + 1]
-                stream_objects.Push(streamobject)
-            end if
-        end if
-    end for
-
-    stream_bitrates = []
-    stream_urls = []
-    stream_qualities = []
-    stream_content_ids = []
-    stream_sticky = []
-    streams = []
-    metadata = []
-    lowLatencyStreamsFound = 0
-
-    for each stream_item in stream_objects
-        if stream_item["RESOLUTION"] <> invalid and stream_item["URL"] <> invalid
-            resParts = stream_item["RESOLUTION"].Split("x")
-            if resParts.Count() < 2
-                continue for
-            end if
-            height = Int(Val(resParts[1]))
-            streamUrl = stream_item["URL"]
-
-            ' Gate on VIDEO DECODE height, not UI graphics resolution.
-            ' Always keep lower playable rungs even when Source/chunked is 1440p+.
-            ' Soft-fail: if the probe looks wrong, keep 1080p-and-under rungs.
-            effectiveMaxHeight = maxDecodeHeight
-            if effectiveMaxHeight <= 0
-                effectiveMaxHeight = 1080
-            end if
-            if height > effectiveMaxHeight and height > 1080
-                continue for
-            end if
-            if height > effectiveMaxHeight and not isStreamHeightPlayable(height)
-                continue for
-            end if
-
-            isLowLatencyStream = detectLowLatencyStream(streamUrl, lowLatencyEnabled)
-            if isLowLatencyStream
-                lowLatencyStreamsFound = lowLatencyStreamsFound + 1
-            end if
-
-            fps = invalid
+            streamobject["URL"] = list[line + 2]
+            stream_objects.push(streamobject)
+            line += 2
+        end for
+        stream_bitrates = []
+        stream_urls = []
+        stream_qualities = []
+        stream_content_ids = []
+        stream_sticky = []
+        stream_formats = []
+        streams = []
+        metadata = []
+        for each stream_item in stream_objects
+            res = stream_item["RESOLUTION"].split("x")[1]
             if stream_item["VIDEO"] = "chunked"
                 if stream_item["FRAME-RATE"] <> invalid
-                    fps = stream_item["FRAME-RATE"].Split(".")[0]
+                    fps = stream_item["FRAME-RATE"].split(".")[0]
                 end if
-                value = height.ToStr() + "p"
+                value = res + "p"
                 if fps <> invalid
                     value = value + fps + " (Source)"
                 end if
-            else if stream_item["VIDEO"] <> invalid
-                value = stream_item["VIDEO"]
             else
-                value = height.ToStr() + "p"
+                value = stream_item["VIDEO"]
             end if
-
-            if lowLatencyEnabled and isLowLatencyStream
-                value = value + " LL"
-            else if lowLatencyEnabled
-                value = value + " LL*"
+            if m.global?.supportedgraphicsresolution <> invalid
+                if res.ToInt() > m.global.supportedgraphicsresolution
+                    ? "Res Skip: "; res
+                    continue for
+                end if
             end if
-
-            stream_quality = (height >= 720)
-            bitrate = Int(Val(stream_item["BANDWIDTH"]) / 1000)
-
-            stream_bitrates.Push(bitrate)
-            stream_sticky.Push(false)
-            stream_content_ids.Push(value)
-            stream_urls.Push(streamUrl)
-            stream_qualities.Push(stream_quality)
-
+            if res.ToInt() >= 720
+                stream_qualities.push(true)
+                stream_quality = true
+            else
+                stream_qualities.push(false)
+                stream_quality = false
+            end if
+            resolution = value.split("p")[0]
+            fps = value.split("p")[1]
+            stream_bitrates.push(Int(Val(stream_item["BANDWIDTH"])) / 1000)
+            stream_sticky.push(false)
+            stream_content_ids.push(value)
+            stream_urls.push(stream_item["URL"])
+            stream_formats.push("hls")
             stream = {
-                url: streamUrl
+                url: stream_item["URL"]
                 stickyredirects: false
                 quality: stream_quality
                 contentid: value
-                bitrate: bitrate
-                height: height
-                isLowLatency: isLowLatencyStream
+                bitrate: Int(Val(stream_item["BANDWIDTH"])) / 1000
             }
-            streams.Push(stream)
-
-            ' Per-quality entries expose a SINGLE media playlist URL so forcing
-            ' 720p/1080p never still pulls an unplayable 1440p Automatic bundle.
-            metadata.Push({
+            streams.push(stream)
+            metadata.push(
+            {
                 QualityID: value
                 Streams: [stream]
-                StreamUrls: [streamUrl]
+                StreamUrls: [stream_item["URL"]]
                 StreamStickyHttpRedirects: [false]
                 StreamQualities: [stream_quality]
                 StreamContentIds: [value]
-                StreamBitrates: [bitrate]
-                isLowLatency: isLowLatencyStream
-                height: height
-            })
-        end if
-    end for
-
-    return {
-        streams: streams
-        metadata: metadata
-        stream_bitrates: stream_bitrates
-        stream_urls: stream_urls
-        stream_qualities: stream_qualities
-        stream_content_ids: stream_content_ids
-        stream_sticky: stream_sticky
-        lowLatencyStreamsFound: lowLatencyStreamsFound
-    }
-end function
-
-function detectLowLatencyStream(streamUrl as string, lowLatencyEnabled as boolean) as boolean
-    if not lowLatencyEnabled or streamUrl = invalid or streamUrl = ""
-        return false
-    end if
-
-    llIndicators = ["llhls", "ll-hls", "low_latency", "fast_bread", "transcode_type=fast", "/ll/", "_ll_", "lowlatency"]
-    for each indicator in llIndicators
-        if LCase(streamUrl).InStr(indicator) > -1
-            return true
-        end if
-    end for
-    return false
-end function
-
-sub sortStreamsByBitrateDesc(streams as object, metadata as object, stream_bitrates as object, stream_urls as object, stream_qualities as object, stream_content_ids as object, stream_sticky as object)
-    if streams.Count() < 2
-        return
-    end if
-    for i = 0 to streams.Count() - 2
-        for j = i + 1 to streams.Count() - 1
-            if streams[i].bitrate < streams[j].bitrate
-                temp = streams[i]
-                streams[i] = streams[j]
-                streams[j] = temp
-
-                temp_meta = metadata[i]
-                metadata[i] = metadata[j]
-                metadata[j] = temp_meta
-
-                temp_val = stream_bitrates[i]
-                stream_bitrates[i] = stream_bitrates[j]
-                stream_bitrates[j] = temp_val
-
-                temp_val = stream_urls[i]
-                stream_urls[i] = stream_urls[j]
-                stream_urls[j] = temp_val
-
-                temp_val = stream_qualities[i]
-                stream_qualities[i] = stream_qualities[j]
-                stream_qualities[j] = temp_val
-
-                temp_val = stream_content_ids[i]
-                stream_content_ids[i] = stream_content_ids[j]
-                stream_content_ids[j] = temp_val
-
-                temp_val = stream_sticky[i]
-                stream_sticky[i] = stream_sticky[j]
-                stream_sticky[j] = temp_val
-            end if
-        end for
-    end for
-end sub
-
-sub applySelectedMetadata(content as object, selectedMetadata as object)
-    if selectedMetadata = invalid
-        return
-    end if
-
-    if selectedMetadata.QualityID <> invalid
-        content.QualityID = selectedMetadata.QualityID
-    end if
-
-    if selectedMetadata.StreamUrls <> invalid and selectedMetadata.StreamUrls.Count() > 0
-        content.url = selectedMetadata.StreamUrls[0]
-        content.StreamUrls = selectedMetadata.StreamUrls
-    else if selectedMetadata.Streams <> invalid and selectedMetadata.Streams.Count() > 0
-        content.url = selectedMetadata.Streams[0].url
-        streamUrls = []
-        for each stream in selectedMetadata.Streams
-            streamUrls.Push(stream.url)
-        end for
-        content.StreamUrls = streamUrls
-    end if
-
-    if selectedMetadata.StreamQualities <> invalid
-        content.StreamQualities = selectedMetadata.StreamQualities
-    end if
-
-    if selectedMetadata.StreamContentIds <> invalid
-        content.StreamContentIds = selectedMetadata.StreamContentIds
-    else if selectedMetadata.StreamContentIDs <> invalid
-        content.StreamContentIds = selectedMetadata.StreamContentIDs
-    end if
-
-    if selectedMetadata.StreamBitrates <> invalid
-        content.StreamBitrates = selectedMetadata.StreamBitrates
-    end if
-
-    if selectedMetadata.StreamStickyHttpRedirects <> invalid
-        content.StreamStickyHttpRedirects = selectedMetadata.StreamStickyHttpRedirects
-    end if
-
-    if selectedMetadata.lowLatencyStreamsAvailable <> invalid
-        content.lowLatencyStreamsAvailable = selectedMetadata.lowLatencyStreamsAvailable
-    end if
-
-    if selectedMetadata.isLowLatency <> invalid
-        content.isLowLatency = selectedMetadata.isLowLatency
-    end if
-end sub
-
-sub buildClipContent()
-    clipSlug = m.top.contentRequested.clipSlug
-    if clipSlug = invalid or clipSlug = ""
-        clipSlug = m.top.contentRequested.contentId
-    end if
-
-    content = CreateObject("roSGNode", "TwitchContentNode")
-    content.setFields(m.top.contentRequested)
-
-    workingUrl = findWorkingClipUrl(clipSlug, m.top.contentRequested.previewImageUrl)
-
-    if workingUrl <> invalid and workingUrl <> ""
-        content.url = workingUrl
-        content.StreamUrls = [workingUrl]
-        content.streamQualities = [true]
-        content.streamContentIds = ["Original"]
-    else
-        clipUrl = getClipUrlViaGraphQL(clipSlug)
-        if clipUrl <> invalid and clipUrl <> ""
-            content.url = clipUrl
-            content.StreamUrls = [clipUrl]
-            content.streamQualities = [true]
-            content.streamContentIds = ["Original"]
-        else
-            fallbackUrls = generateClipFallbackUrls(clipSlug, m.top.contentRequested.previewImageUrl)
-            if fallbackUrls.Count() = 0
-                m.top.metadata = []
-                m.top.response = content
-                return
-            end if
-            content.url = fallbackUrls[0]
-            content.StreamUrls = fallbackUrls
-            content.streamQualities = []
-            content.streamContentIds = []
-            for i = 0 to fallbackUrls.Count() - 1
-                content.streamQualities.Push(true)
-                content.streamContentIds.Push("Fallback_" + i.ToStr())
-            end for
-        end if
-    end if
-
-    content.ignoreStreamErrors = true
-    content.switchingStrategy = "no-adaptation"
-    content.streamFormat = "mp4"
-    content.QualityID = "Original"
-
-    m.top.metadata = [{
-        QualityID: "Original"
-        StreamUrls: content.StreamUrls
-        StreamQualities: content.streamQualities
-        StreamContentIds: content.streamContentIds
-    }]
-    m.top.response = content
-end sub
-
-function getClipUrlViaGraphQL(clipSlug as string) as dynamic
-    try
-        rsp = TwitchGraphQLRequest({
-            query: "query ClipAccessToken($slug: ID!) { clip(slug: $slug) { id slug title playbackAccessToken(params: {platform: " + chr(34) + "web" + chr(34) + ", playerType: " + chr(34) + "site" + chr(34) + "}) { signature value } videoQualities { frameRate quality sourceURL } } }"
-            variables: {
-                "slug": clipSlug
+                StreamBitrates: [Int(Val(stream_item["BANDWIDTH"])) / 1000]
             }
+            )
+        end for
+
+        metadata.unshift({
+            QualityID: "Automatic"
+            StreamBitrates: stream_bitrates
+            streams: streams
+            StreamUrls: stream_urls
+            StreamQualities: stream_qualities
+            StreamContentIDs: stream_content_ids
+            StreamStickyHttpRedirects: stream_sticky
         })
 
-        if rsp <> invalid and rsp.data <> invalid and rsp.data.clip <> invalid
-            clip = rsp.data.clip
+        responseObj = []
+        content = CreateObject("roSGNode", "TwitchContentNode")
+        content.setFields(m.top.contentRequested)
 
-            if clip.playbackAccessToken <> invalid
-                token = clip.playbackAccessToken.value
-                signature = clip.playbackAccessToken.signature
+        userQualityPreference = get_user_setting("playback.video.quality", "auto")
 
-                if clip.videoQualities <> invalid and clip.videoQualities.Count() > 0
-                    bestQuality = clip.videoQualities[0]
-                    for each quality in clip.videoQualities
-                        if quality.quality <> invalid and bestQuality.quality <> invalid
-                            if Val(quality.quality) > Val(bestQuality.quality)
-                                bestQuality = quality
-                            end if
-                        end if
-                    end for
-
-                    if bestQuality.sourceURL <> invalid
-                        authenticatedUrl = bestQuality.sourceURL
-                        if token <> invalid and signature <> invalid
-                            if authenticatedUrl.InStr("?") > -1
-                                authenticatedUrl += "&token=" + token.EncodeUriComponent() + "&sig=" + signature.EncodeUriComponent()
-                            else
-                                authenticatedUrl += "?token=" + token.EncodeUriComponent() + "&sig=" + signature.EncodeUriComponent()
-                            end if
-                        end if
-                        return authenticatedUrl
-                    end if
-                end if
-            end if
-
-            if clip.videoQualities <> invalid and clip.videoQualities.Count() > 0
-                bestQuality = clip.videoQualities[0]
-                for each quality in clip.videoQualities
-                    if quality.quality <> invalid and bestQuality.quality <> invalid
-                        if Val(quality.quality) > Val(bestQuality.quality)
-                            bestQuality = quality
-                        end if
-                    end if
-                end for
-
-                if bestQuality.sourceURL <> invalid
-                    return bestQuality.sourceURL
-                end if
-            end if
+        if userQualityPreference = "highest"
+            content.setFields(metadata[1])
+        else if userQualityPreference = "auto"
+            content.setFields(metadata[0])
         end if
-    catch e
-        ' Clip GraphQL lookup failed; fall through to URL probing.
-    end try
-
-    return invalid
-end function
-
-function generateClipFallbackUrls(clipSlug as string, previewImageUrl as string) as object
-    fallbackUrls = []
-
-    uuid = invalid
-    if previewImageUrl <> invalid and previewImageUrl <> ""
-        if previewImageUrl.InStr("twitch-clips-thumbnails-prod") > -1
-            pathParts = previewImageUrl.Split("/")
-            if pathParts.Count() >= 6
-                uuid = pathParts[5]
-            end if
-        end if
+        m.top.metadata = metadata
     end if
-
-    if uuid <> invalid
-        fallbackUrls.Push("https://production.assets.clips.twitchcdn.net/v2/media/" + clipSlug + "/" + uuid + "/video.mp4")
-        fallbackUrls.Push("https://clips-media-assets2.twitch.tv/" + clipSlug + "-" + uuid + ".mp4")
-        fallbackUrls.Push("https://clips-media-assets.twitch.tv/" + clipSlug + "-" + uuid + ".mp4")
-        fallbackUrls.Push("https://clips-media-assets2.twitch.tv/" + clipSlug + "/" + uuid + ".mp4")
-    end if
-
-    fallbackUrls.Push("https://clips-media-assets2.twitch.tv/" + clipSlug + ".mp4")
-    fallbackUrls.Push("https://clips-media-assets.twitch.tv/" + clipSlug + ".mp4")
-    fallbackUrls.Push("https://production.assets.clips.twitchcdn.net/" + clipSlug + ".mp4")
-    fallbackUrls.Push("https://clips-media-assets2.twitch.tv/" + clipSlug + "-source.mp4")
-    fallbackUrls.Push("https://clips-media-assets2.twitch.tv/AT-cm%7C" + clipSlug + ".mp4")
-
-    return fallbackUrls
-end function
-
-function findWorkingClipUrl(clipSlug as string, previewImageUrl as string) as dynamic
-    testUrls = generateClipFallbackUrls(clipSlug, previewImageUrl)
-
-    for each testUrl in testUrls
-        if isUrlAccessible(testUrl)
-            return testUrl
-        end if
-        sleep(100)
-    end for
-
-    return invalid
-end function
-
-function isUrlAccessible(url as string) as boolean
-    req = CreateObject("roUrlTransfer")
-    req.SetCertificatesFile("common:/certs/ca-bundle.crt")
-    req.InitClientCertificates()
-    req.SetUrl(url)
-
-    headers = TwitchClipPlaybackHeaders()
-    for each key in headers
-        req.AddHeader(key, headers[key])
-    end for
-    req.AddHeader("Range", "bytes=0-1023")
-
-    req.SetMessagePort(CreateObject("roMessagePort"))
-
-    if req.AsyncGetToString()
-        msg = wait(3000, req.GetMessagePort())
-        if msg <> invalid and type(msg) = "roUrlEvent"
-            responseCode = msg.GetResponseCode()
-            return (responseCode = 200 or responseCode = 206 or responseCode = 302)
-        end if
-    end if
-
-    return false
-end function
+    m.top.response = content
+end sub

@@ -26,7 +26,5 @@
         <field id="relativePublishDate" type="string" />
         <field id="createdAt" type="string" />
         <field id="QualityId" type="string" />
-        <field id="isLowLatency" type="bool" value="false" />
-        <field id="lowLatencyStreamsAvailable" type="int" value="0" />
     </interface>
 </component>

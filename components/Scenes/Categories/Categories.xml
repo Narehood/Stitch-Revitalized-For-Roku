@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="Categories" extends="SceneManagerGroup" initialFocus="homeRowList">
+<component name="Categories" extends="SceneManagerGroup" initialFocus="exampleRowList">
     <interface>
         <field id="cursor" type="string" />
         <field id="buffer" type="bool" value="false" />
@@ -9,7 +9,7 @@
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <children>
         <RowList
-            id="homeRowList"
+            id="exampleRowList"
             rowLabelOffset="[[0,5]]"
             rowLabelFont="font:LargeBoldSystemFont"
             translation="[ 130, 120 ]"
