@@ -2,7 +2,7 @@ sub init()
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.top.observeField("focusedChild", "onGetfocus")
     ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist = m.top.findNode("exampleRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
 end sub
 
@@ -33,7 +33,7 @@ function buildContentNodeFromShelves(streams)
         rowItem = createObject("RoSGNode", "TwitchContentNode")
         rowItem.contentId = stream.node.Id
         rowItem.contentType = "LIVE"
-        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
+        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
         rowItem.contentTitle = stream.node.broadcaster.broadcastSettings.title
         rowItem.viewersCount = stream.node.viewersCount
         rowItem.streamerDisplayName = stream.node.broadcaster.displayName
@@ -43,7 +43,7 @@ function buildContentNodeFromShelves(streams)
         ' rowItem.gameDisplayName = stream.node.game.displayName
         ' rowItem.Title = stream.node.broadcaster.broadcastsettings.title
         ' rowItem.secondaryTitle = stream.node.broadcaster.displayName
-        ' rowItem.HDPosterUrl = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
+        ' rowItem.HDPosterUrl = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
         ' rowItem.ShortDescriptionLine1 = stream.node.viewersCount
         ' rowItem.ShortDescriptionLine2 = stream.node.game.displayName
         row.appendChild(rowItem)
@@ -106,7 +106,7 @@ end sub
 sub onGetFocus()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
+    else if m.rowlist.focusedchild.id = "exampleRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
 end sub

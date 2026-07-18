@@ -4,45 +4,87 @@ function GetRandomUUID()
 end function
 
 function getDeviceLocale()
-    return TwitchGetDeviceLocale()
+    di = CreateObject("roDeviceInfo")
+    return di.GetCurrentLocale().Replace("_", "-")
+end function
+
+function TwitchGraphQLRequest(data)
+    access_token = invalid
+    device_code = invalid
+    ' doubled up here in stead of defaulting to "" because access_token is dependent on device_code
+    if get_user_setting("device_code") <> invalid
+        device_code = get_user_setting("device_code")
+        if get_user_setting("access_token") <> invalid
+            access_token = "OAuth " + get_user_setting("access_token")
+        end if
+    else
+        return invalid
+    end if
+    reqHeaders = {
+        "Accept": "*/*"
+        "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa"
+        "Device-ID": device_code
+        "Origin": "https://android.tv.twitch.tv"
+        "Referer": "https://android.tv.twitch.tv/"
+        "Accept-Language": getDeviceLocale()
+    }
+    if access_token <> invalid
+        reqHeaders["Authorization"] = access_token
+    end if
+    req = HttpRequest({
+        url: "https://gql.twitch.tv/gql"
+        headers: reqHeaders
+        method: "POST"
+        data: data
+    })
+    rspData = req.send()
+    if rspData <> invalid
+        rsp = ParseJSON(rspData)
+        return rsp
+    else
+        return invalid
+    end if
 end function
 
 function validateOauthToken() as object
-    deviceCode = get_user_setting("device_code", "")
-    if deviceCode = ""
-        ' No device identity yet — leave response unset so startup does not wipe session state.
-        m.top.control = "STOP"
+    access_token = invalid
+    device_code = invalid
+    ' doubled up here in stead of defaulting to "" because access_token is dependent on device_code
+    if get_user_setting("device_code") <> invalid
+        device_code = get_user_setting("device_code")
+        if get_user_setting("access_token") <> invalid
+            access_token = "OAuth " + get_user_setting("access_token")
+        end if
+    else
         return false
     end if
-
-    reqHeaders = TwitchDefaultHeaders("androidTv")
+    reqHeaders = {
+        "Accept": "*/*"
+        "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa"
+        "Device-ID": device_code
+        "Origin": "https://android.tv.twitch.tv"
+        "Referer": "https://android.tv.twitch.tv/"
+        "Accept-Language": getDeviceLocale()
+    }
+    if access_token <> invalid
+        reqHeaders["Authorization"] = access_token
+    end if
     req = HttpRequest({
         url: "https://id.twitch.tv/oauth2/validate"
         headers: reqHeaders
         method: "GET"
-        timeout: 15000
-        retries: 2
     })
-    body = TwitchResponseBody(req.send())
-    if body = invalid
-        ' Transient network failure: do not emit tokenValid=false (that clears login).
-        m.top.control = "STOP"
-        return false
+    rsp = ParseJSON(req.send())
+    if rsp?.status <> invalid
+        if rsp.status = 401
+            m.top.response = { "tokenValid": false }
+        end if
     end if
-
-    rsp = ParseJSON(body)
-    if rsp = invalid
-        m.top.control = "STOP"
-        return false
-    end if
-
-    if rsp?.status <> invalid and rsp.status = 401
-        m.top.response = { "tokenValid": false }
-    else if rsp?.expires_in <> invalid
+    if rsp?.expires_in <> invalid
         m.top.response = { "tokenValid": true }
     end if
-    ' Ambiguous payloads leave response unset so ValidateUserLogin keeps the session.
     m.top.control = "STOP"
+    ? "pause"
 end function
 
 function getHomePageQuery() as object
@@ -1339,19 +1381,16 @@ function getFollowingPageQuery() as object
 end function
 
 function getRendezvouzToken()
-    ids = TwitchClientIds()
     req = HttpRequest({
-        url: "https://id.twitch.tv/oauth2/device?scopes=channel_read%20chat%3Aread%20user_blocks_edit%20user_blocks_read%20user_follows_edit%20user_read&client_id=" + ids.androidTv
+        url: "https://id.twitch.tv/oauth2/device?scopes=channel_read%20chat%3Aread%20user_blocks_edit%20user_blocks_read%20user_follows_edit%20user_read&client_id=ue6666qo983tsx6so1t0vnawi233wa"
         headers: {
             "content-type": "application/x-www-form-urlencoded"
             "origin": "https://android.tv.twitch.tv"
             "referer": "https://android.tv.twitch.tv/"
         }
         method: "POST"
-        timeout: 15000
-        retries: 2
     })
-    rsp = TwitchParseJsonResponse(req.send())
+    rsp = ParseJSON(req.send())
     if rsp <> invalid
         m.top.response = rsp
     else
@@ -1363,9 +1402,8 @@ end function
 
 function getOauthToken()
     if m.top.request.params.device_code = invalid return invalid
-    ids = TwitchClientIds()
     req = HttpRequest({
-        url: "https://id.twitch.tv/oauth2/token" + "?client_id=" + ids.androidTv + "&device_code=" + m.top.request.params.device_code + "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"
+        url: "https://id.twitch.tv/oauth2/token" + "?client_id=ue6666qo983tsx6so1t0vnawi233wa&device_code=" + m.top.request.params.device_code + "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"
         headers: {
             "content-type": "application/x-www-form-urlencoded"
             "origin": "https://android.tv.twitch.tv"
@@ -1373,20 +1411,15 @@ function getOauthToken()
             "accept": "application/json"
         }
         method: "POST"
-        timeout: 15000
-        retries: 1
     })
-    attempts = 0
-    rsp = invalid
-    while attempts < 60
-        attempts += 1
-        rsp = TwitchParseJsonResponse(req.send())
+    while true
+        rsp = ParseJSON(req.send())
         if rsp <> invalid and rsp.DoesExist("access_token")
             exit while
         end if
         sleep(5000)
     end while
-    if rsp <> invalid and rsp.DoesExist("access_token")
+    if rsp <> invalid
         m.top.response = rsp
     else
         m.top.response = { "response": invalid }
@@ -1727,31 +1760,33 @@ function getChannelShell()
 end function
 
 function TwitchHelixApiRequest()
-    ids = TwitchClientIds()
+    ? "HelixAPIRequest"
     access_token = ""
-    device_code = get_user_setting("device_code", "")
-    if get_user_setting("access_token", "") <> ""
-        access_token = "Bearer " + get_user_setting("access_token")
+    device_code = ""
+    ' doubled up here in stead of defaulting to "" because access_token is dependent on device_code
+    if get_user_setting("device_code") <> invalid
+        device_code = get_user_setting("device_code")
+        if get_user_setting("access_token") <> invalid
+            access_token = "Bearer " + get_user_setting("access_token")
+        end if
     end if
     requestParams = {
         url: "https://api.twitch.tv/helix/" + m.top.request.params.endpoint + "?" + m.top.request.params.args
         headers: {
             "Accept": "*/*"
             "Authorization": access_token
-            "Client-Id": ids.androidTv
+            "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa"
             "Device-ID": device_code
             "Origin": "https://android.tv.twitch.tv"
             "Referer": "https://android.tv.twitch.tv/"
         }
         method: m.top.request.params.method
-        timeout: 15000
-        retries: 2
     }
     if m.top.request.params.data <> invalid
         requestParams["data"] = m.top.request.params.data
     end if
     req = HttpRequest(requestParams)
-    rsp = TwitchParseJsonResponse(req.send())
+    rsp = ParseJSON(req.send())
     if rsp <> invalid
         m.top.response = rsp
     else

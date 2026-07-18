@@ -21,7 +21,7 @@ end sub
 
 sub refreshFollowBar()
     ' if m.top.refreshFollowBar = true
-    m.followBarJob = CreateObject("roSGNode", "FollowedStreamsBarJob")
+    m.followBarJob = CreateObject("roSGNode", "followedStreamsBarJob")
     m.followBarJob.observeField("result", "onFollowedStreamsChange")
     m.followBarJob.control = "run"
     ' end if

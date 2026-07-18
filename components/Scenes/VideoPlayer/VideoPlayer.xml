@@ -17,8 +17,6 @@
     <script type="text/brightscript" uri="VideoPlayer.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
-    <script type="text/brightscript" uri="pkg:/source/utils/http.brs" />
-    <script type="text/brightscript" uri="pkg:/source/utils/twitchClient.brs" />
     <children>
         <Chat
             id="chat"

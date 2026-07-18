@@ -6,7 +6,7 @@ sub init()
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''
     ' Anything important needs to run before this sleep.
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-    sleep(2000)
+    sleep(10000)
     VersionJobs()
     m.top.backgroundUri = ""
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
@@ -15,10 +15,10 @@ sub init()
     m.followedStreamBar.observeField("contentSelected", "onFollowSelected")
     m.menu = m.top.findNode("MenuBar")
     m.menu.menuOptionsText = [
-        "Following",
-        "Discover",
-        "LiveChannels",
+        "Home",
         "Categories",
+        "LiveChannels"
+        "Following",
     ]
     m.menu.observeField("buttonSelected", "onMenuSelection")
     m.menu.setFocus(true)
@@ -61,23 +61,20 @@ function cleanUserData()
     end if
 end function
 
-sub ValidateUserLogin()
-    ' Only act on an explicit validate result. Unset response means the check
-    ' was skipped/failed transiently — keep the existing session.
-    if m.validateOauthToken?.response?.tokenValid = invalid
-        return
+function ValidateUserLogin()
+    if m.validateOauthToken?.response?.tokenValid <> invalid
+        tokenValid = m.validateOauthToken.response.tokenValid
+    else
+        tokenValid = false
     end if
-
-    tokenValid = m.validateOauthToken.response.tokenValid
     if tokenValid
         ? "User Token Seems Valid"
-        m.menu.updateUserIcon = true
     else
         cleanUserData()
         m.menu.updateUserIcon = true
         ? "pause"
     end if
-end sub
+end function
 
 function focusedMenuItem()
     focusedItem = ""
@@ -283,3 +280,4 @@ function onKeyEvent(key, press) as boolean
     if not press return false
     ? "KEY EVENT: "; key press
 end function
+

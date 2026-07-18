@@ -2,7 +2,7 @@ sub init()
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.top.observeField("focusedChild", "onGetfocus")
     ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist = m.top.findNode("exampleRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
     m.username = m.top.findNode("username")
     m.followers = m.top.findNode("followers")
@@ -111,20 +111,16 @@ function buildContentNodeFromShelves(inputData)
             if stream.slug <> invalid
                 rowItem.contentType = "CLIP"
                 rowItem.clipSlug = stream.slug
-                rowItem.contentTitle = stream.title
-                rowItem.viewersCount = stream.viewCount
-                rowItem.datePublished = stream.createdAt
             else
                 rowItem.contentType = "VOD"
-                rowItem.contentTitle = stream.vodTitle
-                rowItem.viewersCount = stream.vodViewCount
-                rowItem.datePublished = stream.vodCreatedAt
             end if
             if stream.previewThumbnailURL <> invalid
                 rowItem.previewImageURL = Left(stream.previewThumbnailURL, len(stream.previewThumbnailURL) - 20) + "320x180." + Right(stream.previewThumbnailURL, 3)
             else if stream.thumbnailURL <> invalid
                 rowItem.previewImageURL = stream.thumbnailURL
             end if
+            rowItem.contentTitle = stream.title
+            rowItem.viewersCount = stream.viewCount
             rowItem.streamerDisplayName = m.top.contentRequested.streamerDisplayName
             rowItem.streamerLogin = m.top.contentRequested.streamerLogin
             rowItem.streamerId = m.top.contentRequested.streamerId
@@ -187,7 +183,7 @@ end function
 sub FocusRowlist()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
+    else if m.rowlist.focusedchild.id = "exampleRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
 end sub

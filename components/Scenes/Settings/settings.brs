@@ -5,24 +5,22 @@ sub init()
 
     m.userLocation = []
 
-    m.categoryList = m.top.findNode("categoryList")
     m.settingsMenu = m.top.findNode("settingsMenu")
     ' m.settingsMenu.focusBitmapUri = m.settingsMenu.focusFootprintBitmapUri
     m.settingsMenu.focusBitmapBlendColor = m.global.constants.colors.twitch.purple9
     ' m.settingsMenu.focusFootprintBlendColor = m.global.constants.colors.twitch.purple10
     m.settingsMenu.focusedColor = m.global.constants.colors.white
 
+
     m.settingDetail = m.top.findNode("settingDetail")
     m.settingDesc = m.top.findNode("settingDesc")
     m.settingTitle = m.top.findNode("settingTitle")
+    m.path = m.top.findNode("path")
 
     m.boolSetting = m.top.findNode("boolSetting")
     m.radioSetting = m.top.findNode("radioSetting")
 
-    m.categoryList.setFocus(true)
-    ' TODO: Add observeField for category selection and update settingsMenu accordingly
-    ' m.categoryList.observeField("itemSelected", "categorySelected")
-
+    m.settingsMenu.setFocus(true)
     m.settingsMenu.observeField("itemFocused", "settingFocused")
     m.settingsMenu.observeField("itemSelected", "settingSelected")
 
@@ -69,7 +67,15 @@ sub LoadMenu(configSection)
         m.settingsMenu.jumpToItem = configSection.selectedIndex
     end if
 
+    ' Set Path display
+    m.path.text = ""
+    for each level in m.userLocation
+        if level.title <> invalid then m.path.text += " / " + tr(level.title)
+    end for
+
 end sub
+
+
 
 sub settingFocused()
     selectedSetting = m.userLocation.peek().children[m.settingsMenu.itemFocused]
@@ -80,9 +86,11 @@ sub settingFocused()
     m.boolSetting.visible = false
     m.radioSetting.visible = false
 
+
     if selectedSetting.type = invalid
         return
     else if selectedSetting.type = "bool"
+
         m.boolSetting.visible = true
 
         if get_user_setting(selectedSetting.settingName) = "true"
@@ -91,6 +99,7 @@ sub settingFocused()
             m.boolSetting.checkedItem = 0
         end if
     else if LCase(selectedSetting.type) = "radio"
+
         selectedValue = get_user_setting(selectedSetting.settingName)
 
         radioContent = CreateObject("roSGNode", "ContentNode")
@@ -110,7 +119,9 @@ sub settingFocused()
     else
         print "Unknown setting type " + selectedSetting.type
     end if
+
 end sub
+
 
 sub settingSelected()
     selectedItem = m.userLocation.peek().children[m.settingsMenu.itemFocused]
@@ -132,7 +143,9 @@ sub settingSelected()
     end if
 
     m.settingDesc.text = m.settingsMenu.content.GetChild(m.settingsMenu.itemFocused).Description
+
 end sub
+
 
 sub boolSettingChanged()
     if m.boolSetting.focusedChild = invalid then return
@@ -143,6 +156,7 @@ sub boolSettingChanged()
     else
         set_user_setting(selectedSetting.settingName, "false")
     end if
+
 end sub
 
 sub radioSettingChanged()

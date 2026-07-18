@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="GamePage" extends="SceneManagerGroup" initialFocus="homeRowList">
+<component name="GamePage" extends="SceneManagerGroup" initialFocus="exampleRowList">
     <interface>
         <field id="contentRequested" type="node" onChange="updatePage" />
         <field id="backgroundColor" type="string" alias="background.color" />
@@ -14,9 +14,9 @@
             translation="[75,20]"
             text="Browse"
             fontSize="48"
-            fontUri="pkg:/fonts/Archivo-Bold.otf" />
+            fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf" />
         <RowList
-            id="homeRowList"
+            id="exampleRowList"
             visible="true"
             rowLabelOffset="[[0,5]]"
             rowLabelFont="font:LargeBoldSystemFont"

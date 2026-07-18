@@ -1,44 +1,39 @@
-<component name="Settings" extends="SceneManagerGroup" initialFocus="categoryList">
+<component name="Settings" extends="SceneManagerGroup" initialFocus="settingsMenu">
     <children>
         <Group translation="[10, 80]">
-            <Rectangle width="1280" height="720" color="0x0e0e10FF" />
-            <!-- Sidebar for categories -->
+            <Rectangle width="1280" height="720" color="0x0e0e10FF"
+            />
+            <Label id="path" translation="[64,117]" font="font:SmallestBoldSystemFont" />
+
             <LabelList
-                id="categoryList"
-                translation="[40, 0]"
-                itemSize="[200, 50]"
-                vertFocusAnimationStyle="floatingFocus"
-                itemSpacing="[0,5]"
-                focusedColor="0x9147FFFF"
-                />
-            <!-- Main settings list for selected category, now closer to the left and with less spacing -->
-            <LabelList
+                translation="[80,67]"
                 id="settingsMenu"
-                translation="[100, 10]"
-                itemSize="[400, 50]"
-                height="600"
+                itemSize="[290,45]"
                 vertFocusAnimationStyle="floatingFocus"
                 itemSpacing="[0,5]"
-                focusedColor="0x9147FFFF"
-                />
-            <!-- Modern card for setting details, moved left for balance -->
-            <Rectangle
-                id="detailsCard"
-                translation="[620, 20]"
-                width="600"
+            />
+
+            <Poster
+                translation="[473,67]"
+                id="testRectangle"
+                width="586"
                 height="400"
-                color="0x18181bFF"
-                opacity="0.95"
-                />
+                uri="pkg:/images/white.9.png"
+                blendColor="#3f3f3f"
+            />
+
             <LayoutGroup
-                translation="[650, 40]"
+                translation="[767,83]"
                 id="settingDetail"
                 vertAlignment="top"
-                horizAlignment="left"
-                itemSpacings="[20]"
-                >
-                <ScrollingLabel font="font:LargeSystemFont" id="settingTitle" maxWidth="560" />
-                <Label id="settingDesc" width="560" wrap="true" color="0xC8C8D0FF" />
+                horizAlignment="center"
+                itemSpacings="[50]"
+            >
+
+                <ScrollingLabel font="font:LargeSystemFont" id="settingTitle" maxWidth="473" />
+
+                <Label id="settingDesc" width="473" wrap="true" />
+
                 <RadioButtonList id="boolSetting" vertFocusAnimationStyle="floatingFocus">
                     <ContentNode role="content">
                         <ContentNode title="Disabled" />
@@ -46,7 +41,7 @@
                     </ContentNode>
                 </RadioButtonList>
             </LayoutGroup>
-            <RadioButtonList id="radioSetting" translation="[650, 200]" visible="false"
+            <RadioButtonList id="radioSetting" translation="[570, 220]" visible="false"
                 inheritParentTransform="false" vertFocusAnimationStyle="floatingFocus" />
         </Group>
     </children>

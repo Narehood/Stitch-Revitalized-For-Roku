@@ -2,7 +2,7 @@ sub init()
     ? "init: "; TimeStamp()
     m.top.observeField("focusedChild", "onGetfocus")
     ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist = m.top.findNode("exampleRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
     m.GetContentTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
     ' observe content so we can know when feed content will be parsed
@@ -52,7 +52,7 @@ function buildContentNodeFromShelves(shelves)
                     rowItem.createdAt = stream.node.createdAt
                     rowItem.contentId = stream.node.Id
                     rowItem.contentType = "LIVE"
-                    rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
+                    rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
                     if stream.node.broadcaster.broadcastSettings?.title <> invalid
                         rowItem.contentTitle = stream.node.broadcaster.broadcastSettings.title
                     else
@@ -197,7 +197,7 @@ end sub
 sub onGetFocus()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
+    else if m.rowlist.focusedchild.id = "exampleRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
 end sub
