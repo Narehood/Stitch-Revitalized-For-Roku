@@ -2,38 +2,32 @@ sub init()
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.top.observeField("focusedChild", "onGetfocus")
     ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("exampleRowList")
+    m.rowlist = m.top.findNode("homeRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
 end sub
 
 sub updatePage()
     m.top.pageTitle = m.top.contentRequested.gameName
-    m.GetContentTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
-    ' observe content so we can know when feed content will be parsed
-    m.GetContentTask.observeField("response", "handleRecommendedSections")
-    m.GetContentTask.request = {
-        type: "getGameDirectoryQuery"
-        params: {
-            gameAlias: m.top.contentRequested.gameName
-        }
-    }
-    m.getcontentTask.functionName = m.getcontenttask.request.type
-    m.getcontentTask.control = "run"
+    m.GetContentTask = createApiTask("getGameDirectoryQuery", "handleRecommendedSections", {
+        params: { gameAlias: m.top.contentRequested.gameName }
+    })
 end sub
 
 function buildContentNodeFromShelves(streams)
     itemsPerRow = 3
     contentCollection = createObject("RoSGNode", "ContentNode")
+    row = createObject("RoSGNode", "ContentNode")
     for i = 0 to (streams.count() - 1) step 1
         if i mod itemsPerRow = 0
             row = createObject("RoSGNode", "ContentNode")
         end if
         stream = streams[i]
+        if stream = invalid or stream.node = invalid or stream.node.broadcaster = invalid then continue for
         row.title = ""
         rowItem = createObject("RoSGNode", "TwitchContentNode")
         rowItem.contentId = stream.node.Id
         rowItem.contentType = "LIVE"
-        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
+        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
         rowItem.contentTitle = stream.node.broadcaster.broadcastSettings.title
         rowItem.viewersCount = stream.node.viewersCount
         rowItem.streamerDisplayName = stream.node.broadcaster.displayName
@@ -43,7 +37,7 @@ function buildContentNodeFromShelves(streams)
         ' rowItem.gameDisplayName = stream.node.game.displayName
         ' rowItem.Title = stream.node.broadcaster.broadcastsettings.title
         ' rowItem.secondaryTitle = stream.node.broadcaster.displayName
-        ' rowItem.HDPosterUrl = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "320", "180")
+        ' rowItem.HDPosterUrl = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
         ' rowItem.ShortDescriptionLine1 = stream.node.viewersCount
         ' rowItem.ShortDescriptionLine2 = stream.node.game.displayName
         row.appendChild(rowItem)
@@ -55,33 +49,17 @@ function buildContentNodeFromShelves(streams)
 end function
 
 
-function updateRowList(contentCollection)
+sub updateRowList(contentCollection)
     rowItemSize = []
     showRowLabel = []
     rowHeights = []
     for each row in contentCollection.getChildren(contentCollection.getChildCount(), 0)
-        if row.title <> ""
-            hasRowLabel = true
-        else
-            hasRowLabel = false
-        end if
+        hasRowLabel = row.title <> ""
         showRowLabel.push(hasRowLabel)
-        defaultRowHeight = 275
-        if row.getchild(0).contentType = "LIVE" or row.getchild(0).contentType = "VOD"
-            rowItemSize.push([320, 180])
-            if hasRowLabel
-                rowHeights.push(275)
-            else
-                rowHeights.push(235)
-            end if
-        end if
-        if row.getchild(0).contentType = "GAME"
-            rowItemSize.push([188, 250])
-            if hasRowLabel
-                rowHeights.push(325)
-            else
-                rowHeights.push(305)
-            end if
+        config = getRowConfig(row.getchild(0).contentType, hasRowLabel)
+        if config <> invalid
+            rowItemSize.push(config.itemSize)
+            rowHeights.push(config.rowHeight)
         end if
     end for
     m.rowList.rowHeights = rowHeights
@@ -89,11 +67,13 @@ function updateRowList(contentCollection)
     m.rowlist.rowItemSize = rowItemSize
     m.rowlist.content = contentCollection
     m.rowlist.numRows = contentCollection.getChildCount()
-end function
+end sub
 
 
 sub handleRecommendedSections()
-    contentCollection = buildContentNodeFromShelves(m.GetContentTask.response.data.game.streams.edges)
+    rsp = m.GetContentTask.response
+    if rsp = invalid then return
+    contentCollection = buildContentNodeFromShelves(rsp.edges)
     updateRowList(contentCollection)
 end sub
 
@@ -106,9 +86,16 @@ end sub
 sub onGetFocus()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedchild.id = "exampleRowList"
+    else if m.rowlist.focusedChild.id = "homeRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
+    updateRowListFocusFeedback()
+end sub
+
+' Hide the RowList focus rectangle when focus leaves the scene; restore on return.
+sub updateRowListFocusFeedback()
+    if m.rowlist = invalid then return
+    m.rowlist.drawFocusFeedback = m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -119,4 +106,5 @@ function onKeyEvent(key as string, press as boolean) as boolean
             return true
         end if
     end if
+    return false
 end function

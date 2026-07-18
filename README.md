@@ -1,37 +1,59 @@
-# Stitch (for Roku)
+[![CI](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/release/jeremy-albinet/Stitch-Revitalized-For-Roku?include_prereleases=&sort=semver&color=blue)](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/releases/)
 
-Stitch is a Roku channel that aims to provide an actively maintained, reasonably feature-complete Twitch experience while respecting Twitch's business model (ads, monetization, and the like).
+# Stitch Revitalized
 
-Stich exists because Twitch does not presently have any official channel for Roku, despite [Roku being the most popular smart TV platform, with (as of early 2022), a 39% market share in North America and a 31% market share worldwide](https://seekingalpha.com/article/4547471-the-sleeping-giant-in-streaming-turning-roku-into-a-huge-2023-winner).
+A feature-complete Twitch client for Roku.
 
-If you work at Twitch, go make an official Twitch app so I don't have to. If you want this one you can have it. (See [Authorship and License](#authorship-and-license).)
+| Cumulative installs | New installs (Mar 2025) | Avg daily viewers | Avg session | Hours streamed (Mar 2025) |
+|---|---|---|---|---|
+| 694,449 | 93,163 | 16,598 | ~2h | 971,218 |
+
+## Features
+
+- Browse live streams by category, search, or followed channels
+- Live chat overlay while watching streams
+- Recently Watched sidebar for quick access to channels you've visited
+- VOD and clip playback
+- Auto-reconnect after mid-roll ads
+- Respects Twitch's business model: ads and monetization work as intended
+- Anonymous browsing without login; sign in to access followed channels and chat
 
 ## Installation
 
-You can add Stitch to your Roku account by clicking the following link: <https://my.roku.com/account/add?channel=LL5GKQ>
+**Channel Store (recommended)**
 
-## Support
+Add the channel directly from Roku's channel store:
+[https://my.roku.com/account/add/TwitchRevitalized](https://my.roku.com/account/add/TwitchRevitalized)
 
-If you have questions or comments, or if you want to receive announcements, you can join the Stitch Discord server:
+**Sideload (manual)**
 
-[![Discord](https://discordapp.com/api/guilds/1056784102084313179/widget.png?style=banner4)](https://discord.gg/KsdejA43SD)
+1. [Download the latest release ZIP](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/releases/latest)
+2. Enable Developer Mode on your Roku (Settings > System > Advanced System Settings > Developer Mode)
+3. Open `http://<your-roku-ip>` in a browser and upload the ZIP
+
+## Known Limitations
+
+### Twitch Enhanced Broadcasting (1440p / multi-track HLS)
+
+Streams using **Twitch Enhanced Broadcasting** deliver audio and video as two separate tracks bundled into a single HLS rendition (one segment file containing both an audio `traf` and a video `traf`, with audio listed first). Roku's Media Player implements fMP4 HLS as CMAF, which expects one elementary stream per HLS rendition (audio declared as a separate `EXT-X-MEDIA:TYPE=AUDIO` rendition). EB's single-rendition-with-two-tracks packaging therefore fails to load on Roku (error 970) or plays silent video.
+
+Roku has officially confirmed they will not support this packaging shape. Twitch is aware but does not plan a server-side change. Affected streams are visible as "Enhanced Broadcasting" on the broadcaster's dashboard. Regular (non-EB) streams are unaffected.
+
+**Workaround:** the self-hosted [`fmp4-demux-proxy`](./fmp4-demux-proxy/README.md) splits the bundled segments into separate audio and video HLS renditions on the fly, producing a CMAF-conformant manifest Roku accepts. Configure under **Settings → Proxy URL** in the app. See [issue #14](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/issues/14) for the full investigation and current status.
 
 ## Contributing
 
-If you are comfortable using the GitHub interface, you can report bugs or request features by opening a [GitHub Issue](https://github.com/0xW1sKy/Stitch-For-Roku/issues). (Please check to see if your issue has already been reported before opening a new one.)
+Found a bug or have a feature request? Open a [GitHub Issue](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/issues). Check for duplicates first.
 
-We are currently looking into integrations between GitHub and Discord in order to make this process easier for everyone.
+Pull requests are welcome. All contributions must be submitted under the [Unlicense](./LICENSE).
 
-In addition to issues, Pull Requests are welcome. All contributions must be made [under the Unlicense](./LICENSE).
+## Privacy
 
-## Authorship and License
+The app collects no personal data. Anonymous, opt-out analytics are available in Settings. Roku and Twitch collect data independently under their own privacy policies.
 
-Stitch began as a hard fork of [Twoku](https://github.com/worldreboot/twitch-reloaded-roku), due to that application's apparent abandonment. Since then Stitch has been almost completely rewritten.
+## License & Credits
 
-Twoku was released without an explicit license, but, as a non-cleanroom rewrite, all subsequent contributions to Stitch are released [under the Unlicense](./LICENSE).
+Released under the [Unlicense](./LICENSE).
 
-If license encumberance is an issue for you, you can compare [the final upstream commit to this repository](https://github.com/0xW1sKy/Stitch-For-Roku/commit/268187c63e1eaf3922f577a2dab6ccb6a2e089f8) to see what code is unclearly licensed.
-
-While removing any residual upstream code is not a priority for Stitch, Pull Requests replacing unclearly licensed code with unencumbered code are welcome.
-
-Stitch is released on a non-commercial basis and derives no revenue. If you work for Twitch, please feel free to use the license-unencumbered portions of this repository as the basis for an official Twitch app.
+This project exists because Twitch has no official Roku channel, despite [Roku holding ~39% of the North American smart TV market](https://seekingalpha.com/article/4547471-the-sleeping-giant-in-streaming-turning-roku-into-a-huge-2023-winner).

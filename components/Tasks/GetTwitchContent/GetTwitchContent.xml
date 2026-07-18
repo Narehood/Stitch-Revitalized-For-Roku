@@ -8,9 +8,11 @@
         <field id="response" type="node" />
         <field id="metadata" type="array" />
     </interface>
-    <script type="text/brightscript" uri="GetTwitchContent.bs" />
-    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/TwitchApiTask.bs" />
+    <script type="text/brightscript" uri="GetTwitchContent.brs" />
+    <script type="text/brightscript" uri="pkg:/source/enums/TaskControl.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/shared.bs" />
     <script type="text/brightscript" uri="pkg:/source/utils/http.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/analytics.brs" />
 </component>

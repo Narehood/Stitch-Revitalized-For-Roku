@@ -8,10 +8,7 @@
             <source>Live Channels</source>
             <translation>Live Channels</translation>
         </message>
-        <message>
-            <source>LiveChannels</source>
-            <translation>Live Channels</translation>
-        </message>
+
         <message>
             <source>Clips</source>
             <translation>Clips</translation>
@@ -50,7 +47,7 @@
         </message>
         <message>
             <source>LoginPageTopText</source>
-            <translation>Go to https://www.twitch.tv/activate and type the following code:</translation>
+            <translation>Scan the QR code or go to https://www.twitch.tv/activate and type:</translation>
         </message>
         <message>
             <source>LoginPageBottomText</source>
@@ -76,15 +73,11 @@
             <source>Video Framerate</source>
             <translation>Video Framerate</translation>
         </message>
-        <message>
-            <source>Home</source>
-            <translation>Discover</translation>
-            <context>User's "home" page / fyp</context>
-        </message>
+
         <message>
             <source>Viewers</source>
             <translation>Viewers</translation>
-            <context>displayed after the count of current viewership of a stream. i.e. this streamer has 200 viewers</context>
+            <context>displayed after the count of current viewership of a stream</context>
         </message>
         <message>
             <source>Views</source>
@@ -94,22 +87,27 @@
         <message>
             <source>Followers</source>
             <translation>Followers</translation>
-            <context>Count of users that are currenlty 'following' a user on their Twitch account</context>
+            <context>Count of users currently following a user on Twitch</context>
+        </message>
+        <message>
+            <source>followers</source>
+            <translation>followers</translation>
+            <context>Lowercase, appended after a follower count number</context>
         </message>
         <message>
             <source>Log Out</source>
             <translation>Log Out</translation>
-            <context>Shown on the user's profile page to disconnect their account from the app</context>
+            <context>Shown on the user profile page to disconnect their account</context>
         </message>
         <message>
             <source>followedLiveUsers</source>
             <translation>They're Live Right Now!</translation>
-            <context>Title shown above a list of streamers that the app user follows that are currently live streaming</context>
+            <context>Title above a list of followed streamers currently live</context>
         </message>
         <message>
             <source>followedOfflineUsers</source>
             <translation>Offline Channels</translation>
-            <context>Shown above a list of streamers that the app user follows that are not currently live</context>
+            <context>Title above a list of followed streamers not currently live</context>
         </message>
         <message>
             <source>Channels</source>
@@ -119,7 +117,31 @@
         <message>
             <source>VODs</source>
             <translation>VODs</translation>
-            <context>Shown above a list of past stream broadcasts in the search results page</context>
+            <context>Shown above a list of past stream broadcasts in search results</context>
+        </message>
+        <message>
+            <source>Settings</source>
+            <translation>Settings</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation>OK</translation>
+        </message>
+        <message>
+            <source>Follow</source>
+            <translation>Follow</translation>
+        </message>
+        <message>
+            <source>Enter Search Query</source>
+            <translation>Enter Search Query</translation>
+        </message>
+        <message>
+            <source>Testing connection...</source>
+            <translation>Testing connection...</translation>
+        </message>
+        <message>
+            <source>Proxy not reachable</source>
+            <translation>Proxy not reachable</translation>
         </message>
     </context>
 </TS>

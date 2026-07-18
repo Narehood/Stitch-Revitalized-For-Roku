@@ -1,8 +1,8 @@
 { //This file controls the vscode BrighterScript extension including Debug Capabilities
     "rootDir": "./",
-    "host": "ROKU_IP_ADDRESS",
+    "host": "0.0.0.0",
     "username": "rokudev",
-    "password": "ROKU_DEV_PASSWORD",
+    "password": "0000",
     "deploy": true,
     "stagingDir": "./out/.debugStaging",
     "sourceMap": false,
@@ -17,8 +17,13 @@
         "modules/**/*",
         "locale/**/*",
         "settings/**/*",
+        "source/**/*",
         "manifest",
         "env"
+    ],
+    "plugins": [
+        "brighterscript-formatter",
+        "@rokucommunity/bslint"
     ],
     "diagnosticFilters": [
         {

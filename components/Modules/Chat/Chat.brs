@@ -8,8 +8,9 @@ sub init()
     m.translation = m.lower_bound - m.line_height
 end sub
 
-function updatePanelTranslation()
+sub updatePanelTranslation()
     ' m.chatPanel.translation = [(m.top.width * 3), 0]
+    if m.maskGroup = invalid or m.global = invalid or m.global.constants = invalid then return
     setChatPanelSize()
     setSizingParameters()
     m.maskGroup.maskSize = [(m.chatpanel.width * m.global.constants.maskScaleFactor), (m.chatPanel.height * m.global.constants.maskScaleFactor)]
@@ -17,12 +18,9 @@ function updatePanelTranslation()
     for each chatmessage in m.chatPanel.getChildren(-1, 0)
         m.chatPanel.removeChild(chatmessage)
     end for
-end function
+end sub
 
-function setSizingParameters()
-    '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    ' Size and Spacing Settings
-    '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+sub setSizingParameters()
     m.left_bound = m.font_size / 2
     m.right_bound = m.chatPanel.width - m.font_size
     m.badge_size = (m.font_size * 1.6)
@@ -32,18 +30,15 @@ function setSizingParameters()
     m.message_height = (m.badge_size * 1.8)
 
     m.lower_bound = m.chatPanel.height - m.message_height
-    '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-end function
+end sub
 
-function setChatPanelSize()
+sub setChatPanelSize()
     m.font_size = m.top.fontSize
-    ' m.chatPanel.width = m.global.constants.screenWidth
-    ' m.chatPanel.height = m.global.constants.screenHeight
     m.translation = m.chatPanel.height - m.font_size
     m.lower_bound = m.chatPanel.height - m.font_size
     m.right_bound = m.chatPanel.width - m.font_size
     m.upper_bound = 0 - (m.chatPanel.height - m.font_size)
-end function
+end sub
 
 sub onInvisible()
     if m.top.visible = false
@@ -53,12 +48,18 @@ sub onInvisible()
     end if
 end sub
 
+' Stops the ChatJob (IRC) and EmoteJob tasks and releases their observers.
+' Called from VideoPlayer.exitPlayer() so the IRC socket loop and emote
+' fetcher are torn down at user-initiated exit, not just when SceneGraph
+' eventually fires onDestroy.
+'
+' Uses destroyTask() per AGENTS.md: unobserve first so any in-flight
+' nextCommentObj callback is suppressed before the task thread halts.
 sub stopJobs()
-    if m.chat <> invalid
-        m.chat.control = "stop"
-    end if
+    m.chat = destroyTask(m.chat, "nextCommentObj")
     if m.EmoteJob <> invalid
         m.EmoteJob.control = "stop"
+        m.EmoteJob = invalid
     end if
 end sub
 
@@ -70,24 +71,19 @@ sub onVideoChange()
 end sub
 
 sub onEnterChannel()
-    ' ? "Chat >> onEnterChannel > " m.top.channel
-    if get_user_setting("ChatWebOption", "true") = "true"
-        m.chat = m.top.findnode("ChatJob")
-        m.chat.forceLive = m.top.forceLive
-        ' m.chat.observeField("nextComment", "onNewComment")
-        m.chat.observeField("nextCommentObj", "onNewCommentObj")
-        ' m.chat.observeField("clientComment", "onNewComment")
-        m.chat.channel = m.top.channel
-        m.chat.control = "stop"
-        m.chat.control = "run"
-    end if
+    m.chat = m.top.findnode("ChatJob")
+    m.chat.forceLive = m.top.forceLive
+    m.chat.observeField("nextCommentObj", "onNewCommentObj")
+    m.chat.channel = m.top.channel
+    m.chat.control = "stop"
+    m.chat.control = "run"
     m.EmoteJob = m.top.findnode("EmoteJob")
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
     m.EmoteJob.control = "run"
 end sub
 
-sub extractMessage(section) as object
+function extractMessage(section) as object
     m.userstate_change = false
     words = section.Split(" ")
     if words[2] = "USERSTATE"
@@ -98,7 +94,7 @@ sub extractMessage(section) as object
         message += words[i] + " "
     end for
     return message
-end sub
+end function
 
 function buildBadges(badges)
     group = createObject("roSGNode", "Group")
@@ -154,22 +150,19 @@ function buildUsername(display_name, color)
     username.color = "0x" + color + "FF"
     username.visible = true
     username.fontSize = m.font_size
-    username.fontUri = "pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf"
+    username.fontUri = "pkg:/fonts/Archivo-Bold.otf"
     return username
 end function
 
 function buildColon()
     colon = createObject("roSGNode", "SimpleLabel")
     colon.fontSize = m.font_size
-    colon.fontUri = "pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf"
+    colon.fontUri = "pkg:/fonts/Archivo-Regular.otf"
     colon.color = "0xFFFFFFFF"
     colon.visible = true
     colon.text = ": "
     return colon
 end function
-
-
-
 
 function wordOrImage(word, isUrl = false)
     if m.global.emoteCache.DoesExist(word)
@@ -177,9 +170,9 @@ function wordOrImage(word, isUrl = false)
     else
         message_text = createObject("roSGNode", "SimpleLabel")
         message_text.fontSize = m.font_size
-        message_text.fontUri = "pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf"
+        message_text.fontUri = "pkg:/fonts/Archivo-Regular.otf"
         message_text.visible = true
-        message_text.text = word + chr(20)
+        message_text.text = word + " "
         if isUrl
             message_text.color = m.global.constants.colors.twitch.purple9
         end if
@@ -187,9 +180,7 @@ function wordOrImage(word, isUrl = false)
     end if
 end function
 
-'
-
-function buildMessage(message, x_translation, emote_set, username_translation)
+function buildMessage(message, x_translation)
     message_group = createObject("roSGNode", "Group")
     words = message.Split(" ")
     line_available_space = m.right_bound - x_translation
@@ -205,12 +196,6 @@ function buildMessage(message, x_translation, emote_set, username_translation)
 
         block = wordOrImage(word, isUrl)
         block_width = block.localBoundingRect().width
-        '* '  "Useful for Debug"
-        ' ? "left_bound: " m.left_bound
-        ' ? "right_bound: " m.right_bound
-        ' ? "x_translation: " x_translation
-        ' ? "Block Width: " block_width
-        ' ? "line_available_space: " line_available_space
         if block_width > m.right_bound
             ? "break it up!"
             block = createObject("roSGNode", "Group")
@@ -220,7 +205,7 @@ function buildMessage(message, x_translation, emote_set, username_translation)
             for each char in word.split("")
                 charNode = createObject("roSGNode", "SimpleLabel")
                 charNode.fontSize = m.font_size
-                charNode.fontUri = "pkg:/fonts/KlokanTechNotoSansCJK-Regular.otf"
+                charNode.fontUri = "pkg:/fonts/Archivo-Regular.otf"
                 charNode.visible = true
                 charNode.text = char
                 if isUrl
@@ -256,7 +241,6 @@ sub onNewCommentObj()
     m.chat.readyForNextComment = false
     if m.chat.nextCommentObj <> invalid
         comment = m.chat.nextCommentObj
-        posteruri = invalid
         display_name = comment.tags.display_name
         message = comment.parameters.trim()
         color = ""
@@ -266,7 +250,6 @@ sub onNewCommentObj()
         badges = []
         if comment?.tags?.badges <> invalid
             for each key in comment.tags.badges
-                ' badgeID = key + "/" + comment.tags.badges[key]
                 badgeID = key
                 badges.push(badgeID)
             end for
@@ -285,7 +268,6 @@ sub onNewCommentObj()
 
         quoteRegex = createObject("roRegex", "[\x{2018}\x{2019}]", "")
         message = quoteRegex.replace(message, "'")
-        ' This Section grabs missing emotes on the fly... not sure if there is a better way to optimize.
         for each emoticon in emote_set.Items()
             e_start = emoticon.value.starts[0]
             emote_word = Mid(message, (e_start + 1), emoticon.value.length)
@@ -317,7 +299,7 @@ sub onNewCommentObj()
         colon.translation = [x_translation, 0]
         x_translation += colon.localBoundingRect().width + 1
 
-        message_group = buildMessage(message, x_translation, emote_set, username.translation[0])
+        message_group = buildMessage(message, x_translation)
         message_group.translation = [0, 0]
         x_translation += message_group.localBoundingRect().width + 1
 
@@ -343,4 +325,12 @@ sub onNewCommentObj()
         end if
     end if
     m.chat.readyForNextComment = true
+end sub
+
+sub onDestroy()
+    m.chat = destroyTask(m.chat, "nextCommentObj")
+    if m.EmoteJob <> invalid
+        m.EmoteJob.control = "stop"
+        m.EmoteJob = invalid
+    end if
 end sub

@@ -7,8 +7,20 @@
         <field id="request" type="assocarray" />
         <field id="response" type="assocarray" />
     </interface>
-    <script type="text/brightscript" uri="TwitchApiTask.bs" />
+    <script type="text/brightscript" uri="pkg:/source/enums/TaskControl.bs" />
+    <script type="text/brightscript" uri="pkg:/source/enums/ContentType.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/shared.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/auth.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/player.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/channel.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/home.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/game.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/browse.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/search.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/user.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/follow.bs" />
     <script type="text/brightscript" uri="pkg:/source/utils/http.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/analytics.brs" />
 </component>

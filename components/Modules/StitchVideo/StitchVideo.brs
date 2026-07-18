@@ -1,517 +1,790 @@
-function init()
-    ' bump
-    m.top.enableUI = "false"
-    m.top.enableTrickPlay = "false"
-    m.progressBar = m.top.findNode("progressBar")
-    m.progressBar.visible = false
+sub init()
+    ' Initialize UI elements
+    m.top.enableUI = false
+    m.top.enableTrickPlay = false
+
+    ' Control overlay elements
+    m.controlOverlay = m.top.findNode("controlOverlay")
+    m.controlOverlay.visible = false
+
+    ' Progress bar elements
     m.progressBarBase = m.top.findNode("progressBarBase")
     m.progressBarProgress = m.top.findNode("progressBarProgress")
-    m.progressDot = m.top.findNode("progressDot")
-    m.timeProgress = m.top.findNode("timeProgress")
-    m.timeDuration = m.top.findNode("timeDuration")
-    m.controlButton = m.top.findNode("controlButton")
 
+    ' Control buttons
+    m.backGroup = m.top.findNode("backGroup")
+    m.chatGroup = m.top.findNode("chatGroup")
+    m.playPauseGroup = m.top.findNode("playPauseGroup")
+    m.qualityGroup = m.top.findNode("qualityGroup")
+    m.controlButton = m.top.findNode("controlButton")
     m.messagesButton = m.top.findNode("messagesButton")
     m.qualitySelectButton = m.top.findNode("qualitySelectButton")
-    m.QualityDialog = m.top.findNode("QualityDialog")
-    m.glow = m.top.findNode("bg-glow")
 
-    m.currentProgressBarState = 0
-    m.currentPositionSeconds = 0
-    m.currentPositionUpdated = false
-    m.thumbnails = m.top.findNode("thumbnails")
-    m.thumbnailImage = m.top.findNode("thumbnailImage")
+    ' Focus backgrounds
+    m.backFocus = m.top.findNode("backFocus")
+    m.chatFocus = m.top.findNode("chatFocus")
+    m.playPauseFocus = m.top.findNode("playPauseFocus")
+    m.qualityFocus = m.top.findNode("qualityFocus")
 
+    ' Other elements
+    m.liveIndicator = m.top.findNode("liveIndicator")
 
+    ' Video info
     m.videoTitle = m.top.findNode("videoTitle")
     m.channelUsername = m.top.findNode("channelUsername")
     m.avatar = m.top.findNode("avatar")
 
-    m.focusedTimeSlot = 0
+    ' Loading overlay
+    m.loadingOverlay = m.top.findNode("loadingOverlay")
+    m.loadingSpinner = m.top.findNode("loadingSpinner")
 
-    m.focusedTimeButton = 0
+    ' Quality dialog
+    m.qualityDialog = m.top.findNode("QualityDialog")
+    ' Set up quality dialog observer once during initialization
+    m.qualityDialog.observeFieldScopedEx("buttonSelected", "onQualityButtonSelect")
 
-    m.progressBarFocused = false
+    ' State variables
+    m.currentFocusedButton = 2 ' 0=back, 1=chat, 2=play/pause, 3=quality
+    m.isOverlayVisible = false
+    m.currentPositionSeconds = 0
+    m.isLiveStream = true ' StitchVideo is always for live streams
 
-    m.top.observeField("position", "watcher")
-    m.top.observeField("state", "onvideoStateChange")
-    ' m.top.observeField("channelAvatar", "onChannelInfoChange")
-    ' m.top.observeField("videoTitle", "onChannelInfoChange")
-    ' m.top.observeField("channelUsername", "onChannelInfoChange")
-    m.top.observeField("chatIsVisible", "onChatVisibilityChange")
-    m.uiResolution = createObject("roDeviceInfo").GetUIResolution()
-    m.uiResolutionWidth = m.uiResolution.width
-    if m.uiResolutionWidth = 1920
-        m.thumbnails.clippingRect = [0, 0, 146.66, 82.66]
-    end if
-
-    deviceInfo = CreateObject("roDeviceInfo")
-    uiResolutionWidth = deviceInfo.GetUIResolution().width
-    m.sec = createObject("roRegistrySection", "VideoSettings")
-
+    ' Timers
     m.fadeAwayTimer = createObject("roSGNode", "Timer")
     m.fadeAwayTimer.observeField("fire", "onFadeAway")
     m.fadeAwayTimer.repeat = false
-    m.fadeAwayTimer.duration = "8"
+    m.fadeAwayTimer.duration = 5
     m.fadeAwayTimer.control = "stop"
 
-    m.buttonHoldTimer = createObject("roSGNode", "Timer")
-    m.buttonHoldTimer.observeField("fire", "onButtonHold")
-    m.buttonHoldTimer.repeat = true
-    m.buttonHoldTimer.duration = "0.070"
-    m.buttonHoldTimer.control = "stop"
+    ' Live-edge latency diagnostic timer.
+    ' Logs streamingSegment.latency every 5s while the stream is active
+    ' (started on state=playing, stopped on paused/error/finished/stopped;
+    ' continues to fire during buffering so buffer dips are visible in logs).
+    ' See AGENTS.md / DEV.md for how to read these logs over the debug console.
+    m.latencyLogTimer = createObject("roSGNode", "Timer")
+    m.latencyLogTimer.observeField("fire", "onLatencyLogFire")
+    m.latencyLogTimer.repeat = true
+    m.latencyLogTimer.duration = 5
+    m.latencyLogTimer.control = "stop"
 
-    m.buttonHeld = invalid
-    m.scrollInterval = 10
-    m.top.streamLayoutMode = 0
-    m.buttonFocused = "controlButton"
-    ? "Check the bookmark"
-end function
+    ' One-shot timer for the post-startup live-edge re-anchor.
+    ' Fires ~3s after state=playing settles, then issues a single seek=999999.
+    ' Roku's streaming spec endorses seek=999999 as the canonical "go to live"
+    ' sentinel: the player clips it to the current availability window.
+    ' m.startupSeekFired guards against re-firing on every state transition -
+    ' a single seek causes its own buffering/playing cycle, which would
+    ' otherwise re-arm this timer in onVideoStateChange and create a tight
+    ' 3s seek loop. Reset to false only when content is reassigned (i.e. a
+    ' new stream is loaded).
+    m.startupSeekFired = false
+    m.liveEdgeStartupTimer = createObject("roSGNode", "Timer")
+    m.liveEdgeStartupTimer.observeField("fire", "onLiveEdgeStartupFire")
+    m.liveEdgeStartupTimer.repeat = false
+    m.liveEdgeStartupTimer.duration = 3
+    m.liveEdgeStartupTimer.control = "stop"
+
+    ' Suppress the loading overlay during the brief (~200-400ms) re-buffer
+    ' that follows the app-initiated live-edge seek. Set true right before
+    ' the seek, cleared on the next state=playing. Without this, the user
+    ' sees a quick spinner flash right after the stream first starts which
+    ' looks like a stutter, even though the seek is working as intended.
+    m.suppressLoadingOverlayUntilPlaying = false
+
+    ' Deferred-analytics state for the live_edge_seek event's "fire"
+    ' branch. issueLiveEdgeSeek sets these right before issuing the seek;
+    ' onLatencyLogFire consumes them on the next valid latency sample
+    ' (~5s later) to emit one PostHog event with the full pre/post
+    ' picture. Both invalid means no outcome is pending.
+    m.pendingSeekReason = invalid
+    m.pendingSeekOutcomePreMs = invalid
+
+    ' Observers
+    m.top.observeField("position", "onPositionChange")
+    m.top.observeField("state", "onVideoStateChange")
+    m.top.observeField("content", "onContentChange")
+    m.top.observeField("chatIsVisible", "onChatVisibilityChange")
+    m.top.observeField("duration", "onDurationChange")
+    m.top.observeField("bufferingStatus", "onBufferingStatusChange")
+    m.top.observeField("qualityOptions", "onQualityOptionsChange")
+    m.top.observeField("selectedQuality", "onSelectedQualityChange")
+
+    ' Initialize UI
+    updateProgressBar()
+    setupLiveUI()
+
+    ' Show loading overlay initially
+    showLoadingOverlay()
+
+    ' ? "[StitchVideo] Initialized for live stream"
+end sub
+
+sub createMessageOverlay()
+    if m.messageOverlay = invalid
+        m.messageOverlay = CreateObject("roSGNode", "Group")
+        m.messageOverlay.visible = false
+
+        messageBg = CreateObject("roSGNode", "Rectangle")
+        messageBg.width = 600
+        messageBg.height = 150
+        messageBg.color = "0x000000CC"
+        messageBg.translation = [340, 285]
+
+        messageTitle = CreateObject("roSGNode", "Label")
+        messageTitle.id = "messageTitle"
+        messageTitle.font = "font:MediumBoldSystemFont"
+        messageTitle.text = ""
+        messageTitle.horizAlign = "center"
+        messageTitle.vertAlign = "center"
+        messageTitle.width = 600
+        messageTitle.height = 50
+        messageTitle.translation = [340, 300]
+
+        messageText = CreateObject("roSGNode", "Label")
+        messageText.id = "messageText"
+        messageText.font = "font:SmallSystemFont"
+        messageText.text = ""
+        messageText.horizAlign = "center"
+        messageText.vertAlign = "center"
+        messageText.width = 600
+        messageText.height = 50
+        messageText.translation = [340, 350]
+
+        m.messageOverlay.appendChild(messageBg)
+        m.messageOverlay.appendChild(messageTitle)
+        m.messageOverlay.appendChild(messageText)
+        m.top.appendChild(m.messageOverlay)
+    end if
+end sub
+
+sub setupLiveUI()
+    ' Set up UI specifically for live streams
+    m.progressBarProgress.width = m.progressBarBase.width ' Full bar for live
+
+    ' Live indicator is only visible when overlay is shown
+    m.liveIndicator.visible = m.isOverlayVisible
+end sub
 
 
-function watcher()
-    m.timeProgress.text = convertToReadableTimeFormat(m.currentPositionSeconds)
-    m.timeDuration.text = convertToReadableTimeFormat(m.top.duration)
+sub onPositionChange()
     m.currentPositionSeconds = m.top.position
-    if m.top.duration <> 0
-        m.progressBarProgress.width = m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration)
-        m.progressDot.translation = [m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration) + 33, 77]
-    end if
-
-    checker = m.top.position mod 20
-    if checker = 0
-        saveVideoBookmark()
-    end if
-end function
-
-function resetProgressBar()
-    m.controlButton.blendColor = "0xFFFFFFFF"
-    m.messagesButton.blendColor = "0xFFFFFFFF"
-    m.qualitySelectButton.blendColor = "0xFFFFFFFF"
-    m.currentProgressBarState = 0
-    m.thumbnailImage.visible = false
-    m.progressBar.visible = false
-end function
-
-sub onQualityButtonSelect()
-    ? "QualityButtonSelect"
-    m.QualityDialog.visible = false
-    m.QualityDialog.setFocus(false)
-    resetProgressBar()
-    m.progressBar.getParent().setFocus(true)
-    m.top.qualityChangeRequest = m.QualityDialog.buttonSelected
-    m.top.qualityChangeRequestFlag = true
+    ' Live streams don't need position-based updates
 end sub
 
-sub onQualitySelectButtonPressed()
-    if m.top.qualityOptions <> invalid
-        m.QualityDialog.title = "Please Choose Your Video Quality"
-        if m.top.content.qualityId <> invalid
-            activeText = "Active: " + m.top.content.qualityId
-            m.QualityDialog.message = [activeText]
-        end if
-        m.QualityDialog.buttons = m.top.qualityOptions
-        m.QualityDialog.observeFieldScoped("buttonSelected", "onQualityButtonSelect")
-        m.QualityDialog.visible = true
-        m.lastFocusedchild = m.top.focusedChild
-        m.QualityDialog.setFocus(true)
+' Re-arm the one-shot startup seek when a fresh stream is loaded.
+' Setting m.top.content fires this; we use it to reset the latched flag so
+' the next stream session gets its own startup seek. Also clear the recent
+' seek timestamp - otherwise the watchdog cooldown could be triggered by a
+' stale value from the previous stream session — and any pending seek
+' outcome event from the prior stream, which would otherwise be emitted
+' against the new stream's latency sample.
+sub onContentChange()
+    if m.top.content <> invalid
+        m.startupSeekFired = false
+        m.top.recentSeekTimestamp = 0
+        m.pendingSeekReason = invalid
+        m.pendingSeekOutcomePreMs = invalid
     end if
-end sub
-
-sub onChatVisibilityChange()
-    m.progressBarBase.width = 1200
-    m.glow.translation = [692, 32]
-    m.qualitySelectButton.translation = [548, 51]
-    m.controlButton.translation = [634, 53]
-    m.messagesButton.translation = [710, 52]
-    m.timeDuration.translation = [1198, 61]
 end sub
 
 sub onVideoStateChange()
+    ? getLogTimestamp(); " [StitchVideo][state] state="; m.top.state; " pos="; m.top.position
     if m.top.state = "playing"
-        m.top.setFocus(true)
         m.controlButton.uri = "pkg:/images/pause.png"
-    else
+        hideLoadingOverlay()
+        ' Reaching "playing" ends any post-seek re-buffer; re-enable the
+        ' loading overlay for future, non-seek-related buffering events.
+        m.suppressLoadingOverlayUntilPlaying = false
+        hideMessage()
+        startLatencyLog()
+        ' Fire one immediate sample so we see latency even if the repeating
+        ' timer is delayed/blocked for some reason.
+        onLatencyLogFire()
+        ' Arm the one-shot live-edge re-anchor (latched via m.startupSeekFired
+        ' so it fires exactly once per stream session). VideoPlayer sets
+        ' suppressStartupSeek=true on recovery paths (watchdog reconnect,
+        ' error-driven retryPlayback) so we don't fight the conditions that
+        ' caused the stall by immediately re-anchoring at the live edge.
+        if m.top.suppressStartupSeek
+            ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason=recovery"
+            m.startupSeekFired = true
+        else
+            startLiveEdgeStartupTimer()
+        end if
+    else if m.top.state = "paused"
         m.controlButton.uri = "pkg:/images/play.png"
+        hideLoadingOverlay()
+        stopLatencyLog()
+        stopLiveEdgeStartupTimer()
+    else if m.top.state = "buffering"
+        ' The post-seek re-buffer is ~200-400ms and looks like a stutter
+        ' to the user. issueLiveEdgeSeek sets the suppress flag immediately
+        ' before issuing seek=999999, and the flag is cleared on the next
+        ' state=playing. If the re-buffer ever runs longer than expected,
+        ' VideoPlayer's stall watchdog (20s post-seek cooldown then 16s
+        ' stall threshold) is still the safety net — no risk of silent
+        ' hangs.
+        if m.suppressLoadingOverlayUntilPlaying <> true
+            showLoadingOverlay()
+        end if
+        stopLiveEdgeStartupTimer()
+    else if m.top.state = "error"
+        hideLoadingOverlay()
+        m.suppressLoadingOverlayUntilPlaying = false
+        stopLatencyLog()
+        stopLiveEdgeStartupTimer()
+        if m.top.errorStr <> invalid and (m.top.errorStr.InStr("970") > -1 or m.top.errorStr.InStr("buffer:loop:demux") > -1)
+            showErrorMessage("Incompatible Video Format", "This stream cannot be played on your device")
+        else
+            showErrorMessage("Stream Error", "Having trouble loading the live stream. Retrying...")
+        end if
+    else if m.top.state = "finished" or m.top.state = "stopped"
+        m.suppressLoadingOverlayUntilPlaying = false
+        stopLatencyLog()
+        stopLiveEdgeStartupTimer()
     end if
 end sub
 
-function hideOverlay()
-    m.controlButton.blendColor = "0xFFFFFFFF"
-    m.messagesButton.blendColor = "0xFFFFFFFF"
-    m.qualitySelectButton.blendColor = "0xFFFFFFFF"
-    m.currentProgressBarState = 0
-    m.thumbnailImage.visible = false
-    m.progressBar.visible = false
-end function
+' ===== Live-edge latency diagnostics =====
+' streamingSegment.latency = ms between live edge and the segment currently
+' being played. This is the only Roku-exposed measurement of how far behind
+' live we are. Useful for evaluating low-latency tuning.
 
-function showOverlay()
-    focusButton(m.controlButton)
-    m.thumbnailImage.visible = true
-    m.progressBar.visible = true
-    m.currentProgressBarState = 1
-end function
+sub startLatencyLog()
+    if m.latencyLogTimer <> invalid
+        m.latencyLogTimer.control = "start"
+    end if
+end sub
+
+sub stopLatencyLog()
+    if m.latencyLogTimer <> invalid
+        m.latencyLogTimer.control = "stop"
+    end if
+end sub
+
+sub onLatencyLogFire()
+    ' Always print one line per fire so we can debug. No early returns:
+    ' if streamingSegment is invalid we want to SEE that, not silently skip.
+    seg = m.top.streamingSegment
+    segValid = "no"
+    segType = "?"
+    latencyMs = "?"
+    bitrate = "?"
+    segSeq = "?"
+    latencyValueMs = invalid
+
+    if seg <> invalid
+        segValid = "yes"
+        if seg.segType <> invalid then segType = seg.segType.toStr()
+        if seg.latency <> invalid
+            latencyMs = seg.latency.toStr()
+            latencyValueMs = seg.latency
+        end if
+        if seg.segBitrateBps <> invalid then bitrate = seg.segBitrateBps.toStr()
+        if seg.segSequence <> invalid then segSeq = seg.segSequence.toStr()
+    end if
+
+    measured = m.top.measuredBitrate
+
+    ? getLogTimestamp(); " [StitchVideo][latency] state="; m.top.state; " pos="; m.top.position; " seg_valid="; segValid; " seg_type="; segType; " live_edge_ms="; latencyMs; " seg_bitrate_bps="; bitrate; " measured_bps="; measured; " seg_seq="; segSeq
+
+    ' If a seek just fired and we have a valid post-seek latency sample,
+    ' emit the unified live_edge_seek event with the full pre/post picture.
+    ' We only consume the pending outcome on a sample that actually has a
+    ' latency value — if seg_valid=no we wait for the next fire (5s later)
+    ' so the post measurement is meaningful.
+    if m.pendingSeekReason <> invalid and latencyValueMs <> invalid
+        preMs = m.pendingSeekOutcomePreMs
+        deltaMs = invalid
+        if preMs <> invalid then deltaMs = preMs - latencyValueMs
+        trackEvent("live_edge_seek", {
+            decision: "fire",
+            reason: m.pendingSeekReason,
+            pre_live_edge_ms: preMs,
+            post_live_edge_ms: latencyValueMs,
+            delta_ms: deltaMs
+        })
+        m.pendingSeekReason = invalid
+        m.pendingSeekOutcomePreMs = invalid
+    end if
+end sub
+
+' ===== Live-edge re-anchor (strategies B and C) =====
+' Roku's streaming spec endorses seek=999999 as the canonical "go to live"
+' sentinel - the platform clips the position to the current availability
+' window. Both timers below use this mechanism. We log a one-line snapshot
+' of live_edge_ms BEFORE every seek so we can correlate before/after impact
+' against the regular 5s latency timer.
+
+sub startLiveEdgeStartupTimer()
+    if m.startupSeekFired = true then return
+    if m.liveEdgeStartupTimer <> invalid
+        m.liveEdgeStartupTimer.control = "stop"
+        m.liveEdgeStartupTimer.control = "start"
+    end if
+end sub
+
+sub stopLiveEdgeStartupTimer()
+    if m.liveEdgeStartupTimer <> invalid
+        m.liveEdgeStartupTimer.control = "stop"
+    end if
+end sub
+
+sub onLiveEdgeStartupFire()
+    m.startupSeekFired = true
+    issueLiveEdgeSeek("startup")
+end sub
+
+' Single point of seek=999999 application. Decides whether to fire the seek
+' based on the current pre-seek latency: if we're already close to live the
+' seek buys us nothing (and can even slightly increase latency), so we skip
+' it.
+'
+' Emits exactly one live_edge_seek PostHog event per decision so we can tune
+' the threshold from real-world data:
+'   - skip path: event fires immediately with decision="skip"
+'   - fire path: event fires ~5s later from onLatencyLogFire once the
+'     post-seek latency sample is available, carrying both pre and post
+'     so we have one row per decision with the full picture
+'
+' Bails (no analytics, no log spam) if we're not in steady-state playing —
+' that's a transient invocation race, not a real decision point.
+sub issueLiveEdgeSeek(reason as string)
+    if m.top.state <> "playing"
+        ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason="; reason; " state="; m.top.state
+        return
+    end if
+
+    ' Pre-seek latency snapshot. preLatencyMs stays invalid when the
+    ' segment isn't ready yet — we still fire the seek in that case so
+    ' we don't regress behavior when latency is unmeasurable.
+    seg = m.top.streamingSegment
+    preLatency = "?"
+    preLatencyMs = invalid
+    if seg <> invalid and seg.latency <> invalid
+        preLatency = seg.latency.toStr()
+        preLatencyMs = seg.latency
+    end if
+
+    ' Skip the seek if we're already close enough to live. The seek's
+    ' empirically observed steady-state floor is ~20s behind live, so
+    ' firing when already at <30s buys us nothing — we've seen latency
+    ' actually increase by ~1s in that range. 30s gives ~10s headroom
+    ' above the floor so the seek is only fired when it can meaningfully
+    ' help.
+    if preLatencyMs <> invalid and preLatencyMs < 30000
+        ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason="; reason; " pre_live_edge_ms="; preLatency; " already_near_live=true"
+        trackEvent("live_edge_seek", {
+            decision: "skip",
+            reason: reason,
+            skip_reason: "already_near_live",
+            pre_live_edge_ms: preLatencyMs
+        })
+        return
+    end if
+
+    ? getLogTimestamp(); " [StitchVideo][seek] action=fire reason="; reason; " pre_live_edge_ms="; preLatency; " pos="; m.top.position
+    ' Tell VideoPlayer's stall watchdog we just seeked so it doesn't treat
+    ' the brief re-buffer that follows as a fake stall and force a reconnect.
+    m.top.recentSeekTimestamp = CreateObject("roDateTime").AsSeconds()
+    ' Hide the loading overlay during the brief post-seek re-buffer so the
+    ' user doesn't see a spinner flash. Cleared when state returns to
+    ' "playing" (typically ~200-400ms after the seek lands).
+    m.suppressLoadingOverlayUntilPlaying = true
+    ' Stash pre-seek context for the deferred analytics event. Consumed by
+    ' onLatencyLogFire on the next sample that has a valid latency value
+    ' (~5s after the seek lands). preLatencyMs may be invalid when the
+    ' segment wasn't ready — onLatencyLogFire handles that explicitly.
+    m.pendingSeekReason = reason
+    m.pendingSeekOutcomePreMs = preLatencyMs
+    m.top.seek = 999999
+end sub
+
+sub onChatVisibilityChange()
+    if m.top.chatIsVisible
+        m.progressBarBase.width = 900
+    else
+        m.progressBarBase.width = 1160
+    end if
+    updateProgressBar()
+end sub
+
+sub onDurationChange()
+    updateProgressBar()
+end sub
+
+sub onBufferingStatusChange()
+    ' Live streams handle buffering differently
+    ' ? "[StitchVideo] Buffering status changed"
+end sub
+
+sub onQualityOptionsChange()
+    setupQualityDialog()
+end sub
+
+sub onSelectedQualityChange()
+    setupLiveUI()
+end sub
+
+sub setupQualityDialog()
+    if m.top.qualityOptions <> invalid and m.top.qualityOptions.count() > 0
+        m.qualityDialog.title = "Please Choose Your Video Quality"
+        m.qualityDialog.message = ["Choose video quality:"]
+
+        buttons = []
+        for each quality in m.top.qualityOptions
+            buttons.push(quality)
+        end for
+        buttons.push("Cancel")
+
+        m.qualityDialog.buttons = buttons
+    end if
+end sub
+
+sub onQualityButtonSelect()
+    ' ? "[StitchVideo] Quality dialog button selected: "; m.qualityDialog.buttonSelected
+
+    selectedIndex = m.qualityDialog.buttonSelected
+    totalButtons = m.qualityDialog.buttons.count()
+
+    ' Hide dialog first
+    m.qualityDialog.visible = false
+    m.qualityDialog.setFocus(false)
+
+    ' Check if Cancel was selected (last button)
+    if selectedIndex = totalButtons - 1
+        ' ? "[StitchVideo] Cancel selected, no quality change"
+    else if selectedIndex >= 0 and selectedIndex < m.top.qualityOptions.count()
+        ' Valid quality option selected
+        selectedQuality = m.top.qualityOptions[selectedIndex]
+        ' ? "[StitchVideo] Quality selected: "; selectedQuality
+
+        m.top.selectedQuality = selectedQuality
+        m.top.QualityChangeRequest = selectedIndex
+        m.top.QualityChangeRequestFlag = true
+    else
+        ' ? "[StitchVideo] Invalid selection index: "; selectedIndex
+    end if
+
+    ' Restore focus to video component
+    m.top.setFocus(true)
+
+    ' If overlay is visible, restart fade timer
+    if m.isOverlayVisible
+        focusButton(m.currentFocusedButton)
+        m.fadeAwayTimer.control = "stop"
+        m.fadeAwayTimer.control = "start"
+    end if
+end sub
+
+sub updateProgressBar()
+    ' For live streams, always show full progress bar in Twitch purple
+    m.progressBarProgress.width = m.progressBarBase.width
+end sub
+
+sub showOverlay()
+    m.isOverlayVisible = true
+    m.controlOverlay.visible = true
+    m.liveIndicator.visible = true
+    focusButton(m.currentFocusedButton)
+
+    ' Start fade timer
+    m.fadeAwayTimer.control = "stop"
+    m.fadeAwayTimer.control = "start"
+end sub
+
+sub hideOverlay()
+    m.isOverlayVisible = false
+    m.controlOverlay.visible = false
+    m.liveIndicator.visible = false
+    clearAllButtonFocus()
+end sub
 
 sub onFadeAway()
-    if not m.QualityDialog.visible
+    ' Only hide overlay if quality dialog is not visible
+    if not m.qualityDialog.visible
         hideOverlay()
     end if
 end sub
 
-sub onButtonHold()
-    if m.buttonHeld <> invalid
-        if m.buttonHeld = "right"
-            m.currentPositionSeconds += m.scrollInterval
-            m.progressBarProgress.width = m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration)
-            m.progressDot.translation = [m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration) + 33, 77]
-            if m.currentPositionSeconds > m.top.duration
-                m.currentPositionSeconds = m.top.duration
-            end if
-            if m.top.thumbnailInfo <> invalid
-                if m.top.thumbnailInfo.width <> invalid
-                    if m.progressBarProgress.width + m.top.thumbnailInfo.width / 2 <= m.progressBarBase.width
-                        if m.progressBarProgress.width - m.top.thumbnailInfo.width / 2 >= 0
-                            m.thumbnails.translation = [m.progressBarProgress.width - m.top.thumbnailInfo.width / 2, -150]
-                        else
-                            m.thumbnails.translation = [0, -150]
-                        end if
-                    else
-                        m.thumbnails.translation = [m.progressBarBase.width - m.top.thumbnailInfo.width, -150]
-                    end if
-                end if
-            end if
-        else if m.buttonHeld = "left"
-            m.currentPositionSeconds -= m.scrollInterval
-            m.progressBarProgress.width = m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration)
-            m.progressDot.translation = [m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration) + 33, 77]
-            if m.currentPositionSeconds < 0
-                m.currentPositionSeconds = 0
-            end if
-            if m.top.thumbnailInfo <> invalid
-                if m.top.thumbnailInfo.width <> invalid
-                    if m.progressBarProgress.width - m.top.thumbnailInfo.width / 2 >= 0
-                        if m.progressBarProgress.width + m.top.thumbnailInfo.width / 2 <= m.progressBarBase.width
-                            m.thumbnails.translation = [m.progressBarProgress.width - m.top.thumbnailInfo.width / 2, -150]
-                        else
-                            m.thumbnails.translation = [m.progressBarBase.width - m.top.thumbnailInfo.width, -150]
-                        end if
-                    else
-                        m.thumbnails.translation = [0, -150]
-                    end if
-                end if
-                if m.top.thumbnailInfo.width <> invalid
-                    showThumbnail()
-                end if
-            end if
-        end if
+sub focusButton(buttonIndex)
+    clearAllButtonFocus()
+    m.currentFocusedButton = buttonIndex
+
+    if buttonIndex = 0 ' Back
+        m.backFocus.visible = true
+    else if buttonIndex = 1 ' Chat
+        m.chatFocus.visible = true
+    else if buttonIndex = 2 ' Play/Pause
+        m.playPauseFocus.visible = true
+    else if buttonIndex = 3 ' Quality
+        m.qualityFocus.visible = true
     end if
-    m.timeProgress.text = convertToReadableTimeFormat(m.currentPositionSeconds)
-    m.timeDuration.text = convertToReadableTimeFormat(m.top.duration)
-    m.scrollInterval += 10
+end sub
+
+sub clearAllButtonFocus()
+    m.backFocus.visible = false
+    m.chatFocus.visible = false
+    m.playPauseFocus.visible = false
+    m.qualityFocus.visible = false
+end sub
+
+sub executeButtonAction()
+    if m.currentFocusedButton = 0 ' Back
+        ' ? "[StitchVideo] Back button pressed - attempting to exit"
+        m.top.backPressed = true
+        if m.top.getParent() <> invalid
+            m.top.getParent().backPressed = true
+        end if
+        hideOverlay()
+        m.top.control = "stop"
+    else if m.currentFocusedButton = 1 ' Chat
+        m.top.toggleChat = true
+        m.top.streamLayoutMode = (m.top.streamLayoutMode + 1) mod 3
+    else if m.currentFocusedButton = 2 ' Play/Pause
+        togglePlayPause()
+    else if m.currentFocusedButton = 3 ' Quality
+        showQualityDialog()
+    end if
+end sub
+
+sub togglePlayPause()
+    if m.top.state = "paused"
+        m.top.control = "resume"
+    else
+        m.top.control = "pause"
+    end if
+end sub
+
+sub showQualityDialog()
+    if m.top.qualityOptions <> invalid and m.top.qualityOptions.count() > 0
+        ' Stop the fade timer when showing dialog
+        m.fadeAwayTimer.control = "stop"
+
+        ' Show dialog and give it focus
+        ' (Observer is already set up in init() function)
+        m.qualityDialog.visible = true
+        m.qualityDialog.setFocus(true)
+    else
+        ' ? "[StitchVideo] No quality options available"
+    end if
 end sub
 
 function convertToReadableTimeFormat(time) as string
     time = Int(time)
     if time < 3600
-        seconds = Int((time mod 60))
+        minutes = Int(time / 60)
+        seconds = Int(time mod 60)
         if seconds < 10
-            seconds = "0" + Int((time mod 60)).ToStr()
+            secondStr = "0" + seconds.toStr()
         else
-            seconds = seconds.ToStr()
+            secondStr = seconds.toStr()
         end if
-        return Int((time / 60)).ToStr() + ":" + seconds
+        return minutes.toStr() + ":" + secondStr
     else
         hours = Int(time / 3600)
         minutes = Int((time mod 3600) / 60)
-        seconds = Int((time mod 3600) mod 60)
-        if seconds < 10
-            seconds = "0" + seconds.ToStr()
-        else
-            seconds = seconds.ToStr()
-        end if
+        seconds = Int(time mod 60)
+
         if minutes < 10
-            minutes = "0" + minutes.ToStr()
+            minuteStr = "0" + minutes.toStr()
         else
-            minutes = minutes.ToStr()
+            minuteStr = minutes.toStr()
         end if
-        return hours.ToStr() + ":" + minutes + ":" + seconds
+
+        if seconds < 10
+            secondStr = "0" + seconds.toStr()
+        else
+            secondStr = seconds.toStr()
+        end if
+
+        return hours.toStr() + ":" + minuteStr + ":" + secondStr
     end if
 end function
 
-sub onVideoPositionChange()
-    if m.top.duration > 0
-        m.progressBarProgress.width = m.progressBarBase.width * (m.top.position / m.top.duration)
-        m.progressDot.translation = [m.progressBarBase.width * (m.top.position / m.top.duration) + 33, 77]
-        m.timeProgress.text = convertToReadableTimeFormat(m.top.position)
-        m.timeDuration.text = convertToReadableTimeFormat(m.top.duration)
-    end if
+sub showErrorMessage(title as string, message as string)
+    showMessage(title, message, 0) ' 0 duration means persistent
 end sub
 
-sub showThumbnail()
-    if m.top.thumbnailInfo <> invalid and m.top.thumbnailInfo.width <> invalid
-        thumbnailsPerPart = Int(m.top.thumbnailInfo.count / m.top.thumbnailInfo.thumbnail_parts.Count())
-        thumbnailPosOverall = Int(m.currentPositionSeconds / m.top.thumbnailInfo.interval)
-        thumbnailPosCurrent = thumbnailPosOverall mod thumbnailsPerPart
-        thumbnailRow = Int(thumbnailPosCurrent / m.top.thumbnailInfo.cols)
-        thumbnailCol = Int(thumbnailPosCurrent mod m.top.thumbnailInfo.cols)
-        if m.uiResolutionWidth = 1280
-            m.thumbnailImage.translation = [-thumbnailCol * m.top.thumbnailInfo.width, -thumbnailRow * m.top.thumbnailInfo.height]
-        else
-            m.thumbnailImage.translation = [(-thumbnailCol * m.top.thumbnailInfo.width) * 0.66, (-thumbnailRow * m.top.thumbnailInfo.height) * 0.66]
-        end if
-        if m.top.thumbnailInfo.info_url <> invalid and m.top.thumbnailInfo.thumbnail_parts[Int(thumbnailPosOverall / thumbnailsPerPart)] <> invalid
-            m.thumbnailImage.uri = m.top.thumbnailInfo.info_url + m.top.thumbnailInfo.thumbnail_parts[Int(thumbnailPosOverall / thumbnailsPerPart)]
-        end if
-        m.thumbnailImage.visible = true
-    end if
+sub hideErrorMessage()
+    hideMessage()
 end sub
 
-function saveVideoBookmark() as void
-    if m.top.video_type = "LIVE" or m.top.video_type = "VOD"
-        bookmarkPosition = Int(m.top.position)
-        if m.top.video_type = "LIVE" and m.top?.content?.createdAt <> invalid
-            secondsSincePublished = createObject("roDateTime")
-            secondsSincePublished.FromISO8601String(m.top.content.createdAt.toStr())
-            currentTime = createObject("roDateTime").AsSeconds()
-            bookmarkPosition = currentTime - secondsSincePublished.AsSeconds()
+sub showMessage(title as string, message as string, duration as float)
+    createMessageOverlay()
+    if m.messageOverlay <> invalid
+        titleNode = m.messageOverlay.findNode("messageTitle")
+        if titleNode <> invalid
+            titleNode.text = title
+            titleNode.visible = (title <> "")
         end if
-        if get_user_setting("id", invalid) <> invalid
-            if m.bookmarkTask <> invalid
-                m.bookmarkTask = invalid
-            end if
-            m.bookmarkTask = createObject("roSGNode", "TwitchApiTask")
-            m.bookmarkTask.functionname = "updateUserViewedVideo"
-            m.bookmarkTask.request = {
-                "userId": get_user_setting("id")
-                "position": bookmarkPosition
-                "videoId": m.top.video_id
-                "videoType": m.top.video_type 'LIVE or VOD
-            }
-            m.bookmarkTask.control = "run"
-        else
-            if m.top.duration >= 900
-                videoBookmarks = "{"
-
-                tempBookmarks = m.top.videoBookmarks
-                if m.top.video_id <> invalid
-                    bookmarkAlreadyExists = tempBookmarks.DoesExist(m.top.video_id)
-                    tempBookmarks[m.top.video_id] = Int(m.top.position).ToStr()
-                else
-                    bookmarkAlreadyExists = false
-                end if
-
-                if tempBookmarks.Count() < 100
-                    first = true
-                    for each item in tempBookmarks.Items()
-                        if not first
-                            videoBookmarks += ","
-                        end if
-                        videoBookmarks += chr(34) + item.key + chr(34) + " : " + chr(34) + item.value + chr(34)
-                        first = false
-                    end for
-                else
-                    skip = true
-                    first = true
-                    for each item in tempBookmarks.Items()
-                        if not skip
-                            if not first
-                                videoBookmarks += ","
-                            end if
-                            videoBookmarks += chr(34) + item.key + chr(34) + " : " + chr(34) + item.value + chr(34)
-                            first = false
-                        end if
-                        skip = false
-                    end for
-                end if
-
-                if m.top.thumbnailInfo <> invalid and bookmarkAlreadyExists = false
-                    videoBookmarks += "," + chr(34) + m.top.video_id.ToStr() + chr(34) + " : " + chr(34) + Int(m.top.position).ToStr() + chr(34) + "}"
-                else
-                    videoBookmarks += "}"
-                end if
-
-                m.top.videoBookmarks = tempBookmarks
-                set_user_setting("VideoBookmarks", videoBookmarks)
+        messageNode = m.messageOverlay.findNode("messageText")
+        if messageNode <> invalid
+            messageNode.text = message
+            if title = ""
+                messageNode.translation = [340, 335]
+            else
+                messageNode.translation = [340, 350]
             end if
         end if
     end if
+
+    m.messageOverlay.visible = true
+
+    ' Clear any existing auto-hide timer
+    if m.messageTimer <> invalid
+        m.messageTimer.control = "stop"
+        m.messageTimer = invalid
+    end if
+
+    ' Set up auto-hide timer if duration > 0
+    if duration > 0
+        m.messageTimer = CreateObject("roSGNode", "Timer")
+        m.messageTimer.duration = duration
+        m.messageTimer.repeat = false
+        m.messageTimer.observeField("fire", "onMessageTimeout")
+        m.messageTimer.control = "start"
+    end if
+end sub
+
+sub hideMessage()
+    if m.messageOverlay <> invalid
+        m.messageOverlay.visible = false
+    end if
+    if m.messageTimer <> invalid
+        m.messageTimer.control = "stop"
+        m.messageTimer = invalid
+    end if
+end sub
+
+sub onMessageTimeout()
+    hideMessage()
+    m.messageTimer = invalid
+end sub
+
+sub showLoadingOverlay()
+    if m.loadingOverlay <> invalid
+        m.loadingOverlay.visible = true
+    end if
+    if m.loadingSpinner <> invalid
+        m.loadingSpinner.control = "start"
+    end if
+end sub
+
+sub hideLoadingOverlay()
+    if m.loadingOverlay <> invalid
+        m.loadingOverlay.visible = false
+    end if
+    if m.loadingSpinner <> invalid
+        m.loadingSpinner.control = "stop"
+    end if
+end sub
+
+function onKeyEvent(key, press) as boolean
+    ' ? "[StitchVideo] KeyEvent: "; key; " "; press
+
+    if press
+        ' If quality dialog is visible, only handle back to close it
+        if m.qualityDialog.visible
+            if key = "back" or key = "down"
+                m.qualityDialog.visible = false
+                m.qualityDialog.setFocus(false)
+                m.top.setFocus(true)
+
+                ' Restart fade timer if overlay is visible
+                if m.isOverlayVisible
+                    focusButton(m.currentFocusedButton)
+                    m.fadeAwayTimer.control = "stop"
+                    m.fadeAwayTimer.control = "start"
+                end if
+                return true
+            end if
+            ' Let dialog handle all other keys
+            return false
+        end if
+
+        ' Normal key handling when dialog is not visible
+        ' Reset fade timer on any key press (except back when overlay is hidden)
+        if key <> "back" or m.isOverlayVisible
+            if m.isOverlayVisible
+                m.fadeAwayTimer.control = "stop"
+                m.fadeAwayTimer.control = "start"
+            end if
+        end if
+
+        return handleMainKeys(key)
+    end if
+
+    return false
 end function
 
-' function getTimeTravelTime()
-'     hour0 = Int(Val(m.timeTravelTimeSlot[0].getChild(0).text)) * 36000
-'     hour1 = Int(Val(m.timeTravelTimeSlot[1].getChild(0).text)) * 3600
-'     minute0 = Int(Val(m.timeTravelTimeSlot[2].getChild(0).text)) * 600
-'     minute1 = Int(Val(m.timeTravelTimeSlot[3].getChild(0).text)) * 60
-'     second0 = Int(Val(m.timeTravelTimeSlot[4].getChild(0).text)) * 10
-'     second1 = Int(Val(m.timeTravelTimeSlot[5].getChild(0).text))
-'     return hour0 + hour1 + minute0 + minute1 + second0 + second1
-' end function
+function handleMainKeys(key) as boolean
+    if key = "up" or key = "OK" or key = "play"
+        if not m.isOverlayVisible
+            showOverlay()
+            return true
+        end if
+    end if
 
-function resetButtonState()
-    m.messagesButton.blendColor = "0xFFFFFFFF"
-    m.qualitySelectButton.blendColor = "0xFFFFFFFF"
-    m.controlButton.blendColor = "0xFFFFFFFF"
-end function
+    if not m.isOverlayVisible
+        return false
+    end if
 
-function focusButton(button)
-    resetButtonState()
-    w = button.width
-    h = button.height
-    m.glow.translation = [button.translation[0] - 30 + w / 2, button.translation[1] - 30 + h / 2]
-    button.blendColor = "0xBD00FFFF"
-    m.buttonFocused = button.id
-    m.currentProgressBarState = 1
-    return true
-end function
-
-function selectButton()
-    if m.buttonFocused = "controlButton"
+    if key = "left"
+        ' Live stream navigation: back(0) -> chat(1) -> play/pause(2) -> quality(3)
+        if m.currentFocusedButton > 0
+            focusButton(m.currentFocusedButton - 1)
+        else
+            focusButton(3) ' Wrap to quality
+        end if
+        return true
+    else if key = "right"
+        ' Live stream navigation: back(0) -> chat(1) -> play/pause(2) -> quality(3)
+        if m.currentFocusedButton < 3
+            focusButton(m.currentFocusedButton + 1)
+        else
+            focusButton(0) ' Wrap to back
+        end if
+        return true
+    else if key = "down" or key = "back"
+        hideOverlay()
+        return true
+    else if key = "OK"
+        executeButtonAction()
+        return true
+    else if key = "play"
         togglePlayPause()
         return true
     end if
-    if m.buttonFocused = "messagesButton"
-        m.top.toggleChat = true
-        m.top.streamLayoutMode = (m.top.streamLayoutMode + 1) mod 3
-        return true
-    end if
-    if m.buttonFocused = "qualitySelectButton"
-        onQualitySelectButtonPressed()
-        return true
-    end if
+
+    return false
 end function
 
-function togglePlayPause()
-    if m.currentProgressBarState = 2
-        m.top.seek = m.currentPositionSeconds
-        m.currentPositionUpdated = false
-        m.currentProgressBarState = 1
-    else
-        if m.top.state = "paused"
-            m.top.control = "resume"
-            m.currentPositionUpdated = false
-        else
-            m.top.control = "pause"
-        end if
-    end if
-end function
-
-
-function onKeyEvent(key, press) as boolean
-    ? "[StichVideo] KeyEvent: "; key press
-    if press
-        if key <> "back"
-            if m.progressBar.visible = false
-                ? "show called"
-                showOverlay()
-            end if
-        end if
+sub onDestroy()
+    if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
-        m.fadeAwayTimer.control = "start"
-        if key = "right"
-            ? "focused button: "; m.buttonFocused
-            if m.buttonFocused = "controlButton"
-                focusButton(m.messagesButton)
-            else if m.buttonFocused = "qualitySelectButton"
-                focusButton(m.controlButton)
-            else if m.buttonFocused = "messagesButton"
-                focusButton(m.qualitySelectButton)
-            end if
-            return true
-        else if key = "left"
-            if m.buttonFocused = "controlButton"
-                focusButton(m.qualitySelectButton)
-            else if m.buttonFocused = "qualitySelectButton"
-                focusButton(m.messagesButton)
-            else if m.buttonFocused = "messagesButton"
-                focusButton(m.controlButton)
-            end if
-            return true
-        else if key = "down"
-            hideOverlay()
-            return true
-        else if key = "back"
-            if m.progressBar.visible
-                hideOverlay()
-                return true
-            end if
-        else if key = "OK"
-            selectButton()
-        else if key = "fastforward"
-            focusButton(m.controlButton)
-            m.currentProgressBarState = 2
-            if m.currentPositionUpdated = false
-                m.currentPositionSeconds = m.top.position
-                m.currentPositionUpdated = true
-                m.top.control = "pause"
-            end if
-            m.currentPositionSeconds += 10
-            if m.currentPositionSeconds > m.top.duration
-                m.currentPositionSeconds = m.top.duration
-            end if
-            m.progressBarProgress.width = m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration)
-            m.progressDot.translation = [m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration) + 33, 77]
-            if m.top.thumbnailInfo <> invalid and m.top.thumbnailInfo.width <> invalid
-                if m.progressBarProgress.width + m.top.thumbnailInfo.width / 2 <= m.progressBarBase.width
-                    if m.progressBarProgress.width - m.top.thumbnailInfo.width / 2 >= 0
-                        m.thumbnails.translation = [m.progressBarProgress.width - m.top.thumbnailInfo.width / 2, -150]
-                    else
-                        m.thumbnails.translation = [0, -150]
-                    end if
-                else
-                    m.thumbnails.translation = [m.progressBarBase.width - m.top.thumbnailInfo.width, -150]
-                end if
-
-                m.timeProgress.text = convertToReadableTimeFormat(m.currentPositionSeconds)
-                m.timeDuration.text = convertToReadableTimeFormat(m.top.duration)
-                if m.top.thumbnailInfo.width <> invalid
-                    showThumbnail()
-                end if
-            end if
-            m.buttonHeld = "right"
-            m.buttonHoldTimer.control = "start"
-        else if key = "rewind"
-            m.progressBar.visible = true
-            focusButton(m.controlButton)
-            m.currentProgressBarState = 2
-            if m.currentPositionUpdated = false
-                m.currentPositionSeconds = m.top.position
-                m.currentPositionUpdated = true
-                m.top.control = "pause"
-            end if
-            m.currentPositionSeconds -= 10
-            if m.currentPositionSeconds < 0
-                m.currentPositionSeconds = 0
-            end if
-            if m.top.thumbnailInfo <> invalid and m.top.thumbnailInfo.width <> invalid
-                if m.progressBarProgress.width - m.top.thumbnailInfo.width / 2 >= 0
-                    if m.progressBarProgress.width + m.top.thumbnailInfo.width / 2 <= m.progressBarBase.width
-                        m.thumbnails.translation = [m.progressBarProgress.width - m.top.thumbnailInfo.width / 2, -150]
-                    else
-                        m.thumbnails.translation = [m.progressBarBase.width - m.top.thumbnailInfo.width, -150]
-                    end if
-                else
-                    m.thumbnails.translation = [0, -150]
-                end if
-
-                m.progressBarProgress.width = m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration)
-                m.progressDot.translation = [m.progressBarBase.width * (m.currentPositionSeconds / m.top.duration) + 33, 77]
-                m.timeProgress.text = convertToReadableTimeFormat(m.currentPositionSeconds)
-                m.timeDuration.text = convertToReadableTimeFormat(m.top.duration)
-                if m.top.thumbnailInfo.width <> invalid
-                    showThumbnail()
-                end if
-            end if
-            m.buttonHeld = "left"
-            m.buttonHoldTimer.control = "start"
-        else if key = "play"
-            togglePlayPause()
-            return true
-        end if
-    else if not press
-        if key = "rewind" or key = "fastforward"
-            m.scrollInterval = 10
-            m.buttonHeld = invalid
-            m.buttonHoldTimer.control = "stop"
-        end if
+        m.fadeAwayTimer.unobserveField("fire")
     end if
-end function
+    if m.messageTimer <> invalid
+        m.messageTimer.control = "stop"
+        m.messageTimer.unobserveField("fire")
+    end if
+    if m.latencyLogTimer <> invalid
+        m.latencyLogTimer.control = "stop"
+        m.latencyLogTimer.unobserveField("fire")
+    end if
+    if m.liveEdgeStartupTimer <> invalid
+        m.liveEdgeStartupTimer.control = "stop"
+        m.liveEdgeStartupTimer.unobserveField("fire")
+    end if
+    if m.qualityDialog <> invalid
+        m.qualityDialog.unobserveFieldScoped("buttonSelected")
+    end if
+    m.top.unobserveField("position")
+    m.top.unobserveField("state")
+    m.top.unobserveField("content")
+    m.top.unobserveField("chatIsVisible")
+    m.top.unobserveField("duration")
+    m.top.unobserveField("bufferingStatus")
+    m.top.unobserveField("qualityOptions")
+    m.top.unobserveField("selectedQuality")
+end sub

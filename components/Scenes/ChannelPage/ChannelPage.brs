@@ -1,55 +1,36 @@
 sub init()
-    m.top.backgroundColor = m.global.constants.colors.hinted.grey1
+    if m.global.constants <> invalid
+        m.top.backgroundColor = m.global.constants.colors.hinted.grey1
+    end if
     m.top.observeField("focusedChild", "onGetfocus")
-    ' m.top.observeField("itemFocused", "onGetFocus")
-    m.rowlist = m.top.findNode("exampleRowList")
-    m.rowlist.ObserveField("itemSelected", "handleItemSelected")
+    m.rowlist = m.top.findNode("homeRowList")
+    m.rowlist.observeField("itemSelected", "handleItemSelected")
     m.username = m.top.findNode("username")
     m.followers = m.top.findNode("followers")
     m.description = m.top.findNode("description")
-    m.livestreamlabel = m.top.findNode("livestreamlabel")
-    m.liveDuration = m.top.findNode("liveDuration")
     m.avatar = m.top.findNode("avatar")
-    m.videoPlayer = m.top.findNode("videoPlayer")
-    m.plyrTask = invalid
-    ' m.button = m.top.findnode("exampleButton")
 end sub
 
 sub updatePage()
     m.username.text = m.top.contentRequested.streamerDisplayName
-    m.GetContentTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
-    ' ' observe content so we can know when feed content will be parsed
-    m.GetContentTask.observeField("response", "updateChannelInfo")
-    m.GetContentTask.request = {
-        type: "getChannelHomeQuery"
-        params: {
-            id: m.top.contentRequested.streamerLogin
-        }
-    }
-    m.GetContentTask.functionName = m.getcontenttask.request.type
-    m.getcontentTask.control = "run"
-    m.GetShellTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
-    ' ' observe content so we can know when feed content will be parsed
-    m.GetShellTask.observeField("response", "updateChannelShell")
-    m.GetShellTask.request = {
-        type: "getChannelShell"
-        params: {
-            id: m.top.contentRequested.streamerLogin
-        }
-    }
-    m.getshellTask.functionName = m.getshelltask.request.type
-    m.getshellTask.control = "run"
+    m.GetContentTask = createApiTask("getChannelHomeQuery", "updateChannelInfo", {
+        params: { id: m.top.contentRequested.streamerLogin }
+    })
+    m.GetShellTask = createApiTask("getChannelShell", "updateChannelShell", {
+        params: { id: m.top.contentRequested.streamerLogin }
+    })
 end sub
 
 sub updateChannelShell()
     setBannerImage()
 end sub
 
-function setBannerImage()
+sub setBannerImage()
     bannerGroup = m.top.findNode("banner")
     poster = createObject("roSGNode", "Poster")
-    if m.GetShellTask.response.data.userOrError.bannerImageUrl <> invalid
-        poster.uri = m.GetShellTask.response.data.userOrError.bannerImageUrl
+    rsp = m.GetShellTask.response
+    if rsp?.bannerImageUrl <> invalid
+        poster.uri = rsp.bannerImageUrl
     else
         poster.uri = "pkg:/images/default_banner.png"
     end if
@@ -58,50 +39,31 @@ function setBannerImage()
     poster.scale = [1.1, 1.1]
     poster.visible = true
     poster.translation = [0, (0 - poster.height / 3)]
-    ' overlay = createObject("roSGNode", "Rectangle")
-    ' overlay.color = "0x01010110"
-    ' overlay.width = 1280
-    ' overlay.height = 320
-    ' poster.appendChild(overlay)
     bannerGroup.appendChild(poster)
-end function
-
-sub updateChannelInfo()
-    ' m.GetcontentTask.response.data.channel
-    ' id                : 71092938
-    ' __typename        : User
-    ' login             : xqc
-    ' stream            :
-    ' videoShelves      : @{edges=System.Object[]}
-    ' self              : @{follower=; subscriptionBenefit=}
-    ' displayName       : xQc
-    ' hosting           :
-    ' videos            : @{edges=System.Object[]}
-    ' roles             : @{isPartner=True}
-    ' broadcastSettings : @{isMature=False; id=71092938; __typename=BroadcastSettings}
-    ' description       : THE BEST AT ABSOLUTELY EVERYTHING. THE JUICER. LEADER OF THE JUICERS.
-    ' followers         : @{totalCount=11870230}
-    ' profileImageURL   : https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-70x70.jpeg
-    ' profileViewCount  :
-    m.description.infoText = m.GetcontentTask.response.data.channel.description
-    m.followers.text = numberToText(m.GetcontentTask.response.data.channel.followers.totalCount) + " " + tr("followers")
-    m.avatar.uri = m.GetcontentTask.response.data.channel.profileImageUrl
-    channelContent = buildContentNodeFromShelves(m.GetcontentTask.response.data)
-    updateRowList(channelContent)
-    ' ? "Resp: "; m.GetcontentTask.response
-    ' ? "Resp: "; m.GetcontentTask.response.data
 end sub
 
-function buildContentNodeFromShelves(inputData)
-    shelves = inputData.channel.videoShelves.edges
+sub updateChannelInfo()
+    rsp = m.GetContentTask.response
+    if rsp = invalid then return
+    m.description.infoText = rsp.description
+    m.followers.text = numberToText(rsp.followerCount) + " " + tr("followers")
+    if rsp.profileImageUrl <> invalid
+        m.avatar.uri = rsp.profileImageUrl
+    end if
+    channelContent = buildContentNodeFromShelves(rsp)
+    updateRowList(channelContent)
+end sub
+
+function buildContentNodeFromShelves(rsp)
     contentCollection = createObject("RoSGNode", "ContentNode")
-    if inputData.channel.stream <> invalid
+    if rsp.isLive
         row = createObject("RoSGNode", "ContentNode")
         row.title = "Live Stream"
         rowItem = m.top.contentRequested
         row.appendChild(rowItem)
         contentCollection.appendChild(row)
     end if
+    shelves = rsp.videoShelves
     for each shelf in shelves
         row = createObject("RoSGNode", "ContentNode")
         row.title = shelf.node.title
@@ -111,16 +73,20 @@ function buildContentNodeFromShelves(inputData)
             if stream.slug <> invalid
                 rowItem.contentType = "CLIP"
                 rowItem.clipSlug = stream.slug
+                rowItem.contentTitle = stream.title
+                rowItem.viewersCount = stream.viewCount
+                rowItem.datePublished = stream.createdAt
             else
                 rowItem.contentType = "VOD"
+                rowItem.contentTitle = stream.vodTitle
+                rowItem.viewersCount = stream.vodViewCount
+                rowItem.datePublished = stream.vodCreatedAt
             end if
             if stream.previewThumbnailURL <> invalid
                 rowItem.previewImageURL = Left(stream.previewThumbnailURL, len(stream.previewThumbnailURL) - 20) + "320x180." + Right(stream.previewThumbnailURL, 3)
             else if stream.thumbnailURL <> invalid
                 rowItem.previewImageURL = stream.thumbnailURL
             end if
-            rowItem.contentTitle = stream.title
-            rowItem.viewersCount = stream.viewCount
             rowItem.streamerDisplayName = m.top.contentRequested.streamerDisplayName
             rowItem.streamerLogin = m.top.contentRequested.streamerLogin
             rowItem.streamerId = m.top.contentRequested.streamerId
@@ -137,76 +103,63 @@ function buildContentNodeFromShelves(inputData)
     return contentCollection
 end function
 
-function updateRowList(contentCollection)
+sub updateRowList(contentCollection)
     rowItemSize = []
     showRowLabel = []
     rowHeights = []
     for each row in contentCollection.getChildren(contentCollection.getChildCount(), 0)
-        if row.title <> ""
-            hasRowLabel = true
-        else
-            hasRowLabel = false
-        end if
-        showRowLabel.push(hasRowLabel)
-        defaultRowHeight = 275
-        if row?.getchild(0)?.contentType = "LIVE" or row?.getchild(0)?.contentType = "VOD"
-            rowItemSize.push([320, 180])
-            if hasRowLabel
-                rowHeights.push(275)
-            else
-                rowHeights.push(235)
-            end if
-        end if
-        if row?.getchild(0)?.contentType = "GAME"
-            rowItemSize.push([188, 250])
-            if hasRowLabel
-                rowHeights.push(325)
-            else
-                rowHeights.push(305)
-            end if
+        hasRowLabel = row.title <> ""
+        config = getRowConfig(row?.getchild(0)?.contentType, hasRowLabel)
+        if config <> invalid
+            showRowLabel.push(hasRowLabel)
+            rowItemSize.push(config.itemSize)
+            rowHeights.push(config.rowHeight)
         end if
     end for
     m.rowList.rowHeights = rowHeights
     m.rowlist.showRowLabel = showRowLabel
     m.rowlist.rowItemSize = rowItemSize
     m.rowlist.content = contentCollection
-    m.rowlist.numRows = contentCollection.getChildCount()
-end function
+    m.rowlist.numRows = rowHeights.count()
+end sub
 
-function handleItemSelected()
-    selectedRow = m.rowlist.content.getchild(m.rowlist.rowItemSelected[0])
+sub handleItemSelected()
+    if m.rowlist.content = invalid then return
+    selectedRow = m.rowlist.content.getChild(m.rowlist.rowItemSelected[0])
+    if selectedRow = invalid then return
     selectedItem = selectedRow.getChild(m.rowlist.rowItemSelected[1])
     m.top.playContent = true
     m.top.contentSelected = selectedItem
-end function
+end sub
 
 sub FocusRowlist()
     if m.rowlist.focusedChild = invalid
         m.rowlist.setFocus(true)
-    else if m.rowlist.focusedchild.id = "exampleRowList"
+    else if m.rowlist.focusedChild.id = "homeRowList"
         m.rowlist.focusedChild.setFocus(true)
     end if
 end sub
 
 sub onGetFocus()
-    if m.top?.focusedChild?.id <> invalid and m.top.focusedChild.id = "exampleButton"
-        ?"do nothing"
-    else
-        FocusRowlist()
-    end if
+    FocusRowlist()
+    updateRowListFocusFeedback()
+end sub
+
+' Hide the RowList focus rectangle when focus leaves the scene; restore on return.
+sub updateRowListFocusFeedback()
+    if m.rowlist = invalid then return
+    m.rowlist.drawFocusFeedback = m.rowlist.isInFocusChain()
+end sub
+
+sub onDestroy()
+    m.top.unobserveField("focusedChild")
+    m.rowlist.unobserveField("itemSelected")
+    m.GetContentTask = destroyTask(m.GetContentTask, "response")
+    m.GetShellTask = destroyTask(m.GetShellTask, "response")
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if press
-        ? "Channel Page Key Event: "; key
-        ' if key = "up"
-        '     m.button.setFocus(true)
-        '     return true
-        ' end if
-        ' if key = "down"
-        '     m.rowlist.setFocus(true)
-        '     return true
-        ' end if
         if key = "back"
             m.top.backPressed = true
             return true
@@ -215,5 +168,5 @@ function onKeyEvent(key as string, press as boolean) as boolean
             ? "selected"
         end if
     end if
+    return false
 end function
-

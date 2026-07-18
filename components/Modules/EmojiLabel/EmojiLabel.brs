@@ -23,18 +23,22 @@ sub init()
     m.top.observeField("emojiSize", "updateComponents")
     m.top.observeField("maxWidth", "updateComponents")
     m.timer = m.top.findNode("timer")
-    m.timer.observeField("fire", "onTimerFireChange")
+    if m.timer <> invalid
+        m.timer.observeField("fire", "onTimerFireChange")
+    end if
     setText()
 end sub
 
 sub onTimerFireChange() as void
+    if m.animation = invalid or m.timer = invalid then return
     m.animation.repeat = false
     m.animation.control = "stop"
     m.components.translation = [0, 0]
     m.timer.control = "stop"
 end sub
 
-function doScroll()
+sub doScroll()
+    if m.animation = invalid or m.timer = invalid then return
     if m.top.repeatCount <> invalid
         if m.top.repeatCount <> 0
             m.animation.repeat = true
@@ -59,10 +63,10 @@ function doScroll()
             m.timer.control = "stop"
         end if
     end if
-end function
+end sub
 
 ' Will update the components if an interface field has changed.
-function updateComponents()
+sub updateComponents()
     ' Only update components if we are actually rendering text
     if m.top.text <> ""
         width = m.top.width
@@ -116,9 +120,15 @@ function updateComponents()
         if m.top.maxWidth = 0
             m.top.maxWidth = m.top.width
         end if
-        m.animation.duration = (m.top.width / m.top.maxWidth)
-        m.timer.duration = (m.top.width / m.top.maxWidth)
-        m.vector.keyValue = [[0, 0], [innerWidth, 0]]
+        if m.animation <> invalid
+            m.animation.duration = (m.top.width / m.top.maxWidth)
+        end if
+        if m.timer <> invalid
+            m.timer.duration = (m.top.width / m.top.maxWidth)
+        end if
+        if m.vector <> invalid
+            m.vector.keyValue = [[0, 0], [innerWidth, 0]]
+        end if
 
         if m.top.emojiSize > height
             height = m.top.emojiSize
@@ -143,18 +153,18 @@ function updateComponents()
             yTranslation = height
         end if
         m.top.clippingRect = {
-            width: m.top.maxWidth
-            height: (m.top.height * 2)
-            x: 0
+            width: m.top.maxWidth,
+            height: (m.top.height * 2),
+            x: 0,
             y: (0 - (m.top.height / 2))
         }
         ' m.top.translation = [m.top.translation[0], m.top.translation[1] + (height / 2)]
         ' m.components.translation = [xTranslation, height]
     end if
-end function
+end sub
 
 ' Convenience function to check if we need to truncate the label
-function checkBoundingWidth()
+sub checkBoundingWidth()
     curWidth = 0
     width = m.top.width
     ' Reset previous ellipsis if present
@@ -202,7 +212,7 @@ function checkBoundingWidth()
             end if
         end if
     end for
-end function
+end sub
 
 ' function normalizeText(text as string)
 '     unicodeRegex = createObject("roRegex", unidecodeRegex(), "m")
@@ -215,7 +225,7 @@ end function
 ' end function
 
 ' Updates the entire label components with new text.
-function setText()
+sub setText()
     labelText = m.top.text
 
     resetComponents()
@@ -251,7 +261,7 @@ function setText()
 
     ' Update the components.
     updateComponents()
-end function
+end sub
 
 ' Create a new label to display non-emoji text in the label.
 function createLabel(withText as string)
@@ -296,12 +306,31 @@ function getAllComponents()
 end function
 
 ' Removes all child components to reset the layout group.
-function resetComponents()
+sub resetComponents()
     while m.components.getChildCount() > 0
         m.components.removeChildIndex(0)
     end while
-end function
+end sub
 
+
+sub onDestroy()
+    if m.timer <> invalid
+        m.timer.control = "stop"
+        m.timer.unobserveField("fire")
+    end if
+    if m.animation <> invalid
+        m.animation.control = "stop"
+    end if
+    m.top.unobserveField("text")
+    m.top.unobserveField("color")
+    m.top.unobserveField("font")
+    m.top.unobserveField("horizAlign")
+    m.top.unobserveField("vertAlign")
+    m.top.unobserveField("width")
+    m.top.unobserveField("repeatCount")
+    m.top.unobserveField("emojiSize")
+    m.top.unobserveField("maxWidth")
+end sub
 
 ' function onSizeChange()
 '     m.top.clippingRect = {

@@ -26,5 +26,19 @@
         <field id="relativePublishDate" type="string" />
         <field id="createdAt" type="string" />
         <field id="QualityId" type="string" />
+        <!-- Streaming metadata fields -->
+        <field id="StreamUrls" type="array" />
+        <field id="StreamQualities" type="array" />
+        <field id="StreamContentIds" type="array" />
+        <field id="StreamBitrates" type="array" />
+        <field id="StreamStickyHttpRedirects" type="array" />
+        <!-- Enhanced Broadcasting detection -->
+        <field id="isTransmux" type="bool" value="false" />
+        <field id="isProxied" type="bool" value="false" />
+        <!-- Built-in ContentNode playback attr (Roku firmware 7.5+). Declared
+             here for IDE/autocomplete and to pin the default explicitly. -->
+        <field id="ForwardQueryStringParams" type="bool" value="true" />
+        <!-- Error handling fields -->
+        <field id="errorCode" type="string" />
     </interface>
 </component>

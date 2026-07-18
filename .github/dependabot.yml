@@ -1,0 +1,92 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+
+    groups:
+      # Build toolchain — compiler, linter, formatter, hooks, package manager
+      dev-tools:
+        patterns:
+          - "brighterscript"
+          - "brighterscript-formatter"
+          - "@rokucommunity/bslint"
+          - "ropm"
+          - "ghooks"
+        update-types:
+          - "minor"
+          - "patch"
+      # Runtime/support deps — ship to device or support build infra
+      runtime-deps:
+        patterns:
+          - "@rokucommunity/bslib"
+          - "bslib"
+          - "@npmcli/fs"
+          - "glob"
+          - "lru-cache"
+          - "rimraf"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Ignore transitive/lockfile-only deps not declared in package.json
+    ignore:
+      - dependency-name: "minimatch"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      - dependency-name: "brace-expansion"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      - dependency-name: "picomatch"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "America/New_York"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "pip"
+    directory: "/fmp4-demux-proxy"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "America/New_York"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "proxy"
+
+  - package-ecosystem: "docker"
+    directory: "/fmp4-demux-proxy"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "America/New_York"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "proxy"

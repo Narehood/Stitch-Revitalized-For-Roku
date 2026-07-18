@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="GamePage" extends="SceneManagerGroup" initialFocus="exampleRowList">
+<component name="GamePage" extends="SceneManagerGroup" initialFocus="homeRowList">
     <interface>
         <field id="contentRequested" type="node" onChange="updatePage" />
         <field id="backgroundColor" type="string" alias="background.color" />
@@ -7,6 +7,8 @@
     </interface>
     <script type="text/brightscript" uri="GamePage.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <children>
         <rectangle id="background" width="1920" height="1080" />
         <SimpleLabel
@@ -14,9 +16,9 @@
             translation="[75,20]"
             text="Browse"
             fontSize="48"
-            fontUri="pkg:/fonts/KlokanTechNotoSansCJK-Bold.otf" />
+            fontUri="pkg:/fonts/Archivo-Bold.otf" />
         <RowList
-            id="exampleRowList"
+            id="homeRowList"
             visible="true"
             rowLabelOffset="[[0,5]]"
             rowLabelFont="font:LargeBoldSystemFont"
@@ -29,9 +31,9 @@
             itemSpacing="[ 0, 40 ]"
             showRowLabel="[ false ]"
             rowHeights="[235]"
-            focusBitmapUri="pkg:/images/focusIndicator.9.png"
+            focusBitmapUri="pkg:/images/focusindicator.9.png"
             vertFocusAnimationStyle="fixedFocus"
-            rowFocusAnimationStyle="floatingFocus"
+            rowFocusAnimationStyle="fixedFocus"
         />
     </children>
 

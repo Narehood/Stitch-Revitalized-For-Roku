@@ -31,8 +31,8 @@ end sub
 '     newItem.focusedIconUri = map[icon]
 '     newItem.height = m.top.menuOptionsHeight
 '     newItem.minWidth = 0
-'     newItem.focusFootprintBitmapUri = "pkg:/images/FocusFootprint.9.png"
-'     newItem.focusBitmapUri = "pkg:/images/FocusFootprint.9.png"
+'     newItem.focusFootprintBitmapUri = "pkg:/images/focusfootprint.9.png"
+'     newItem.focusBitmapUri = "pkg:/images/focusfootprint.9.png"
 '     newItem.showFocusFootprint = false
 '     newItem.getchild(3).blendColor = m.top.menuTextColor
 '     newItem.getchild(3).width = m.top.menuFontSize * 2
@@ -60,8 +60,8 @@ sub updateMenuOptions()
             newItem.iconUri = ""
             newItem.focusedIconUri = ""
             newItem.height = m.top.menuOptionsHeight
-            newItem.focusFootprintBitmapUri = "pkg:/images/FocusFootprint.9.png"
-            newItem.focusBitmapUri = "pkg:/images/FocusIndicator.9.png"
+            newItem.focusFootprintBitmapUri = "pkg:/images/focusfootprint.9.png"
+            newItem.focusBitmapUri = "pkg:/images/focusindicator.9.png"
             newItem.showFocusFootprint = false
             newItem.id = m.top.menuOptionsText[i]
             if m.top.menuOptionsText[i] = "follow"
@@ -92,7 +92,6 @@ end sub
 sub handleUserLoginResponse()
     ? "[MenuBar] - handleUserLoginResponse()"
     search = m.loginIconTask.response
-    result = { raw: search }
     if search <> invalid and search.data <> invalid
         for each stream in search.data
             set_user_setting("id", stream.id)
@@ -114,18 +113,13 @@ sub handleUserLogin()
     if m.top.updateUserIcon
         if get_setting("active_user", "$default$") <> "$default$"
             ? "[MenuBar] - handleUserLogin()"
-            m.loginIconTask = CreateObject("roSGNode", "TwitchApiTask") ' create task for feed retrieving
-            m.loginIconTask.observeField("response", "handleUserLoginResponse")
-            m.loginIconTask.request = {
-                type: "TwitchHelixApiRequest"
+            m.loginIconTask = createApiTask("TwitchHelixApiRequest", "handleUserLoginResponse", {
                 params: {
-                    endpoint: "users"
-                    args: "login=" + get_user_setting("login")
+                    endpoint: "users",
+                    args: "login=" + get_user_setting("login"),
                     method: "GET"
                 }
-            }
-            m.loginIconTask.functionName = m.loginIconTask.request.type
-            m.loginIconTask.control = "run"
+            })
         else
             for i = 0 to (m.menuOptions.getChildCount() - 1)
                 if m.menuOptions.getchild(i).id = "LoginPage"

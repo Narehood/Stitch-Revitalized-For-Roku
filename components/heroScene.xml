@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!-- Copyright 2016 Roku Corp.  All Rights Reserved. -->
-
 <component name="HeroScene" extends="SceneManagerScene">
   <interface>
     <field id="ready" type="boolean" value="false" />
@@ -16,11 +14,16 @@
       visible="true"
       translation="[0,0]"
     />
-    <FollowedStreamsBar
-      id="followedStreamsBar"
-      translation="[0,78]" />
+    <RecentlyWatchedBar
+      id="recentlyWatchedBar"
+      focusable="true"
+      translation="[0,64]"
+    />
   </children>
   <script type="text/brightscript" uri="heroScene.brs" />
-  <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+  <script type="text/brightscript" uri="pkg:/source/changelog.brs" />
   <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+  <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+  <script type="text/brightscript" uri="pkg:/source/utils/analytics.brs" />
+  <script type="text/brightscript" uri="pkg:/source/utils/sceneFactory.brs" />
 </component>

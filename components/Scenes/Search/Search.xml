@@ -3,6 +3,7 @@
     <script type="text/brightscript" uri="Search.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <children>
         <ButtonGroup
             id="recents"
@@ -21,7 +22,7 @@
             buttonheight="30"
             translation="[100,120]" />
         <RowList
-            id="exampleRowList"
+            id="homeRowList"
             translation="[500, 120]"
             rowLabelOffset="[[0,10]]"
             rowLabelFont="font:LargeBoldSystemFont"
@@ -32,7 +33,7 @@
             itemSize="[1280,295]"
             itemSpacing="[ 0, 40 ]"
             showRowLabel="[ true ]"
-            focusBitmapUri="pkg:/images/focusIndicator.9.png"
+            focusBitmapUri="pkg:/images/focusindicator.9.png"
             vertFocusAnimationStyle="fixedFocus"
             rowFocusAnimationStyle="fixedFocus"
         />

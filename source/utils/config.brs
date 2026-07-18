@@ -29,7 +29,7 @@ sub registry_delete(key, section = invalid)
 end sub
 
 
-' "StitchForRoku" registry accessors for the default global settings
+' "StitchRevitalizedForRoku" registry accessors for the default global settings
 function get_setting(key, default = invalid)
     value = registry_read(key, m.global.appid)
     if value = invalid then return default
@@ -94,9 +94,9 @@ end function
 
 function getTokenFromRegistry()
     return {
-        access_token: get_user_setting("refresh_token", "")
-        refresh_token: get_user_setting("access_token", "")
-        login: get_user_setting("login", "")
+        access_token: get_user_setting("access_token", ""),
+        refresh_token: get_user_setting("refresh_token", ""),
+        login: get_user_setting("login", ""),
         device_id: get_user_setting("device_code", "")
     }
 end function
@@ -116,7 +116,7 @@ function getRegistryKeys(section = invalid)
     return output
 end function
 
-function NukeRegistry(section = invalid)
+sub NukeRegistry(section = invalid)
     ? "Erasing Registry"
     Registry = CreateObject("roRegistry")
     if section = invalid
@@ -138,4 +138,4 @@ function NukeRegistry(section = invalid)
         RegistrySection.flush()
     end if
 
-end function
+end sub

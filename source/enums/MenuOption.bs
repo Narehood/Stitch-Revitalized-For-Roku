@@ -1,0 +1,11 @@
+enum MenuOption
+    BROWSE = "Browse"
+    FOLLOWING = "Following"
+    VODS = "Vods"
+    SEARCH = "Search"
+    SETTINGS = "Settings"
+    LOGIN_PAGE = "LoginPage"
+    GAME_PAGE = "GamePage"
+    CHANNEL_PAGE = "ChannelPage"
+    VIDEO_PLAYER = "VideoPlayer"
+end enum

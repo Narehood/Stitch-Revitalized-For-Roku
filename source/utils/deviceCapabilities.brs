@@ -127,7 +127,7 @@ function getDeviceProfile() as object
                 "AudioCodec": tsAudioCodecs,
                 "VideoCodec": tsVideoCodecs,
                 "Context": "Streaming",
-                "Protocol": "hls",
+                "Protocol": "lhls",
                 "MaxAudioChannels": StrI(maxAudioChannels), ' Currently Jellyfin server expects this as a string
                 "MinSegments": "1",
                 "BreakOnNonKeyFrames": true

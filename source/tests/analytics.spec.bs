@@ -1,0 +1,64 @@
+namespace tests
+
+    @suite("Analytics")
+    class AnalyticsTests extends rooibos.BaseTestSuite
+
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        @describe("trackEvent")
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        @it("does not crash when analyticsTask is invalid")
+        sub trackEvent_taskInvalid()
+            m.global = { analyticsTask: invalid }
+            trackEvent("test_event", { key: "value" })
+            m.assertTrue(true)
+        end sub
+
+        @it("does not crash when analyticsTask is valid")
+        sub trackEvent_taskValid()
+            m.global = { analyticsTask: { capture: invalid } }
+            trackEvent("tab_visited", { tab: "Discover" })
+            m.assertTrue(true)
+        end sub
+
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        @describe("analyticsIdentify")
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        @it("does not crash when analyticsTask is invalid")
+        sub analyticsIdentify_taskInvalid()
+            m.global = { analyticsTask: invalid }
+            analyticsIdentify({ app_version: "2.3.0" })
+            m.assertTrue(true)
+        end sub
+
+        @it("does not crash when analyticsTask is valid")
+        sub analyticsIdentify_taskValid()
+            m.global = { analyticsTask: { identify: invalid } }
+            analyticsIdentify({ app_version: "2.3.0" })
+            m.assertTrue(true)
+        end sub
+
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        @describe("captureException")
+        '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        @it("does not crash when analyticsTask is invalid")
+        sub captureException_taskInvalid()
+            m.global = { analyticsTask: invalid }
+            e = { message: "Some error", number: 0 }
+            captureException(e, "someScene/someHandler")
+            m.assertTrue(true)
+        end sub
+
+        @it("does not crash when analyticsTask is valid")
+        sub captureException_taskValid()
+            m.global = { analyticsTask: { captureException: invalid } }
+            e = { message: "Value is invalid", number: 24 }
+            captureException(e, "heroScene/onMenuSelection")
+            m.assertTrue(true)
+        end sub
+
+    end class
+
+end namespace
