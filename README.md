@@ -2,53 +2,82 @@
 [![forks - Stitch-Revitalized-For-Roku](https://img.shields.io/github/forks/Narehood/Stitch-Revitalized-For-Roku?style=social)](https://github.com/Narehood/Stitch-Revitalized-For-Roku)
 [![GitHub release](https://img.shields.io/github/release/Narehood/Stitch-Revitalized-For-Roku?include_prereleases=&sort=semver&color=blue)](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/)
 [![License](https://img.shields.io/badge/License-Unlicense-blue)](https://github.com/Narehood/Stitch-Revitalized-For-Roku/blob/main/LICENSE)
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Narehood/Stitch-Revitalized-For-Roku?utm_source=oss&utm_medium=github&utm_campaign=Narehood%2FStitch-Revitalized-For-Roku&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
-[![issues - Stitch-Revitalized-For-Roku](https://img.shields.io/github/issues/Narehood/Stitch-Revitalized-For-Roku)](https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues)
-
 ![Roku](https://img.shields.io/badge/roku-6f1ab1?style=for-the-badge&logo=roku&logoColor=white)
 ![Twitch](https://img.shields.io/badge/Twitch-9347FF?style=for-the-badge&logo=twitch&logoColor=white)
 
 # Stitch Revitalized (for Roku)
-Stitch Revitalized is a Roku channel that aims to provide an actively maintained, reasonably feature-complete Twitch experience while respecting Twitch's business model (ads, monetization, and the like). This channel is based on the now archived Stich channel https://github.com/0xW1sKy/Stitch-For-Roku (Nov 24, 2024).
 
-## Installation
+Stitch Revitalized is a Roku channel that aims to provide an actively maintained, reasonably feature-complete Twitch experience while respecting Twitch's business model (ads, monetization, and the like). This channel is based on the now archived Stitch channel https://github.com/0xW1sKy/Stitch-For-Roku.
 
-No longer available
+**v2.2 revitalization highlights**
+- Playback gated on **video decode capability** (not UI graphics resolution), so 1440p-enabled channels remain watchable at lower qualities
+- Live **low-latency** settings applied to the actual `StitchVideo` player path
+- Centralized Twitch client helpers (`source/utils/twitchClient.brs`) for GQL/Usher/Helix headers and retries
+- Refreshed channel art, splash screens, and in-app icons
 
 ## Side Loading
-If the link is not loading or you otherwise want to sideload this you can do so by doing the following (this is not a full tutorial, I may make one at some point). There may be a better way to do this, but this was what I was able to figure out without any previous instruction/documentation.
 
-Easy: 
+### Easy (release ZIP)
 
-- Download the ZIP here: [Sitch Revitalized Download](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v1.6.6/Stitch.Revitalized.zip)
-- Enable/Configure Dev mode on your Roku
-- Upload the ZIP file to your Roku through a web browser
+1. Download the latest release ZIP from [Releases](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases)
+2. Enable Developer Mode on your Roku (Home ×3, Up ×2, Right, Left, Right, Left, Right)
+3. Note the IP address and developer password shown on the Roku
+4. In a browser, open `http://<ROKU_IP>` and upload the ZIP
 
-Manual Compiling:
+### Manual compile (VS Code)
 
-- Download this repo
-- Install Visual Studio Code
-- Install the required extensions/software: BrightScript Function Comment, BrightScript Language, nodejs, and anything else it requires; it should prompt you
-- Enable Dev mode on your Roku
-- Modify the bsconfig.json by entering your Rokus IP address and the password you set (you can also access the Roku through telnet or web browser once this is enabled
-- Click on Run > Start Debugging and it will install the app on your device
-- You may need to run a 'npm install' command in the terminal of Visual Studio Code
+1. Clone this repository
+2. Install Node.js, then from the repo root run `npm install`
+3. Copy `bsconfig.json.example` to `bsconfig.json` and set your Roku IP + developer password
+4. Install the BrightScript Language extension in VS Code
+5. Enable Developer Mode on your Roku
+6. Run **Run → Start Debugging**, or package with:
+
+```bash
+npm run package
+```
+
+The packaged channel ZIP is written under `out/`.
+
+### Sideload validation checklist
+
+After installing, confirm:
+
+1. Device login (Twitch device code flow)
+2. Discover / Following / Categories load
+3. A live stream starts (try a 1440p-capable channel and force 720p/1080p)
+4. Quality picker lists playable rungs only
+5. Low Latency vs Normal latency setting changes player behavior
+6. Chat opens and receives messages when enabled
+
+## Playback notes (1440p & latency)
+
+- Stream variants are filtered with `roDeviceInfo.CanDecodeVideo` height probes (`getMaxVideoDecodeHeight()`), **not** `GetSupportedGraphicsResolutions()`.
+- Choosing a specific quality uses that media playlist alone, so an unplayable Source/1440p rung cannot poison forced 720p/1080p playback.
+- Low latency requests Usher LL parameters and configures LL-HLS / buffering on live `StitchVideo` nodes when the firmware supports those fields.
+
+## Twitch API health
+
+This app uses Twitch GraphQL + Usher (unofficial Android TV / web client IDs). Those surfaces change without notice.
+
+If browse or playback breaks:
+
+1. Confirm login still completes (`getRendezvouzToken` / `getOauthToken`)
+2. Confirm homepage / following GQL queries in `TwitchApiTask.bs` still return data
+3. Confirm `GetTwitchContent` can fetch an Usher playlist for a live login
+4. Update operation documents / persisted query hashes as needed — client IDs live in `source/utils/twitchClient.brs`
 
 ## Contributing
 
-If you are comfortable using the GitHub interface, you can report bugs or request features by opening a [GitHub Issue](https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues). (Please check to see if your issue has already been reported before opening a new one.)
-
-
-In addition to issues, Pull Requests are welcome. All contributions must be made [under the Unlicense](./LICENSE).
+Report bugs or request features via [GitHub Issues](https://github.com/Narehood/Stitch-Revitalized-For-Roku/issues). Pull Requests are welcome. All contributions must be made [under the Unlicense](./LICENSE).
 
 ## Data Collection
 
 I do not collect any data from this app, but Roku and Twitch may do so. If this is a concern you should read their policies on data collection. The data Roku collects may be in whole or in part accessible by myself, but I, nor anyone working with me or on my behalf will use this data for any purpose except for fixing bugs/errors if they are reported.
 
-
 ## Authorship and License
 
-Stich Revitalized exists because Twitch does not presently have any official channel for Roku, despite [Roku being the most popular smart TV platform, with (as of early 2022), a 39% market share in North America and a 31% market share worldwide](https://seekingalpha.com/article/4547471-the-sleeping-giant-in-streaming-turning-roku-into-a-huge-2023-winner). If Stitch becomes active or Twitch makes an official app, this project will no longer be maintained.
+Stitch Revitalized exists because Twitch does not presently have any official channel for Roku. If Stitch becomes active or Twitch makes an official app, this project will no longer be maintained.
 
 Stitch (and now Stitch Revitalized) began as a hard fork of [Twoku](https://github.com/worldreboot/twitch-reloaded-roku), due to that application's apparent abandonment. Since then Stitch has been almost completely rewritten.
 

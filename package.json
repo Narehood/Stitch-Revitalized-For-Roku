@@ -1,9 +1,11 @@
 {
     "name": "@narehood/stitch-revitalized-for-roku",
+    "version": "2.2.0",
     "scripts": {
-        "build": "bsc --createPackage=false",
+        "build": "bsc --createPackage=false --deploy=false",
         "watch": "npm run build -- --watch",
-        "package": "bsc --create-package"
+        "package": "bsc --create-package --deploy=false",
+        "lint": "bsc --createPackage=false --deploy=false"
     },
     "devDependencies": {
         "@rokucommunity/bslint": "^0.8.32",

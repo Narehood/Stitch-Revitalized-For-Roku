@@ -55,22 +55,27 @@ end sub
 
 sub stopJobs()
     if m.chat <> invalid
+        m.chat.unobserveField("nextCommentObj")
         m.chat.control = "stop"
     end if
     if m.EmoteJob <> invalid
         m.EmoteJob.control = "stop"
+        m.EmoteJob = invalid
     end if
 end sub
 
 sub onVideoChange()
     if not m.top.control
-        m.chat.control = "stop"
+        if m.chat <> invalid
+            m.chat.control = "stop"
+        end if
         m.top.control = true
     end if
 end sub
 
 sub onEnterChannel()
     ' ? "Chat >> onEnterChannel > " m.top.channel
+    stopJobs()
     if get_user_setting("ChatWebOption", "true") = "true"
         m.chat = m.top.findnode("ChatJob")
         m.chat.forceLive = m.top.forceLive
