@@ -5,11 +5,21 @@ out/
 template.env
 .dev
 node_modules
-bsconfig.json
-# Environment variables
-.env
-.env.local
-.env.*.local
 
-# Roku device specific configs
+# Local Roku device credentials / deploy config (never commit)
+bsconfig.json
 bsconfig.local.json
+bsconfig.*.json
+!bsconfig.json.example
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+env
+*.pem
+*.key
+secrets/
+.secrets/
+credentials.json
+credentials.*.json
