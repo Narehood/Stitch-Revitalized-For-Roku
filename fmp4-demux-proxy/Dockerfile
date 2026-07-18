@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 FROM python:3.14-slim AS runtime
 
-LABEL org.opencontainers.image.source="https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku/tree/main/fmp4-demux-proxy" \
+LABEL org.opencontainers.image.source="https://github.com/Narehood/Stitch-Revitalized-For-Roku/tree/main/fmp4-demux-proxy" \
       org.opencontainers.image.description="HLS/fMP4 proxy that demuxes Twitch EB streams for Roku playback"
 
 RUN groupadd --gid 1000 fmp4demux \
