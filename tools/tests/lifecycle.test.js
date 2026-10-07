@@ -58,8 +58,10 @@ test('SceneGraph permanent disposal stops resources and preserves retained navig
         await addFile(packageDir, 'components/Owner.xml', `<component name="Owner" extends="OwnerBase">
           <interface>
             <field id="active" type="node" /><field id="saved" type="node" /><field id="sidebarResource" type="node" />
+            <field id="exitApp" type="boolean" value="false" />
             <function name="begin" /><function name="retain" /><function name="goBack" />
             <function name="switchTab" /><function name="login" /><function name="logout" /><function name="disposeAgain" />
+            <function name="rootBack" />
           </interface><script uri="owner.brs" />
         </component>`);
         for (const name of ['Following', 'ChannelPage', 'Settings', 'InheritedFollowing']) {

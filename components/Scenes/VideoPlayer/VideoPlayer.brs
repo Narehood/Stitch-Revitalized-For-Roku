@@ -515,6 +515,7 @@ sub onVideoStateChange()
     if m.video.state = "buffering"
         handleBufferingState()
     else if m.lastBufferState = "buffering" and m.video.state = "playing"
+        m.bufferStartTime = 0
         ' Recovered from buffering — cancel all pending retry/buffer timers
         if m.bufferCheckTimer <> invalid
             m.bufferCheckTimer.control = "stop"
@@ -971,7 +972,6 @@ end sub
 
 sub showTransmuxWarning()
     stopPlaybackForDialog()
-    m.transmuxButtonIndex = -1
     dialog = createObject("roSGNode", "StandardMessageDialog")
     dialog.title = "Audio service needed"
     dialog.message = ["This stream combines audio and video in CMAF segments. Roku needs separate tracks.", "Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream.", "The service runs directly in Python or in Docker; it does not re-encode your video."]
@@ -988,7 +988,6 @@ end sub
 sub onTransmuxDialogButton()
     scene = m.top.getScene()
     if scene <> invalid and scene.dialog <> invalid
-        m.transmuxButtonIndex = scene.dialog.buttonSelected
         scene.dialog.close = true
     end if
 end sub
@@ -1003,11 +1002,7 @@ sub onTransmuxDialogClosed()
     if scene <> invalid
         scene.dialog = invalid
     end if
-    if m.transmuxButtonIndex = 1
-        playContent()
-    else
-        exitPlayer()
-    end if
+    exitPlayer()
 end sub
 
 sub onDurationChanged()

@@ -28,6 +28,8 @@ function twitchVariantVideoFormat(variant as object) as dynamic
     codecText = ""
     if variant["CODECS"] <> invalid then codecText = LCase(variant["CODECS"])
     format = { codec: "mpeg4 avc", profile: "high", level: "3.1" }
+    ' H.264 A-1: 720p60 uses 216000 macroblocks/sec, exactly level 3.2's limit.
+    ' https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/h264_levels.c
     minimumLevel = 3.1
     if width > 1280 or height > 720 then minimumLevel = 4.0
     if fps > 30 and (width > 1280 or height > 720) then minimumLevel = 4.2
@@ -39,6 +41,7 @@ function twitchVariantVideoFormat(variant as object) as dynamic
         format = { codec: "hevc", profile: "main", level: "4.0" }
         ' HEVC level limits are based on picture size AND luma sample rate.
         ' 1440p60 fits level 5.0; it must not be treated as 2160p60 (5.1).
+        ' Level 5.0 also fits 2160p30: MaxLumaPs=8912896, MaxLumaSr=267386880.
         ' https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/h265_profile_level.c
         minimumLevel = 4.0
         pictureSize = width * height

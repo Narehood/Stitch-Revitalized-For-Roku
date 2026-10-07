@@ -4,6 +4,16 @@ sub main()
     screen.setMessagePort(port)
     scene = screen.createScene("Owner")
     screen.show()
+    if not scene.callFunc("rootBack", true) or not scene.exitApp
+        fail("root Back could not exit before an initial screen loaded")
+        return
+    end if
+    scene.exitApp = false
+    scene.observeField("exitApp", port)
+    if scene.callFunc("rootBack", false) or scene.exitApp
+        fail("Back release requested exit")
+        return
+    end if
     scene.callFunc("begin")
     wait(150, port)
     retained = scene.active
@@ -73,6 +83,20 @@ sub main()
         fail("inherited cleanup export did not dispatch derived implementation")
         return
     end if
+    if not scene.callFunc("rootBack", true)
+        fail("root Back did not consume the key while requesting exit")
+        return
+    end if
+    exitMessage = wait(1000, port)
+    if type(exitMessage) <> "roSGNodeEvent"
+        fail("root Back did not notify the main thread")
+        return
+    end if
+    if exitMessage.getField() <> "exitApp" or exitMessage.getData() <> true
+        fail("root Back did not deliver a true exit request")
+        return
+    end if
+    scene.unobserveField("exitApp")
     scene.callFunc("onDestroy")
     scene.callFunc("onDestroy")
     before = finalScreen.ticks

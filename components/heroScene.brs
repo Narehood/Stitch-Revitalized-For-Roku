@@ -382,6 +382,12 @@ end sub
 
 function onKeyEvent(key, press) as boolean
     if not press then return false
+    if key = "back"
+        ' Children consume navigation Back. The remaining root Back requests
+        ' cleanup on the main thread before it closes the render thread.
+        m.top.exitApp = true
+        return true
+    end if
     if m.activeNode = invalid then return false
 
     if key = "replay"

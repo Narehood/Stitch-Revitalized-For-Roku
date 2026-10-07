@@ -23,6 +23,33 @@ sub main()
     if not playbackCapabilityExpect(hevcFormat.codec = "hevc" and hevcFormat.profile = "main" and Val(hevcFormat.level) = 5.1, "documented HEVC decoder query fields") then return
     hevc.CODECS = "hvc1.1.6.L150.B0,mp4a.40.2"
     if not playbackCapabilityExpect(Val(twitchVariantVideoFormat(hevc).level) = 5.0, "1440p60 fits HEVC level 5.0") then return
+    avc32Device = {
+        CanDecodeVideo: function(format as object) as object
+            return { result: format.codec = "mpeg4 avc" and Val(format.level) <= 3.2 }
+        end function
+    }
+    avc31Device = {
+        CanDecodeVideo: function(format as object) as object
+            return { result: format.codec = "mpeg4 avc" and Val(format.level) <= 3.1 }
+        end function
+    }
+    avc720 = { RESOLUTION: "1280x720", "FRAME-RATE": "60", CODECS: "avc1.4d401f,mp4a.40.2" }
+    if not playbackCapabilityExpect(twitchVariantVideoFormat(avc720).level = "3.2", "720p60 reaches AVC level 3.2 macroblock limit") then return
+    if not playbackCapabilityExpect(isTwitchVariantSupported(avc720, avc32Device), "level 3.2 decoder accepts 720p60") then return
+    if not playbackCapabilityExpect(not isTwitchVariantSupported(avc720, avc31Device), "level 3.1 decoder rejects 720p60 despite underspecified codec") then return
+    avc720["FRAME-RATE"] = "30"
+    if not playbackCapabilityExpect(isTwitchVariantSupported(avc720, avc31Device), "level 3.1 decoder accepts 720p30") then return
+    hevc50Device = {
+        CanDecodeVideo: function(format as object) as object
+            return { result: format.codec = "hevc" and format.profile = "main" and Val(format.level) <= 5.0 }
+        end function
+    }
+    hevc4k = { RESOLUTION: "3840x2160", "FRAME-RATE": "30", CODECS: "hvc1.1.6.L150.B0,mp4a.40.2", BANDWIDTH: "16000000" }
+    if not playbackCapabilityExpect(twitchVariantVideoFormat(hevc4k).level = "5.0", "2160p30 fits HEVC level 5.0 picture and sample limits") then return
+    if not playbackCapabilityExpect(isTwitchVariantSupported(hevc4k, hevc50Device), "level 5.0 decoder accepts 2160p30") then return
+    hevc4k["FRAME-RATE"] = "60"
+    if not playbackCapabilityExpect(twitchVariantVideoFormat(hevc4k).level = "5.1", "2160p60 exceeds HEVC level 5.0 sample limit") then return
+    if not playbackCapabilityExpect(not isTwitchVariantSupported(hevc4k, hevc50Device), "level 5.0 decoder rejects 2160p60 despite underspecified codec") then return
     hevc.CODECS = "hvc1.2.4.L153.B0,mp4a.40.2"
     if not playbackCapabilityExpect(not isTwitchVariantSupported(hevc, hevcDevice), "unsupported Main10 rejected") then return
     hevc.CODECS = "hvc1.1.6.L153.B0,mp4a.40.2"

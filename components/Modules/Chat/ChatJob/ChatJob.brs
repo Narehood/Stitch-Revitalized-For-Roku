@@ -138,7 +138,10 @@ sub runChatConnection(transport as object)
             if type(event) = "roWebSocketEvent" and event.getSocketId() = transport.socket.getSocketId()
                 eventType = event.getType()
                 if eventType = 2 or eventType = 3 then return
-                if eventType = 5 then chunk = event.getInfo().text
+                if eventType = 5
+                    chunk = ircWebSocketText(event.getInfo())
+                    if chunk = invalid then return
+                end if
             end if
         else
             if transport.socket.getCountRcvBuf() > 0
@@ -179,7 +182,8 @@ sub runChatConnection(transport as object)
         end if
         ' A missing welcome or dead connection gets a finite retry rather than a frozen panel.
         if not welcomed and m.connectionLifetime.totalMilliseconds() > 15000 then return
-        if lastActivity.totalMilliseconds() > 300000 then return
+        ' Allow keepalive delivery jitter while retaining finite dead-connection recovery.
+        if lastActivity.totalMilliseconds() > 360000 then return
         if m.top.readyForNextComment and queue.count() > 0 and lastDelivery.totalMilliseconds() >= 100
             oldest = queue[0]
             delay = ircBoundedDelay(m.top.delaySeconds, m.top.forceLive)

@@ -1,4 +1,11 @@
 ' IRC helpers are independent of SceneGraph so wire-format regressions can run offline.
+function ircWebSocketText(info as dynamic) as dynamic
+    if getInterface(info, "ifAssociativeArray") = invalid then return invalid
+    text = info.text
+    if getInterface(text, "ifString") = invalid then return invalid
+    return text
+end function
+
 function ircParseMessage(message as dynamic) as dynamic
     if type(message) <> "String" and type(message) <> "roString" then return invalid
     if message.len() = 0 or message.len() > 8192 then return invalid

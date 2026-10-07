@@ -9,7 +9,7 @@ sub init()
     m.errorHistory = []
     m.bufferStallCount = 0
     m.maxBufferStalls = 5
-    m.bufferStallTimeout = 10000 ' 10 seconds
+    m.bufferStallResetSeconds = 120 ' Policy: forget prolonged checks after two quiet minutes.
     m.lastBufferTime = 0
 
     ' Error recovery strategies
@@ -109,7 +109,7 @@ function handleBufferStall(video as object) as object
     currentTime = CreateObject("roDateTime").AsSeconds()
 
     ' Check if this is a new buffer stall
-    if currentTime - m.lastBufferTime > m.bufferStallTimeout
+    if currentTime - m.lastBufferTime > m.bufferStallResetSeconds
         m.bufferStallCount = 0
     end if
 
@@ -122,17 +122,14 @@ function handleBufferStall(video as object) as object
         delay: 0
     }
 
+    ' Let Roku's player recover for the first five recent prolonged checks.
+    ' The sixth requests a lower quality; VideoPlayer caps session recoveries.
     if m.bufferStallCount > m.maxBufferStalls
         ' ? "[VideoErrorHandler] Excessive buffering detected ("; m.bufferStallCount; " stalls)"
         recovery.shouldRecover = true
         recovery.action = "reduce_quality"
         recovery.delay = 1000
         m.bufferStallCount = 0
-    else if m.bufferStallCount > 3
-        ' Adjust buffering config
-        recovery.shouldRecover = true
-        recovery.action = "adjust_buffer"
-        recovery.delay = 0
     end if
 
     return recovery

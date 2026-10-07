@@ -1,5 +1,16 @@
 ' @include source/utils/ircParser.brs
 sub main()
+    malformedInfo = [invalid, "PING :server", 5, false, [], {}, { text: invalid }, { text: 5 }, { text: false }, { text: [] }, { text: {} }, { text: createObject("roByteArray") }]
+    for each info in malformedInfo
+        if not chatAssert(ircWebSocketText(info) = invalid, "malformed WebSocket event info rejected") then return
+    end for
+    if not chatAssert(ircWebSocketText({ Text: "" }) = "", "empty TextReceived event remains valid") then return
+    chunk = ircWebSocketText({ Text: "PING :server" + chr(13) + chr(10) + "partial" })
+    consumed = ircConsumeChunk({ buffer: "", discarding: false }, chunk)
+    if not chatAssert(consumed.lines.count() = 1 and consumed.buffer = "partial", "valid TextReceived frame preserves IRC framing") then return
+    ping = ircParseMessage(consumed.lines[0])
+    if not chatAssert(ping.command.command = "PING" and ping.parameters = "server", "valid TextReceived keepalive remains parseable") then return
+
     raw = "@badges=moderator/1;color=#00FF00;display-name=Tester;tmi-sent-ts=1760000000123 :tester!tester@tester.tmi.twitch.tv PRIVMSG #channel :Hello : world"
     message = ircParseMessage(raw)
     if not chatAssert(message <> invalid, "tagged PRIVMSG") then return

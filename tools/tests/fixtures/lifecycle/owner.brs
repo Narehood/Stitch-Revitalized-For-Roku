@@ -58,3 +58,7 @@ end sub
 sub disposeAgain(node as object)
     disposeNodeTree(node)
 end sub
+
+function rootBack(press as boolean) as boolean
+    return onKeyEvent("back", press)
+end function
