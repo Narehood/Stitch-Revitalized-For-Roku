@@ -4,7 +4,7 @@ Baseline: `3747337`, audited October 6–7, 2026. Work branch: `modernize/stitch
 
 ## Status and scope
 
-The playback, chat, proxy, build, and dependency audits are complete. Their source findings have been checked and disputed conclusions corrected. Claude Opus 5.5's interface audit stopped at its usage limit before producing a report. Its design work remains incomplete and will resume after the provider's October 7, 12:50 a.m. Eastern reset. This first plan authorizes independent correctness work; the interface specification and acceptance results will be added when that audit finishes. The project is not yet declared usable or ready for release.
+The playback, chat, proxy, build, and dependency audits are complete. Their source findings have been checked and disputed conclusions corrected. Claude Opus 5.5's interface audit remains incomplete: its resumed run reached another session limit before producing a report. Its source-inspection work and private probe tooling have been preserved. The next retry is October 7 at 5:55 a.m. Eastern, after the provider's 5:50 a.m. reset. This plan authorizes independent correctness work; the interface specification and acceptance results will be added when that audit finishes. The project is not yet declared usable or ready for release.
 
 The target is a maintained native Roku SceneGraph application with working live and VOD video and audio, reliable live text chat, and an explanation when VOD or clip chat is unavailable. Offer 1440p when the Roku decoder and stream transport support it. Preserve existing features and currently supported devices. Explore lower live latency as an opt-in experiment and measure it on hardware before making claims.
 
@@ -142,7 +142,7 @@ Investigate separately: deep links (`supports_input_launch` is declared but laun
 ## Progress log
 
 - Core audits complete; baseline checks recorded. Grok's failed initial startup was retried successfully.
-- Opus interface audit incomplete after a provider usage limit; resume scheduled for October 7, 12:55 a.m. Eastern. The temporary daily timer will be disabled when its assignment is actually complete.
+- Opus interface audit remains incomplete after another provider session limit; its next retry is October 7, 5:55 a.m. Eastern. Recovered source inspection, font-glyph checks and private fixture tooling will carry forward. Independent validation support is improving the local probes; native UI design and implementation remain assigned to Opus. The temporary daily timer will be disabled when its audit and UI implementation are actually complete.
 - Playback, chat and explicit scene lifecycle implementations are released. HTTP/auth, opt-in diagnostics, Node 24 tooling, portable test deployment, workflows and build/use documentation are implemented.
 - Proxy implementation is released: 183 tests pass on Python 3.12 and 3.14, ruff checks and wheel build pass, and the strict locked runtime dependency audit reports no known vulnerabilities. The hardened container builds and returns version 0.2.0 from `/health` in CI.
 - Full-project format/check, lint, package and Rooibos compilation pass, along with seven offline suites and twelve Node regressions including actual playback recovery and SceneGraph navigation/disposal. A bounded anonymous Twitch request returned a native AVC TS ladder; it did not offer HEVC and does not verify audible sound or hardware decoding.
