@@ -49,14 +49,14 @@ Anonymous browsing and playback remain supported. Device identity and an account
 
 Keep stable playback as the default. Add an explicit experimental setting only around documented controls and bounded live-edge behavior. Do not invent player flags, promise LL-HLS support, or equate lowest quality with guaranteed low latency. Use measured segment latency where available for chat synchronization. Compare stable and experimental modes on the same device/network/broadcast, including rebuffering and recovery.
 
-## Other open pull request intake
+## Dependabot pull request consolidation
 
-The eleven open dependency/action PRs (#108–118) are reviewed against the modernization branch rather than applied as older lockfiles. Review uses each original head, full diff, existing review and failed CI context. The native UI working tree is preserved separately.
+The eleven dependency/action PRs (#108–118) were reviewed against the modernization branch rather than applied as older lockfiles. Review used each original head, full diff, existing review and failed CI context. Their changes are covered by #119, and all eleven were closed as superseded on October 7, 2026 at the user's request. The native UI working tree is preserved separately.
 
 | PR | Proposed update | Disposition in #119 |
 |---|---|---|
-| [#108](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/108) | actions/labeler 6 → 7 | Add v7; keep current label configuration, event and permissions |
-| [#109](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/109) | actions/stale 10 → 11 | Add v11; keep current timing, labels, exemptions and permissions |
+| [#108](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/108) | actions/labeler 6 → 7 | v7 included; keep current label configuration, event and permissions |
+| [#109](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/109) | actions/stale 10 → 11 | v11 included; keep current timing, labels, exemptions and permissions |
 | [#110](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/110) | BrighterScript, bslint, formatter and ropm group | Compiler 0.73.5, bslint 0.8.46 and formatter 1.8.3 already included; unused ropm was removed, so do not reintroduce it |
 | [#111](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/111) | commitlint CLI 21.2.3 | Already included |
 | [#112](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/112) | commitlint conventional config 21.2.3 | Already included |
@@ -73,7 +73,7 @@ The action updates migrate upstream internals to ESM while retaining their input
 
 Independent npm/tooling and action reviews covered all eleven original PR heads and their complete diffs. Their failed build checks all stop at the baseline raw security-audit step after successful installation; they do not show regressions introduced by these updates. The modernization policy still fails unapproved advisories and retains only the documented temporary development-only exception.
 
-The incidental [ws 8.22.0 update](https://github.com/websockets/ws/releases/tag/8.22.0) from #113 is included without downgrading Rooibos. Its single lock entry matches registry integrity and satisfies the existing override. Fresh locked installation, audit policy, formatting, lint, package, Rooibos compilation and seven offline/twelve Node regression suites pass; both changed workflows pass actionlint. Original PRs remain open while #119 is draft. No source PR or modernization PR is merged by this work. Final native UI/full-diff reviews and physical verification remain separate gates.
+The incidental [ws 8.22.0 update](https://github.com/websockets/ws/releases/tag/8.22.0) from #113 is included without downgrading Rooibos. Its single lock entry matches registry integrity and satisfies the existing override. Fresh locked installation, audit policy, formatting, lint, package, Rooibos compilation and seven offline/twelve Node regression suites pass; both changed workflows pass actionlint. Before closing the originals, their unchanged reviewed heads and every disposition above were checked against pushed #119 commit `72c7ad3`, whose Windows/Linux, proxy and container checks pass. No Dependabot PR remains open. #119 stays draft; none of these PRs was merged and their branches were retained. Final native UI/full-diff reviews and physical verification remain separate gates.
 
 ## Implementation order
 
