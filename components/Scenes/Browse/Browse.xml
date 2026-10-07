@@ -7,13 +7,14 @@
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+    <script type="text/brightscript" uri="pkg:/components/Modules/StatusPanel/StatusPanelHost.brs" />
     <children>
         <RowList
             id="browseRowList"
             visible="false"
             rowLabelOffset="[[0,10]]"
-            rowLabelFont="font:LargeBoldSystemFont"
-            translation="[130, 120]"
+            rowLabelColor="0xEFEFF1FF"
+            translation="[110, 88]"
             itemComponentName="VideoItem"
             numRows="4"
             rowItemSize="[[320,180]]"
@@ -23,7 +24,9 @@
             showRowLabel="[true]"
             focusBitmapUri="pkg:/images/focusindicator.9.png"
             vertFocusAnimationStyle="fixedFocus"
-            rowFocusAnimationStyle="fixedFocus"
-        />
+            rowFocusAnimationStyle="fixedFocus">
+            <Font role="rowLabelFont" uri="pkg:/fonts/Archivo-Bold.otf" size="24" />
+        </RowList>
+        <StatusPanel id="status" translation="[110, 200]" />
     </children>
 </component>

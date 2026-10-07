@@ -802,10 +802,18 @@ function onKeyEvent(key, press) as boolean
 end function
 
 function handleMainKeys(key) as boolean
-    if key = "up" or key = "OK" or key = "play"
-        if not m.isOverlayVisible
+    if not m.isOverlayVisible
+        if key = "play"
+            ' The remote Play key acts on its first press and reveals the state.
+            showOverlay()
+            togglePlayPause()
+            return true
+        else if key = "up" or key = "OK"
             showOverlay()
             return true
+        else if (key = "rewind" or key = "fastforward") and not m.isLiveStream
+            ' Show the seek preview, then use the shared hold/seek handling below.
+            showOverlay()
         end if
     end if
 

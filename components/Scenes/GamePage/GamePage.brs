@@ -5,46 +5,73 @@ sub init()
     ' m.top.observeField("itemFocused", "onGetFocus")
     m.rowlist = m.top.findNode("homeRowList")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
+    initPageStatus()
 end sub
 
 sub updatePage()
     m.top.pageTitle = m.top.contentRequested.gameName
+    loadDirectory()
+end sub
+
+' One finite request on open or explicit Try again.
+sub loadDirectory()
+    m.GetContentTask = destroyTask(m.GetContentTask, "response")
+    setPageStatus("loading", tr("Loading live channels…"))
     m.GetContentTask = createApiTask("getGameDirectoryQuery", "handleRecommendedSections", {
         params: { gameAlias: m.top.contentRequested.gameName }
     })
 end sub
 
+sub onStatusAction(actionId as string)
+    if actionId = "retry"
+        loadDirectory()
+    else if actionId = "back"
+        m.top.backPressed = true
+    end if
+end sub
+
+' Returns card fields for each well-formed directory edge. Malformed edges are
+' skipped before grouping so they cannot shift or drop the remaining streams.
+function buildGameStreamItems(streams as dynamic) as object
+    items = []
+    if type(streams) <> "roArray" then return items
+    for each stream in streams
+        node = invalid
+        broadcaster = invalid
+        if type(stream) = "roAssociativeArray" then node = stream.node
+        if type(node) = "roAssociativeArray" then broadcaster = node.broadcaster
+        login = invalid
+        if type(broadcaster) = "roAssociativeArray" then login = broadcaster.login
+        if GetInterface(login, "ifString") <> invalid and login <> ""
+            title = invalid
+            if type(broadcaster.broadcastSettings) = "roAssociativeArray" then title = broadcaster.broadcastSettings.title
+            items.push({
+                contentId: node.id,
+                contentType: "LIVE",
+                previewImageURL: Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", login, "1280", "720"),
+                contentTitle: title,
+                viewersCount: node.viewersCount,
+                streamerDisplayName: broadcaster.displayName,
+                streamerLogin: login,
+                streamerId: broadcaster.id,
+                streamerProfileImageUrl: broadcaster.profileImageURL
+            })
+        end if
+    end for
+    return items
+end function
+
 function buildContentNodeFromShelves(streams)
-    itemsPerRow = 3
     contentCollection = createObject("RoSGNode", "ContentNode")
-    row = createObject("RoSGNode", "ContentNode")
-    for i = 0 to (streams.count() - 1) step 1
-        if i mod itemsPerRow = 0
-            row = createObject("RoSGNode", "ContentNode")
-        end if
-        stream = streams[i]
-        if stream = invalid or stream.node = invalid or stream.node.broadcaster = invalid then continue for
+    for each rowItems in chunkItems(buildGameStreamItems(streams), 3)
+        row = createObject("RoSGNode", "ContentNode")
         row.title = ""
-        rowItem = createObject("RoSGNode", "TwitchContentNode")
-        rowItem.contentId = stream.node.Id
-        rowItem.contentType = "LIVE"
-        rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
-        rowItem.contentTitle = stream.node.broadcaster.broadcastSettings.title
-        rowItem.viewersCount = stream.node.viewersCount
-        rowItem.streamerDisplayName = stream.node.broadcaster.displayName
-        rowItem.streamerLogin = stream.node.broadcaster.login
-        rowItem.streamerId = stream.node.broadcaster.id
-        rowItem.streamerProfileImageUrl = stream.node.broadcaster.profileImageURL
-        ' rowItem.gameDisplayName = stream.node.game.displayName
-        ' rowItem.Title = stream.node.broadcaster.broadcastsettings.title
-        ' rowItem.secondaryTitle = stream.node.broadcaster.displayName
-        ' rowItem.HDPosterUrl = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-{1}x{2}.jpg", stream.node.broadcaster.login, "1280", "720")
-        ' rowItem.ShortDescriptionLine1 = stream.node.viewersCount
-        ' rowItem.ShortDescriptionLine2 = stream.node.game.displayName
-        row.appendChild(rowItem)
-        if row.getChildCount() = itemsPerRow
-            contentCollection.appendChild(row)
-        end if
+        for each fields in rowItems
+            rowItem = createObject("RoSGNode", "TwitchContentNode")
+            setTwitchContentFields(rowItem, fields)
+            row.appendChild(rowItem)
+        end for
+        contentCollection.appendChild(row)
     end for
     return contentCollection
 end function
@@ -57,7 +84,7 @@ sub updateRowList(contentCollection)
     for each row in contentCollection.getChildren(contentCollection.getChildCount(), 0)
         hasRowLabel = row.title <> ""
         showRowLabel.push(hasRowLabel)
-        config = getRowConfig(row.getchild(0).contentType, hasRowLabel)
+        config = getRowConfig(row.getchild(0).contentType, hasRowLabel, true)
         if config <> invalid
             rowItemSize.push(config.itemSize)
             rowHeights.push(config.rowHeight)
@@ -72,10 +99,21 @@ end sub
 
 
 sub handleRecommendedSections()
+    if m.disposed or m.GetContentTask = invalid then return
     rsp = m.GetContentTask.response
-    if rsp = invalid then return
+    if rsp = invalid
+        setPageStatus("error", tr("Couldn't load this category"), tr("Check your internet connection and try again."), ["retry", "back"])
+        return
+    end if
     contentCollection = buildContentNodeFromShelves(rsp.edges)
+    if contentCollection.getChildCount() = 0
+        gameName = m.top.contentRequested.gameName
+        if gameName = invalid then gameName = ""
+        setPageStatus("empty", Substitute(tr("No live channels in {0} right now."), gameName), "", ["back"])
+        return
+    end if
     updateRowList(contentCollection)
+    hidePageStatus()
 end sub
 
 sub handleItemSelected()
@@ -85,10 +123,14 @@ sub handleItemSelected()
 end sub
 
 sub onGetFocus()
-    if m.rowlist.focusedChild = invalid
-        m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
-        m.rowlist.focusedChild.setFocus(true)
+    if m.disposed then return
+    ' While the status panel offers actions, it holds page focus.
+    if not focusStatusIfActive()
+        if m.rowlist.focusedChild = invalid
+            m.rowlist.setFocus(true)
+        else if m.rowlist.focusedChild.id = "homeRowList"
+            m.rowlist.focusedChild.setFocus(true)
+        end if
     end if
     updateRowListFocusFeedback()
 end sub
@@ -116,5 +158,6 @@ sub onDestroy()
     m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     m.rowlist.unobserveField("itemSelected")
+    releasePageStatus()
     m.GetContentTask = destroyTask(m.GetContentTask, "response")
 end sub

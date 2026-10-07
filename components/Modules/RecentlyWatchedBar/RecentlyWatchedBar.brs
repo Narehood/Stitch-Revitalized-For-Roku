@@ -9,6 +9,9 @@
 sub init()
     m.disposed = false
     m.icon = m.top.findNode("icon")
+    m.caption = m.top.findNode("caption")
+    m.captionPlate = m.top.findNode("captionPlate")
+    m.captionLabel = m.top.findNode("captionLabel")
 
     ' Layout constants
     m.itemSpacing = 60 ' px between item origins
@@ -35,7 +38,7 @@ end sub
 ' Called on init and by refresh timer.
 sub buildItems()
     if m.disposed then return
-    ' Remove previously created item children (children 2+ are items; 0=bg, 1=icon)
+    ' Remove previously created item children (tracked in m.items)
     if m.items.Count() > 0
         for each item in m.items
             item.callFunc("onDestroy")
@@ -48,9 +51,13 @@ sub buildItems()
     m.currentIndex = 0
     m.min = 0
     m.max = m.visibleWindow - 1
+    updateCaption()
 
     history = RW_Load()
-    if history = invalid or history.Count() = 0 then return
+    if history = invalid or history.Count() = 0
+        m.top.hasItems = false
+        return
+    end if
 
     translationY = m.itemStartY
     index = 0
@@ -65,6 +72,7 @@ sub buildItems()
         translationY += m.itemSpacing
         index += 1
     end for
+    m.top.hasItems = m.items.Count() > 0
 
     fetchLiveStatus()
 end sub
@@ -98,7 +106,10 @@ sub onLiveStatusResponse()
         item.isLive = false
     end for
 
-    if rsp = invalid or rsp.Count() = 0 then return
+    if rsp = invalid or rsp.Count() = 0
+        updateCaption()
+        return
+    end if
 
     for each item in m.items
         data = item.itemData
@@ -109,6 +120,7 @@ sub onLiveStatusResponse()
             end if
         end if
     end for
+    updateCaption()
 end sub
 
 ' Refresh timer callback — only rebuilds when focus is not inside the bar,
@@ -133,6 +145,38 @@ sub onFocusToggle()
             m.items[m.currentIndex].focused = false
         end if
     end if
+    updateCaption()
+end sub
+
+' The focused avatar says its channel name, plus LIVE when it is live.
+sub updateCaption()
+    if m.caption = invalid or m.captionLabel = invalid then return
+    if not m.top.itemHasFocus or m.currentIndex >= m.items.Count()
+        m.caption.visible = false
+        return
+    end if
+    item = m.items[m.currentIndex]
+    data = item.itemData
+    name = ""
+    if data <> invalid
+        if data.displayName <> invalid and data.displayName <> ""
+            name = data.displayName
+        else if data.login <> invalid
+            name = data.login
+        end if
+    end if
+    if item.isLive then name = name + " · " + tr("LIVE")
+    m.captionLabel.text = name
+    width = 0
+    try
+        width = m.captionLabel.boundingRect().width
+    catch e
+    end try
+    if width <= 0 then width = len(name) * 10
+    m.captionPlate.width = width + 24
+    ' Centre the 32px plate on the 54px avatar.
+    m.caption.translation = [84, item.translation[1] + 11]
+    m.caption.visible = true
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -160,6 +204,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             updateItemVisibility()
         end if
         m.items[m.currentIndex].focused = true
+        updateCaption()
         return true
 
     else if key = "down"
@@ -179,6 +224,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             updateItemVisibility()
         end if
         m.items[m.currentIndex].focused = true
+        updateCaption()
         return true
 
     else if key = "OK"

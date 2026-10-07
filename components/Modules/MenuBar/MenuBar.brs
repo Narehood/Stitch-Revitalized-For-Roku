@@ -6,12 +6,16 @@ sub init()
     m.headerRect = m.top.findNode("headerRect")
     m.menuOptions = m.top.findNode("MenuOptions")
     m.iconOptions = m.top.findNode("IconOptions")
+    m.iconCaption = m.top.findNode("iconCaption")
+    m.iconCaptionPlate = m.top.findNode("iconCaptionPlate")
+    m.iconCaptionLabel = m.top.findNode("iconCaptionLabel")
 
     '*******************'
     '* Layout Constants
     '*******************'
     m.screenWidth = 1280
     m.iconRightPadding = 24
+    m.iconSize = 44
 
     '*******************'
     '* Per-group focus bitmap URIs. Each ButtonGroup uses a different
@@ -41,8 +45,13 @@ sub init()
     m.iconOptions.observeField("buttonFocused", "onIconOptionsFocused")
     m.iconOptions.observeField("buttonSelected", "onIconOptionsSelected")
 
-    m.top.menuTextColor = m.global.constants.colors.muted.ice
-    m.top.menuFocusColor = m.global.constants.colors.twitch.purple10
+    m.top.observeField("activeItem", "updateTabColors")
+    m.top.observeField("focusItem", "onFocusItem")
+
+    ' Active tab reads as primary text, other tabs as secondary; the focused
+    ' tab adds the focus colour and underline indicator.
+    m.top.menuTextColor = m.global.constants.ui.color.textSecondary
+    m.top.menuFocusColor = m.global.constants.ui.color.focus
 end sub
 
 ' Remove all children from a ButtonGroup so updateMenuOptions can be re-run.
@@ -78,6 +87,7 @@ sub onIconOptionsFocused()
     idx = m.iconOptions.buttonFocused
     if idx < 0 then return
     m.top.buttonFocused = textButtonCount() + idx
+    updateIconCaption()
 end sub
 
 sub onIconOptionsSelected()
@@ -114,7 +124,83 @@ sub updateGroupFocusVisuals()
     iconActive = (focusedId = "IconOptions")
     applyFocusUri(m.menuOptions, m.menuOptionsFocusUri, menuActive)
     applyFocusUri(m.iconOptions, m.iconOptionsFocusUri, iconActive)
+    updateIconCaption()
 end sub
+
+sub updateTabColors()
+    if m.menuOptions = invalid then return
+    color = m.global.constants.ui.color
+    for i = 0 to m.menuOptions.getChildCount() - 1
+        tabButton = m.menuOptions.getChild(i)
+        if tabButton <> invalid
+            if tabButton.id = m.top.activeItem
+                tabButton.textColor = color.text
+            else
+                tabButton.textColor = color.textSecondary
+            end if
+        end if
+    end for
+end sub
+
+' Moves the tab focus marker without selecting it, so returning to the menu
+' starts from the page that was opened another way.
+sub onFocusItem()
+    if m.menuOptions = invalid then return
+    for i = 0 to m.menuOptions.getChildCount() - 1
+        tabButton = m.menuOptions.getChild(i)
+        if tabButton <> invalid and tabButton.id = m.top.focusItem
+            m.menuOptions.focusButton = i
+            return
+        end if
+    end for
+end sub
+
+' Icon-only buttons say their name while focused.
+sub updateIconCaption()
+    if m.iconCaption = invalid or m.iconCaptionLabel = invalid then return
+    focused = m.top.focusedChild
+    button = invalid
+    if focused <> invalid and focused.id = "IconOptions"
+        button = m.iconOptions.getChild(m.iconOptions.buttonFocused)
+    end if
+    if button = invalid
+        m.iconCaption.visible = false
+        return
+    end if
+    m.iconCaptionLabel.text = iconCaptionText(button.id)
+    padding = 12
+    labelWidth = 0
+    rightEdge = m.screenWidth - m.iconRightPadding
+    try
+        labelWidth = m.iconCaptionLabel.boundingRect().width
+        bounds = button.boundingRect()
+        rightEdge = m.iconOptions.translation[0] + bounds.x + bounds.width
+    catch e
+    end try
+    if labelWidth <= 0 then labelWidth = len(m.iconCaptionLabel.text) * 10
+    width = labelWidth + (padding * 2)
+    ' Keep the caption inside the TV-safe frame.
+    x = rightEdge - width
+    if x + width > 1232 then x = 1232 - width
+    if x < 48 then x = 48
+    m.iconCaptionPlate.width = width
+    m.iconCaption.translation = [x, 72]
+    m.iconCaption.visible = true
+end sub
+
+function iconCaptionText(iconId as string) as string
+    if iconId = "Settings" then return tr("Settings")
+    if iconId = "Search" then return tr("Search")
+    if iconId = "LoginPage"
+        if get_setting("active_user", "$default$") = "$default$" then return tr("Sign in")
+        ' Signed in, the avatar opens the user's own channel.
+        name = get_user_setting("display_name")
+        if name = invalid or name = "" then name = get_user_setting("login", "")
+        if name <> "" then return name
+        return tr("Your channel")
+    end if
+    return iconId
+end function
 
 sub applyFocusUri(group as object, uri as string, active as boolean)
     if group = invalid then return
@@ -176,15 +262,15 @@ function buildIcon(icon)
     ' Some runtimes omit these internal Posters; the public icon fields remain valid.
     iconPoster = newItem.getChild(3)
     if iconPoster <> invalid
-        iconPoster.blendColor = m.top.menuTextColor
-        iconPoster.width = m.top.menuFontSize * 2
-        iconPoster.height = m.top.menuFontSize * 2
+        iconPoster.blendColor = m.global.constants.ui.color.text
+        iconPoster.width = m.iconSize
+        iconPoster.height = m.iconSize
     end if
     focusedIconPoster = newItem.getChild(4)
     if focusedIconPoster <> invalid
         focusedIconPoster.blendColor = m.top.menuFocusColor
-        focusedIconPoster.width = m.top.menuFontSize * 2
-        focusedIconPoster.height = m.top.menuFontSize * 2
+        focusedIconPoster.width = m.iconSize
+        focusedIconPoster.height = m.iconSize
     end if
     return newItem
 end function
@@ -237,6 +323,7 @@ sub updateMenuOptions()
     for each menuButton in menuButtons
         m.menuOptions.appendChild(menuButton)
     end for
+    updateTabColors()
 
     '*******************'
     '* Build icons -> IconOptions (right-anchored)
@@ -277,8 +364,8 @@ sub positionIconOptions()
     end try
     if width <= 0
         ' Fallback: estimate based on icon size when boundingRect is unavailable.
-        ' Each icon button is ~ menuFontSize * 2 wide plus button chrome (~16px).
-        perIcon = (m.top.menuFontSize * 2) + 16
+        ' Each icon button is ~ iconSize wide plus button chrome (~16px).
+        perIcon = m.iconSize + 16
         width = m.iconOptions.getChildCount() * perIcon
     end if
     x = m.screenWidth - m.iconRightPadding - width
@@ -333,6 +420,8 @@ sub onDestroy()
     m.top.unobserveField("updateUserIcon")
     m.top.unobserveField("buttonSelected")
     m.top.unobserveField("buttonFocused")
+    m.top.unobserveField("activeItem")
+    m.top.unobserveField("focusItem")
     if m.menuOptions <> invalid
         m.menuOptions.unobserveField("buttonFocused")
         m.menuOptions.unobserveField("buttonSelected")

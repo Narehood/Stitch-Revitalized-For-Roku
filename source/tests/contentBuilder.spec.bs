@@ -48,14 +48,14 @@ namespace tests
         sub gameWithLabel()
             config = getRowConfig("GAME", true)
             m.assertEqual(config.itemSize, [188, 250])
-            m.assertEqual(config.rowHeight, 325)
+            m.assertEqual(config.rowHeight, 355)
         end sub
 
         @it("returns correct size for GAME without row label")
         sub gameNoLabel()
             config = getRowConfig("GAME", false)
             m.assertEqual(config.itemSize, [188, 250])
-            m.assertEqual(config.rowHeight, 305)
+            m.assertEqual(config.rowHeight, 315)
         end sub
 
         '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

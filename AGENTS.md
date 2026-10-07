@@ -224,7 +224,7 @@ The app has two independent auth levels:
 
 `active_user = "$default$"` means no Twitch account is logged in — but the device still has a `device_code` and can make GQL requests. Anonymous users can browse and watch most public streams and VODs without an `access_token`.
 
-**Never assume login is required for playback.** `TwitchGraphQLRequest` in `shared.bs` blocks when `device_code` is missing (first-launch only, very brief window) — not when `access_token` is missing.
+**Never assume login is required for playback.** `TwitchGraphQLRequest` in `shared.bs` returns `invalid` without sending a request when `device_code` is missing. It does not require an `access_token`. First launch acquires device identity separately and offers retry if registration fails.
 
 ### Query Function Contract (TwitchApiTask SDK scripts)
 

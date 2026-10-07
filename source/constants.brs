@@ -334,6 +334,64 @@ sub setConstants()
                 blue: "0x1f69ffFF",
                 magenta: "0xc53dffFF"
             },
+            ' Interface tokens (HD 1280x720 coordinates). Purple marks focus and
+            ' selection only; red marks LIVE only. XML literals mirror these values.
+            ui: {
+                color: {
+                    canvas: "0x0E0E10FF",
+                    chrome: "0x18181BFF",
+                    surface: "0x1F1F23FF",
+                    raised: "0x26262CFF",
+                    divider: "0x323239FF",
+                    scrim: "0x0E0E10D9",
+                    text: "0xEFEFF1FF",
+                    textSecondary: "0xADADB8FF",
+                    textTertiary: "0x848494FF",
+                    onAccent: "0xFFFFFFFF",
+                    focus: "0xA970FFFF",
+                    focusFill: "0x9147FFFF",
+                    live: "0xEB0400FF",
+                    error: "0xFF8280FF",
+                    warn: "0xFFD37AFF",
+                    success: "0x00F593FF",
+                    link: "0xBF94FFFF"
+                },
+                font: {
+                    regular: "pkg:/fonts/Archivo-Regular.otf",
+                    bold: "pkg:/fonts/Archivo-Bold.otf"
+                },
+                ' Sizes by role; sentences use 18 or larger.
+                type: {
+                    display: 40,
+                    title: 28,
+                    rowLabel: 24,
+                    headline: 22,
+                    body: 20,
+                    meta: 18,
+                    caption: 16
+                },
+                space: {
+                    xs: 4,
+                    s: 8,
+                    m: 16,
+                    l: 24,
+                    xl: 32,
+                    xxl: 48,
+                    xxxl: 64
+                },
+                layout: {
+                    headerHeight: 64,
+                    railWidth: 78,
+                    contentX: 110,
+                    contentY: 88,
+                    safeLeft: 48,
+                    safeRight: 1232,
+                    safeTop: 32,
+                    safeBottom: 688,
+                    statusY: 200,
+                    statusWidth: 720
+                }
+            },
             icons: {
                 arrow_down: "pkg:/images/icons/chevron-down.png",
                 arrow_up: "pkg:/images/icons/chevron-up.png",

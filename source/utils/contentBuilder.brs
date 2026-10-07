@@ -1,7 +1,7 @@
 ' Returns row item size and height config for a given content type.
 ' contentType: string — the contentType field from a TwitchContentNode child
 ' hasRowLabel: boolean — whether the row has a visible label (affects height)
-' tallRows: boolean — use taller row heights (Following scene uses larger cards)
+' tallRows: boolean — reserve space for the expanded stream card text
 ' Returns: { itemSize: [width, height], rowHeight: integer }
 ' Returns invalid if contentType is unrecognized.
 function getRowConfig(contentType, hasRowLabel as boolean, tallRows = false as boolean) as object
@@ -26,10 +26,11 @@ function getRowConfig(contentType, hasRowLabel as boolean, tallRows = false as b
     end if
 
     if contentType = "GAME"
+        ' The category subtitle ends at y=308; leave padding and label space.
         if hasRowLabel
-            rowHeight = 325
+            rowHeight = 355
         else
-            rowHeight = 305
+            rowHeight = 315
         end if
         return { itemSize: [188, 250], rowHeight: rowHeight }
     end if

@@ -10,20 +10,22 @@
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+    <script type="text/brightscript" uri="pkg:/components/Modules/StatusPanel/StatusPanelHost.brs" />
     <children>
         <rectangle id="background" width="1920" height="1080" />
         <SimpleLabel
             id="Header"
-            translation="[75,20]"
-            text="Browse"
-            fontSize="48"
+            translation="[110,24]"
+            text=""
+            fontSize="40"
+            color="0xEFEFF1FF"
             fontUri="pkg:/fonts/Archivo-Bold.otf" />
         <RowList
             id="homeRowList"
             visible="true"
             rowLabelOffset="[[0,5]]"
-            rowLabelFont="font:LargeBoldSystemFont"
-            translation="[ 100, 120 ]"
+            rowLabelColor="0xEFEFF1FF"
+            translation="[ 110, 96 ]"
             itemComponentName="VideoItem"
             numRows="4"
             rowItemSize="[[320,180]]"
@@ -31,11 +33,13 @@
             itemSize="[1280,295]"
             itemSpacing="[ 0, 40 ]"
             showRowLabel="[ false ]"
-            rowHeights="[235]"
+            rowHeights="[255]"
             focusBitmapUri="pkg:/images/focusindicator.9.png"
             vertFocusAnimationStyle="fixedFocus"
-            rowFocusAnimationStyle="fixedFocus"
-        />
+            rowFocusAnimationStyle="fixedFocus">
+            <Font role="rowLabelFont" uri="pkg:/fonts/Archivo-Bold.otf" size="24" />
+        </RowList>
+        <StatusPanel id="status" translation="[110, 200]" />
     </children>
 
 </component>

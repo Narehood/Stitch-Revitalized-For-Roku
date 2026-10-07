@@ -143,5 +143,142 @@
             <source>Proxy not reachable</source>
             <translation>Proxy not reachable</translation>
         </message>
+        <!-- Interface phase 1 strings -->
+        <message>
+            <source>Back</source>
+            <translation>Back</translation>
+        </message>
+        <message>
+            <source>Try again</source>
+            <translation>Try again</translation>
+        </message>
+        <message>
+            <source>Go to Browse</source>
+            <translation>Go to Browse</translation>
+        </message>
+        <message>
+            <source>Sign in</source>
+            <translation>Sign in</translation>
+        </message>
+        <message>
+            <source>Your channel</source>
+            <translation>Your channel</translation>
+        </message>
+        <message>
+            <source>Live now</source>
+            <translation>Live now</translation>
+        </message>
+        <message>
+            <source>Recent searches</source>
+            <translation>Recent searches</translation>
+        </message>
+        <message>
+            <source>Connecting to Twitch…</source>
+            <translation>Connecting to Twitch…</translation>
+        </message>
+        <message>
+            <source>Can't connect to Twitch</source>
+            <translation>Can't connect to Twitch</translation>
+        </message>
+        <message>
+            <source>Stitch needs to register this Roku with Twitch before it can load channels. Check that your Roku is connected to the internet, then try again.</source>
+            <translation>Stitch needs to register this Roku with Twitch before it can load channels. Check that your Roku is connected to the internet, then try again.</translation>
+        </message>
+        <message>
+            <source>If it still doesn't work, restart your Roku or check its network settings.</source>
+            <translation>If it still doesn't work, restart your Roku or check its network settings.</translation>
+        </message>
+        <message>
+            <source>Check your internet connection and try again.</source>
+            <translation>Check your internet connection and try again.</translation>
+        </message>
+        <message>
+            <source>Loading channels you follow…</source>
+            <translation>Loading channels you follow…</translation>
+        </message>
+        <message>
+            <source>Loading live channels…</source>
+            <translation>Loading live channels…</translation>
+        </message>
+        <message>
+            <source>Loading channels and categories…</source>
+            <translation>Loading channels and categories…</translation>
+        </message>
+        <message>
+            <source>Loading channel…</source>
+            <translation>Loading channel…</translation>
+        </message>
+        <message>
+            <source>Couldn't load Following</source>
+            <translation>Couldn't load Following</translation>
+        </message>
+        <message>
+            <source>Couldn't load Browse</source>
+            <translation>Couldn't load Browse</translation>
+        </message>
+        <message>
+            <source>Couldn't load this channel</source>
+            <translation>Couldn't load this channel</translation>
+        </message>
+        <message>
+            <source>Couldn't load this category</source>
+            <translation>Couldn't load this category</translation>
+        </message>
+        <message>
+            <source>You're not following anyone yet</source>
+            <translation>You're not following anyone yet</translation>
+        </message>
+        <message>
+            <source>Channels you follow on Twitch appear here. Find something to watch in Browse.</source>
+            <translation>Channels you follow on Twitch appear here. Find something to watch in Browse.</translation>
+        </message>
+        <message>
+            <source>No one you follow is live · Offline channels</source>
+            <translation>No one you follow is live · Offline channels</translation>
+        </message>
+        <message>
+            <source>Not signed in. Showing popular live channels — sign in to see who you follow.</source>
+            <translation>Not signed in. Showing popular live channels — sign in to see who you follow.</translation>
+        </message>
+        <message>
+            <source>No live channels to show right now</source>
+            <translation>No live channels to show right now</translation>
+        </message>
+        <message>
+            <source>Try again in a moment, or find something to watch in Browse.</source>
+            <translation>Try again in a moment, or find something to watch in Browse.</translation>
+        </message>
+        <message>
+            <source>Nothing to browse right now</source>
+            <translation>Nothing to browse right now</translation>
+        </message>
+        <message>
+            <source>Twitch didn't return any channels or categories. Try again in a moment.</source>
+            <translation>Twitch didn't return any channels or categories. Try again in a moment.</translation>
+        </message>
+        <message>
+            <source>Nothing to watch yet</source>
+            <translation>Nothing to watch yet</translation>
+        </message>
+        <message>
+            <source>{0} isn't live and has no recent videos or clips.</source>
+            <translation>{0} isn't live and has no recent videos or clips.</translation>
+        </message>
+        <message>
+            <source>No live channels in {0} right now.</source>
+            <translation>No live channels in {0} right now.</translation>
+        </message>
+        <message>
+            <source>Searching for "{0}"…</source>
+            <translation>Searching for "{0}"…</translation>
+        </message>
+        <message>
+            <source>No results for "{0}". Check the spelling or try a channel or category name.</source>
+            <translation>No results for "{0}". Check the spelling or try a channel or category name.</translation>
+        </message>
+        <message>
+            <source>Search isn't working right now. Check your connection, then edit your search to try again.</source>
+            <translation>Search isn't working right now. Check your connection, then edit your search to try again.</translation>
+        </message>
     </context>
 </TS>

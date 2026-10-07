@@ -420,6 +420,50 @@ function createGrid(list as object)
 end function
 
 
+' Applies the interface palette to a standard dialog or keyboard dialog. Keys
+' follow Roku's RSGPalette documentation (Standard Dialog Framework). Without a
+' palette field or constants, the dialog keeps the inherited system palette.
+function applyDialogPalette(dialog as dynamic) as boolean
+    if dialog = invalid then return false
+    if not dialog.hasField("palette") then return false
+    color = m.global?.constants?.ui?.color
+    if color = invalid then return false
+    palette = CreateObject("roSGNode", "RSGPalette")
+    if palette = invalid then return false
+    palette.colors = {
+        DialogBackgroundColor: color.surface,
+        DialogItemColor: color.focus,
+        DialogTextColor: color.text,
+        DialogFocusColor: color.focusFill,
+        DialogFocusItemColor: color.onAccent,
+        DialogSecondaryTextColor: color.textSecondary,
+        DialogSecondaryItemColor: color.divider,
+        DialogInputFieldColor: color.raised,
+        DialogKeyboardColor: color.raised,
+        DialogFootprintColor: color.divider
+    }
+    dialog.palette = palette
+    return true
+end function
+
+' Splits items into consecutive groups of at most size items. The final group
+' keeps any remainder, so no trailing item is dropped.
+function chunkItems(items as dynamic, size as integer) as object
+    groups = []
+    if type(items) <> "roArray" or size < 1 then return groups
+    group = []
+    for each item in items
+        group.push(item)
+        if group.count() = size
+            groups.push(group)
+            group = []
+        end if
+    end for
+    if group.count() > 0 then groups.push(group)
+    return groups
+end function
+
+
 function numberToText(number as object) as object
     result = ""
     if number < 1000

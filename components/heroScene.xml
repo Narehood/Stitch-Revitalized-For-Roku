@@ -21,6 +21,12 @@
       focusable="true"
       translation="[0,64]"
     />
+    <!-- First-launch device identity recovery; shown only while no page is open -->
+    <StatusPanel
+      id="startupStatus"
+      focusable="true"
+      translation="[110,200]"
+    />
   </children>
   <script type="text/brightscript" uri="heroScene.brs" />
   <script type="text/brightscript" uri="pkg:/source/changelog.brs" />

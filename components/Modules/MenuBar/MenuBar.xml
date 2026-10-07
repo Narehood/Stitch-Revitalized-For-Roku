@@ -4,7 +4,7 @@
     <Rectangle
       visible="true"
       id="headerRect"
-      color="0x26262cFF"
+      color="0x18181BFF"
       width="1280"
       height="64"
       translation="[0, 0]"
@@ -12,6 +12,13 @@
 
     <ButtonGroupHoriz id="MenuOptions" layoutDirection="horiz" horizAlignment="left" />
     <ButtonGroupHoriz id="IconOptions" layoutDirection="horiz" horizAlignment="left" />
+    <!-- Name of the focused icon button, shown below the header -->
+    <Group id="iconCaption" visible="false" translation="[1100, 72]">
+      <Rectangle id="iconCaptionPlate" color="0x1F1F23FF" width="120" height="32" />
+      <Label id="iconCaptionLabel" color="0xEFEFF1FF" translation="[12, 5]">
+        <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="18" />
+      </Label>
+    </Group>
   </children>
   <interface>
     <function name="onDestroy" />
@@ -33,12 +40,16 @@
       value="[15,0]"
       alias="MenuOptions.translation"
     />
-    <field id="menuFontSize" type="int" value="22" />
+    <field id="menuFontSize" type="int" value="24" />
     <field id="menuFontUri" type="uri" value="pkg:/fonts/Archivo-Bold.otf" />
     <field id="showSearchIcon" type="bool" value="true" onChange="updateMenuOptions" />
     <field id="showSettingsIcon" type="bool" value="true" onChange="updateMenuOptions" />
     <field id="showLoginIcon" type="bool" value="true" onChange="updateMenuOptions" />
     <field id="updateUserIcon" type="bool" value="false" />
+    <!-- Id of the tab whose page is open; shown as active when not focused -->
+    <field id="activeItem" type="string" value="" />
+    <!-- Moves the tab focus marker to this id without selecting it -->
+    <field id="focusItem" type="string" value="" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="MenuBar.brs" />
   <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
