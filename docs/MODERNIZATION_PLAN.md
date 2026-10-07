@@ -4,11 +4,11 @@ Baseline: `3747337`, audited October 6–7, 2026. Work branch: `modernize/stitch
 
 ## Status and scope
 
-The playback, chat, proxy, build, and dependency audits are complete. Their source findings have been checked and disputed conclusions corrected. Claude Opus 5.5's interface audit remains incomplete: its resumed run reached another session limit before producing a report. Its source-inspection work and private probe tooling have been preserved. The next retry is October 7 at 5:55 a.m. Eastern, after the provider's 5:50 a.m. reset. This plan authorizes independent correctness work; the interface specification and acceptance results will be added when that audit finishes. The project is not yet declared usable or ready for release.
+The playback, chat, proxy, build, dependency and native interface audits are complete. Their findings have been checked and disputed conclusions corrected. Opus 5.5 completed the interface specification after its quota reset on October 7; the checked findings, design rules and implementation sequence are incorporated below. Core implementation and core reviews are green. Native UI implementation, final whole-diff reviews and physical Roku acceptance remain open. The project is not yet declared usable or ready for release.
 
 The target is a maintained native Roku SceneGraph application with working live and VOD video and audio, reliable live text chat, and an explanation when VOD or clip chat is unavailable. Offer 1440p when the Roku decoder and stream transport support it. Preserve existing features and currently supported devices. Explore lower live latency as an opt-in experiment and measure it on hardware before making claims.
 
-The user will provide developer-mode Roku access tomorrow. Local compilation, fixtures, and simulation cannot establish HEVC playback, audible sound, hardware performance, or real latency. Those remain release gates. No minimum OS or device requirement is raised by this plan.
+The user has offered developer-mode Roku access; access is still pending. Local compilation, fixtures, and simulation cannot establish HEVC playback, audible sound, hardware performance, or real latency. Those remain release gates. No minimum OS or device requirement is raised by this plan.
 
 ## Baseline evidence and important corrections
 
@@ -112,17 +112,97 @@ Security acceptance: update all available compatible patches and inspect the dep
 
 ### 5. Native interface modernization — Opus 5.5 xHigh
 
-Owner: Claude Opus 5.5 using the local `frontend-design` skill, adapted to SceneGraph, TV viewing distance, and D-pad control. Skill: `C:/Users/Michael/.claude/plugins/marketplaces/claude-plugins-official/plugins/frontend-design/skills/frontend-design/SKILL.md`.
+Owner: Claude Opus 5.5 using the local `frontend-design` skill, adapted to native SceneGraph, TV viewing distance and D-pad control. Skill: `C:/Users/Michael/.claude/plugins/marketplaces/claude-plugins-official/plugins/frontend-design/skills/frontend-design/SKILL.md`. The source audit and concrete specification are complete at `35e2c55`; implementation and acceptance are separate work. No user-facing feature is deprecated by the UI audit.
 
-Complete the interrupted audit first and update this plan with its finished specification. Preserve Following, Browse, Search, channel/category pages, recent channels, login/account management, all settings, bookmarks, clips/VODs, playback controls, seeking, quality selection, chat/emotes, and proxy setup unless a feature is proven deprecated.
+#### Checked problems and priorities
 
-Starting concerns recovered from the partial audit: tiny player typography; poor contrast for some chat usernames; icon-only actions; unclear account status; loading/empty/error screens without recovery guidance; Back behavior in the recent-channel rail; and settings descriptions that conflate quality and latency. These are leads, not a completed design report.
+| Priority | Finding | Source evidence at the audit commit |
+|---|---|---|
+| P0 | Back from the recent-channel rail reaches root exit instead of returning to the page | `RecentlyWatchedBar.brs:170–238`, `heroScene.brs:385–389` |
+| P0 | A failed first-launch device-code request leaves blank tabs with no retry | `heroScene.brs:30–34,168–176`, `shared.bs:15–22` |
+| P1 | Content pages silently discard failures and have no useful empty states | Following, Browse, Search, ChannelPage and GamePage response handlers |
+| P1 | Game/category directories drop the last one or two streams, and malformed entries can break row grouping | `GamePage.brs:17–45` |
+| P1 | Play first opens hidden controls without pausing; hidden VOD controls swallow Rewind/Fast-forward | `StitchVideo.brs:725–733`, `CustomVideo.brs:804–871` |
+| P1 | VOD seek preview has no explanation or cancel and can fade while a seek is pending | `CustomVideo.brs:328–332,419–459` |
+| P1 | Player text is 12–14 px, and icon controls have no names | `StitchVideo.xml:69–110`, `CustomVideo.xml:182–266` |
+| P1 | Playback errors offer only an exiting OK action; authorization copy assumes an account is required | `VideoPlayer.brs:943–958`, `VideoErrorHandler.brs:154,306–309` |
+| P1 | Every LIVE/VOD/clip card can show a stray natural-size black runtime badge | `VideoItem.brs:117–128,178–236` |
+| P1 | Some raw Twitch chat name colors lack readable contrast | `Chat.brs:225–231,258,293` |
+| P1 | Account state and sign-out are difficult to find | `heroScene.brs:274–282`, Settings logout below the fold |
+| P2 | Settings hide current values; header and rail icons lack captions; headings and focus share colors | Settings, MenuBar, RecentlyWatchedBar and page XML |
+| P2 | Search starts a task on every keystroke without stopping the prior task; Back redirects to recents | `Search.brs:65–77,271–282` |
+| P2 | Login footer can show a localization key; code/body sizes and optional-sign-in guidance need improvement | `LoginPage.xml:197–217`, `LoginPage.brs:125` |
+| P2 | Card titles/subtitles overlap; quality selection does not identify the current quality | `VideoItem.xml:23–56`, `StitchVideo.brs:426–439` |
+| P3 | Emoji regex is rebuilt for each text update | `EmojiLabel.brs:230–236`; cache per instance, measure performance on hardware |
 
-Build a cohesive token system using existing bundled fonts and intentional focus/status colors, visible remote focus, TV-safe margins, readable text, clear account/proxy setup, and predictable focus restoration. Validate signed-out and signed-in navigation, every overlay, Back behavior, search keyboard, settings dialogs, retries, and repeated transitions. Preserve performance on older devices. Do not replace the native app with a web page.
+Simulator-specific horizontal menu layout, builtin icon scaling, XML alias propagation and invisible chat text are recorded as simulator limitations. They do not alone justify production changes. The alleged chat-default mismatch was rejected: the settings helper returns the stored/schema default before the player fallback.
 
-Ownership: non-player scenes and navigation/modules/theme first. Parent finishes auth/telemetry changes to `heroScene` and LoginPage before Opus edits those files. Opus modernizes player overlays only after the playback agent releases those files. No concurrent editing of the same files.
+#### Native design specification
 
-Completion requires actual implementation, feature comparison, compilation/lint/format checks, and visual/remote review where simulation is available. A rate limit or incomplete report is recorded as incomplete, resumed after reset, and never counted as design completion.
+Use graphite surfaces and bundled Archivo type. Purple indicates focus/selection, red labels LIVE, coral identifies errors with explicit text, and amber labels experiments/warnings. Every focused icon control displays its name. Existing focus assets suffice; a native Rectangle and Label replace the LIVE bitmap.
+
+| Color role | RGBA |
+|---|---|
+| Canvas / chrome / surface / raised / divider | `0x0E0E10FF` / `0x18181BFF` / `0x1F1F23FF` / `0x26262CFF` / `0x323239FF` |
+| Primary / secondary / tertiary text | `0xEFEFF1FF` / `0xADADB8FF` / `0x848494FF` |
+| Focus / focus fill / text on accent | `0xA970FFFF` / `0x9147FFFF` / `0xFFFFFFFF` |
+| LIVE / error / warning / success / chat link | `0xEB0400FF` / `0xFF8280FF` / `0xFFD37AFF` / `0x00F593FF` / `0xBF94FFFF` |
+| Player scrim | `0x0E0E10D9` |
+
+Archivo roles in HD coordinates: Bold 40 page titles; Bold 28 panel titles; Bold 24 row labels; Bold 22 card titles; Regular 20 body text; Regular 18 metadata/captions; Bold 16 short badges. Sentences are at least 18 px. Player channel names use 24 and titles 20. Preserve chosen chat sizes separately.
+
+Keep the 1280×720 coordinate system, 64 px header and 78 px rail. Standard row origins are [110,88]; Search keeps the keyboard/results split and ChannelPage keeps the profile area. Keep ordinary text/focus targets inside x=48–1232 and y=32–688; rail avatars require an overscan check. Use 4/8/16/24/32/48/64 px spacing. Avoid focus zoom, repeated transitions and new per-frame timers.
+
+A shared `StatusPanel` exposes hidden/loading/empty/error states, title, message, actions and an always-notify selected action. Show its spinner only after 0.6 s. Hosts own actual request/retry logic. Export idempotent disposal; stop timers before unobserving.
+
+- **Startup:** use the real finite `getRendezvouzToken` task. Show “Connecting to Twitch…”; failure shows “Can't connect to Twitch” with Try again and Settings. Ignore duplicate presses while a request is pending. After three failures, suggest checking network settings/restarting. Success stores the actual device code and resumes anonymous browsing. Gate content tabs while identity is missing, allow offline Settings, preserve independent login, and prevent late callbacks from rebuilding a page the user has left. Never fabricate identity or require sign-in.
+- **Header/rail:** distinguish active and focused tabs; caption Settings, Sign in/Account and focused recent channels. Skip an empty rail. Back from the rail restores the page's remembered focus; menu Back keeps cleanup-before-exit.
+- **Following/Browse:** show loading, empty and failure messages with real retry. Preserve anonymous recommendations, follows/offline sorting, partial successful Browse sections and pagination. No follows offers Go to Browse.
+- **Search:** debounce 0.5 s, destroy the previous task and discard stale results. Show Searching, no-results or failure copy. Keep keyboard, voice, recent searches and every result type. Back leaves to the menu; Up reaches recents.
+- **Channel/Game:** readable headers, loading/error/empty states, Try again and Back. Group successfully appended streams in threes and include the trailing partial row.
+- **Cards:** distinct title/subtitle lines, 22/18 px type, middle-dot separators and native LIVE labels; hide unused runtime artifacts.
+- **Login/Account:** show the real activation code at Bold 56 with readable steps, QR quiet zone, actual expiry when available and optional-sign-in copy. A signed-in account icon opens an Account panel with Your channel, Sign out and Back. Own-channel access remains available one press deeper. Confirm sign-out and preserve preferences, recent channels and device identity.
+- **Settings:** a MarkupList row displays each setting's current value. Preserve all setting keys, option ids and features; order account, quality, latency, chat/emotes, sorting, demux, diagnostics and Support. Use Off/On and named chat sizes. New installations default to size 16; existing values are unchanged. Clarify the optional demux URL and actual health-check failure without claiming connectivity prematurely.
+- **Player:** contiguous named controls, larger text and a readable scrim within the video area both with and without chat. Play toggles immediately from hidden controls. VOD Rewind/Fast-forward show preview, retain hold acceleration, explain Play/OK to apply and Back to cancel, restore the prior play state and suppress fade while seeking. Preserve time travel, thumbnails, bookmarks, quality indexes and recovery metadata. Mark the current quality and retain the VOD/clip chat notice. Label the low-latency experiment only in sessions using it; never imply measured success.
+- **Error recovery:** offer Try again and Back with one finite playback attempt per explicit retry. Preserve capped automatic recovery and teardown. Authorization failures should say Twitch did not authorize the video and may require an account or have other restrictions; a 401/403 alone does not prove every public stream needs sign-in.
+- **Chat:** lighten insufficient-contrast name colors toward white with a capped per-instance cache. Validate contrast and preserve hue where possible; use the readable link token. No transport, parser, queue, delay or emote-provider change.
+- **Dialogs/strings:** verify current Roku palette keys before using them, retain a safe system fallback, and translate new user-facing strings through `tr()`. Verify long strings and flag Spanish/Portuguese additions for native-speaker review.
+
+#### Implementation sequence and ownership
+
+Core agents have released ownership. Root owns public docs, TODO, orchestration, global formatting, commits and the PR. Opus owns native UI implementation in the following bounded phases; no other agent edits the same files.
+
+| Step | Work and owned files |
+|---|---|
+| U0 | Targeted rail/game/card/remote/Search fixes: heroScene, RecentlyWatchedBar, GamePage, VideoItem, StitchVideo/CustomVideo key handlers and Search |
+| U1 | Add UI tokens in constants and documented dialog helper in misc |
+| U2 | StatusPanel plus actual first-launch recovery in heroScene |
+| U3 | Following/Browse/Search/Channel/Game states and rows, cards, header and rail |
+| U4 | Login/Account plus sceneFactory and heroScene account routing |
+| U5 | Settings/schema copy and ordering, preserved identifiers, SettingsListItem |
+| U6 | Player overlays/seek/dialogs and limited error copy/retry changes |
+| U7 | Chat rendering and per-instance EmojiLabel regex cache |
+| U8 | Locale strings and meaningful new helper/navigation/recovery fixtures |
+| U9 | Fresh simulator captures, feature comparison and independent Kimi/Grok review |
+
+Phase 1 implements U0–U3 with their strings and regression checks, then root verifies it. Phase 2 implements U4–U9 after ownership handoff. Save an incremental checkpoint for every completed step; a quota failure remains incomplete.
+
+UI work cannot change GetTwitchContent/HLS contracts, decoder floors, proxy implementation, ChatJob/EmoteJob/IRC parsing, shared HTTP/auth SDK internals, diagnostics consent or the OS/HD support baseline. Preserve all player interfaces, proxy/quality flags, `suppressStartupSeek`, unavailable-chat routing, explicit disposal and reusable retained footprints. Do not bundle optional dead-code removals into this UI change.
+
+#### Interface acceptance
+
+1. Rail Back returns to the same card; top-rail Up reaches the menu; an empty rail cannot take invisible focus; root exit still performs cleanup.
+2. Failed startup shows recovery; repeated Retry while pending starts no extra task; failure three adds guidance; a real/canned successful response resumes anonymous browsing; missing identity does not produce blank content tabs.
+3. Every content page has tested loading/empty/failure/retry states. Partial Browse success remains usable. A Game list of 7 streams yields rows 3/3/1 with malformed entries handled.
+4. Rapid Search typing issues one request after 0.5 s, suppresses stale results and shows meaningful no-results/failure copy; keyboard Back reaches the menu.
+5. Cards have readable separated labels and no black artifact; active/focused menu states and rail captions are distinct.
+6. Settings expose current values; all stored identifiers remain compatible; stored chat size 14 stays 14 and only new installs receive 16; failed service checks never save an unverified address.
+7. Account opens the user's channel, confirms sign-out, updates navigation/account state and preserves settings/history/device identity. Login shows real values and localized optional-sign-in guidance.
+8. Live/VOD controls work with chat hidden/shown; Play acts on its first press; VOD hold seeking, apply/cancel and fade behavior are exercised; quality selection still preserves proxy metadata/indexes; recorded chat still opens the notice and restores focus.
+9. Manual playback retry remains bounded, does not resurrect destroyed nodes or create duplicate tasks/observers, and retains meaningful restricted/expired/missing messages.
+10. Contrast helpers and meaningful state-machine regressions pass with compile/lint/format/package/test checks. Fresh simulator screenshots/logs are inspected; known engine gaps are distinguished from application failures.
+11. Physical checks remain open: font/contrast at TV distance, dialog palettes, overscan, actual remote keys/seek timing, low-end scrolling, chat at sizes 16–20, real startup/OAuth/sign-out, and all existing audio/1440p/WSS/latency gates. No simulator result closes them.
+
 
 ## Deprecation and follow-up queue
 
@@ -142,7 +222,7 @@ Investigate separately: deep links (`supports_input_launch` is declared but laun
 ## Progress log
 
 - Core audits complete; baseline checks recorded. Grok's failed initial startup was retried successfully.
-- Opus interface audit remains incomplete after another provider session limit; its next retry is October 7, 5:55 a.m. Eastern. Recovered source inspection, font-glyph checks and private fixture tooling will carry forward. Independent validation support is improving the local probes; native UI design and implementation remain assigned to Opus. The temporary daily timer will be disabled when its audit and UI implementation are actually complete.
+- Opus 5.5 xhigh completed its interface audit/specification in R3 after the 5:50 a.m. Eastern reset on October 7, without another usage limit. The report covers all screens/features, concrete tokens/copy/focus rules, source-backed priorities, ownership and 30 acceptance scenarios. Native implementation now proceeds in two bounded phases; the temporary timer remains enabled until the audit and implemented UI are verified.
 - Playback, chat and explicit scene lifecycle implementations are released. HTTP/auth, opt-in diagnostics, Node 24 tooling, portable test deployment, workflows and build/use documentation are implemented.
 - Proxy implementation is released: 183 tests pass on Python 3.12 and 3.14, ruff checks and wheel build pass, and the strict locked runtime dependency audit reports no known vulnerabilities. The hardened container builds and returns version 0.2.0 from `/health` in CI.
 - Full-project format/check, lint, package and Rooibos compilation pass, along with seven offline suites and twelve Node regressions including actual playback recovery and SceneGraph navigation/disposal. A bounded anonymous Twitch request returned a native AVC TS ladder; it did not offer HEVC and does not verify audible sound or hardware decoding.
