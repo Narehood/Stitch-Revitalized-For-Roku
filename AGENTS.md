@@ -348,17 +348,11 @@ curl -s -X POST http://localhost:8060/keypress/Right
 4. Navigate: ECP keypress commands to localhost:8060
 5. Repeat
 
-#### Running Tests — Stale Package Warning
+#### Running Tests — Fresh Package Verification
 
-`npm test` builds a zip, sideloads it, then streams the debug console output. The simulator **keeps the previous package in memory** until the new one fully loads. This means the first 2–3 test runs printed by the console may reflect the old zip, not the freshly built one.
+`npm test` executes offline fixtures and Node regressions without sideloading. It does not read a simulator's previous package.
 
-**Rule: always `rm -rf out` before `npm test` when you need a definitive result.** This forces a clean build and eliminates any ambiguity about which package is running.
-
-```bash
-rm -rf out && npm test
-```
-
-Rooibos loops the test suite multiple times. Treat the first run that shows the correct test names as canonical. If any run shows test names from a previous version of the spec, discard it — the simulator was still loading.
+`npm run test:device` compiles a separate Rooibos package, opens the console before installation, and requires both successful installation and the new package's unique run marker before accepting a positive test summary. Stale output, zero tests, a crash, failure or timeout fail the command. Use this command for simulator or authorized physical-device tests; do not infer results from an earlier package's console output.
 
 #### Rooibos Test Patterns — brs-engine Limitations
 

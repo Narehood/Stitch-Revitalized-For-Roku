@@ -75,16 +75,16 @@ function getOauthToken()
         remainingMs = Int((lifetime - deadline.TotalSeconds()) * 1000)
         if remainingMs < 50 then exit while
         req = HttpRequest({
-        url: "https://id.twitch.tv/oauth2/token",
-        headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            "origin": "https://android.tv.twitch.tv",
-            "referer": "https://android.tv.twitch.tv/",
-            "accept": "application/json"
-        },
-        method: "POST",
-        data: requestData,
-        timeout: boundedHttpOption(remainingMs, 10000, 50, 10000)
+            url: "https://id.twitch.tv/oauth2/token",
+            headers: {
+                "content-type": "application/x-www-form-urlencoded",
+                "origin": "https://android.tv.twitch.tv",
+                "referer": "https://android.tv.twitch.tv/",
+                "accept": "application/json"
+            },
+            method: "POST",
+            data: requestData,
+            timeout: boundedHttpOption(remainingMs, 10000, 50, 10000)
         })
         event = req.send()
         status = 0

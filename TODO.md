@@ -11,6 +11,8 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |
 | P2 | Review OAuth refresh and account renewal | Stored refresh metadata is not a background renewal flow; preserve anonymous playback |
 | P2 | Reduce remaining simulator dependency advisories | Inspect compatible fixes; avoid overrides breaking CommonJS consumers |
+| P2 | Make tagged channel releases validate their exact source | Release currently relies on main CI; gate tag artifacts on lint/audit/tests/package checks |
+| P2 | Expand production resolver and container reproducibility coverage | Add create_app resolver-wiring regression; consider digest-pinned Python base image |
 | P2 | Complete locale coverage for new status and recovery copy | Inventory translations and verify long-string layouts |
 | P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
 | P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |

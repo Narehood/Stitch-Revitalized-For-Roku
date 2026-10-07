@@ -1,0 +1,3 @@
+# Keep formatter input identical on Windows and Linux.
+*.brs text eol=lf
+*.bs text eol=lf
