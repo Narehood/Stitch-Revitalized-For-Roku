@@ -3,6 +3,7 @@
 <component name="LoginPage" extends="SceneManagerGroup">
 
     <interface>
+        <function name="onDestroy" />
         <field id="finished" type="bool" />
         <field id="login" type="string" />
     </interface>

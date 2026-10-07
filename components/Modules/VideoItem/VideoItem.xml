@@ -3,6 +3,8 @@
 <component name="VideoItem" extends="Group">
 
     <interface>
+        <function name="onDestroy" />
+        <field id="supportsDisposal" type="boolean" value="true" />
         <field id="itemContent" type="node" onChange="showcontent" />
         <field id="rowFocusPercent" type="float" onChange="showrowfocus" />
         <field id="itemHasFocus" type="boolean" onChange="onGetfocus" />

@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.top.observeField("focusedChild", "onGetFocus")
     m.top.overhangTitle = tr("Settings")
     m.top.optionsAvailable = false
@@ -204,11 +205,7 @@ sub closeKeyboardDialog()
     m.keyboardDialog = invalid
     ' Cancel any in-flight health check so its result does not save the URL
     ' after the user has already dismissed or cancelled the dialog.
-    if m.healthCheckTask <> invalid
-        m.healthCheckTask.unobserveField("result")
-        m.healthCheckTask.control = "stop"
-        m.healthCheckTask = invalid
-    end if
+    m.healthCheckTask = destroyTask(m.healthCheckTask, "result")
     m.pendingProxySave = invalid
     m.settingsMenu.setFocus(true)
 end sub
@@ -236,8 +233,7 @@ sub onProxyHealthResult()
     if m.healthCheckTask = invalid then return
 
     result = m.healthCheckTask.result
-    m.healthCheckTask.unobserveField("result")
-    m.healthCheckTask = invalid
+    m.healthCheckTask = destroyTask(m.healthCheckTask, "result")
 
     pending = m.pendingProxySave
     m.pendingProxySave = invalid
@@ -269,6 +265,9 @@ end sub
 sub boolSettingChanged()
     if m.boolSetting.focusedChild = invalid then return
     selectedSetting = m.userLocation.peek().children[m.settingsMenu.itemFocused]
+    if selectedSetting.settingName = "analytics.enabled"
+        set_user_setting("analytics.consentVersion", "1")
+    end if
     if m.boolSetting.checkedItem
         set_user_setting(selectedSetting.settingName, "true")
     else
@@ -310,21 +309,14 @@ function onKeyEvent(key as string, press as boolean) as boolean
 end function
 
 sub performLogout()
-    active_user = get_setting("active_user", "$default$")
-    if active_user <> "$default$"
-        NukeRegistry(active_user)
-        set_setting("active_user", "$default$")
-    else
-        for each key in getRegistryKeys("$default$")
-            if key <> "temp_device_code" and key <> "device_code"
-                unset_user_setting(key)
-            end if
-        end for
-    end if
+    signOutAccount()
     m.top.finished = true
 end sub
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     m.settingsMenu.unobserveField("itemFocused")
     m.settingsMenu.unobserveField("itemSelected")
@@ -333,11 +325,12 @@ sub onDestroy()
     m.radioSetting.unobserveField("checkedItem")
     if m.keyboardDialog <> invalid
         m.keyboardDialog.unobserveField("buttonSelected")
+        scene = m.top.getScene()
+        if scene <> invalid and scene.dialog <> invalid
+            if scene.dialog.isSameNode(m.keyboardDialog) then scene.dialog = invalid
+        end if
         m.keyboardDialog = invalid
     end if
-    if m.healthCheckTask <> invalid
-        m.healthCheckTask.unobserveField("result")
-        m.healthCheckTask.control = "stop"
-        m.healthCheckTask = invalid
-    end if
+    m.healthCheckTask = destroyTask(m.healthCheckTask, "result")
+    m.pendingProxySave = invalid
 end sub

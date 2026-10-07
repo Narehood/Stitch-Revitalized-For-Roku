@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     '*******************'
     '* Get Node List
     '*******************'
@@ -172,12 +173,19 @@ function buildIcon(icon)
     newItem.focusFootprintBitmapUri = "pkg:/images/focusfootprint.9.png"
     newItem.focusBitmapUri = "pkg:/images/focusfootprint.9.png"
     newItem.showFocusFootprint = false
-    newItem.getchild(3).blendColor = m.top.menuTextColor
-    newItem.getchild(3).width = m.top.menuFontSize * 2
-    newItem.getchild(3).height = m.top.menuFontSize * 2
-    newItem.getchild(4).blendColor = m.top.menuFocusColor
-    newItem.getchild(4).width = m.top.menuFontSize * 2
-    newItem.getchild(4).height = m.top.menuFontSize * 2
+    ' Some runtimes omit these internal Posters; the public icon fields remain valid.
+    iconPoster = newItem.getChild(3)
+    if iconPoster <> invalid
+        iconPoster.blendColor = m.top.menuTextColor
+        iconPoster.width = m.top.menuFontSize * 2
+        iconPoster.height = m.top.menuFontSize * 2
+    end if
+    focusedIconPoster = newItem.getChild(4)
+    if focusedIconPoster <> invalid
+        focusedIconPoster.blendColor = m.top.menuFocusColor
+        focusedIconPoster.width = m.top.menuFontSize * 2
+        focusedIconPoster.height = m.top.menuFontSize * 2
+    end if
     return newItem
 end function
 
@@ -319,6 +327,8 @@ sub handleUserLogin()
 end sub
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
     m.top.unobserveField("focusedChild")
     m.top.unobserveField("updateUserIcon")
     m.top.unobserveField("buttonSelected")

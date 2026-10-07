@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.top.observeField("focusedChild", "onGetfocus")
     ' m.top.observeField("itemFocused", "onGetFocus")
@@ -108,3 +109,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     return false
 end function
+
+sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
+    m.top.unobserveField("focusedChild")
+    m.rowlist.unobserveField("itemSelected")
+    m.GetContentTask = destroyTask(m.GetContentTask, "response")
+end sub

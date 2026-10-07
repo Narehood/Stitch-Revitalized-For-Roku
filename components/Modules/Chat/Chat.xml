@@ -3,7 +3,8 @@
 <component name="Chat" extends="Group">
 
     <interface>
-        <field id="backgroundColor" type="string" value="0x000000FF" alias="chatBackground.color, chatPanel.color" />
+        <field id="supportsDisposal" type="boolean" value="true" />
+        <field id="backgroundColor" type="string" value="0x000000FF" onChange="onBackgroundColorChange" />
         <field id="channel" type="string" onChange="onEnterChannel" alwaysNotify="true" />
         <field id="channel_id" type="string" />
         <field id="focusable" type="Boolean" value="true" />
@@ -11,12 +12,15 @@
         <field id="doneFocus" type="Boolean" value="false" />
         <field id="clientInfo" type="assocarray" />
         <field id="clientMessage" type="string" value="" />
-        <field id="width" type="integer" value="275" alias="chatPanel.width, chatBackground.width" onchange="updatePanelTranslation" />
-        <field id="height" type="integer" value="720" alias="chatPanel.height, chatBackground.height" onChange="updatePanelTranslation" />
-        <field id="forceLive" type="bool" value="false" />
+        <field id="width" type="integer" value="275" onchange="updatePanelTranslation" />
+        <field id="height" type="integer" value="720" onChange="updatePanelTranslation" />
+        <field id="forceLive" type="bool" value="false" onChange="onChatTimingChange" />
+        <field id="delaySeconds" type="float" value="0" onChange="onChatTimingChange" />
+        <field id="connectionState" type="string" value="stopped" />
         <field id="translation" type="vector2d" alias="chatPanel.translation" />
         <field id="fontSize" type="integer" value="14" onChange="updatePanelTranslation" />
         <function name="stopJobs" />
+        <function name="onDestroy" />
     </interface>
 
     <script type="text/brightscript" uri="Chat.brs" />
@@ -40,19 +44,15 @@
                 opacity="1"
                 translation="[0,0]" />
         </MaskGroup>
+        <Label id="chatStatus" translation="[12, 12]" width="251" height="130" wrap="true" numLines="5" visible="false" color="0xFFFFFFFF">
+            <font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
+        </Label>
         <!-- <SimpleLabel
             translation="[0,0]"
             text=""
             color="0xEFEFF1FF"
             fontSize="12"
             fontUri="pkg:/fonts/Archivo-Regular.otf" /> -->
-        <ChatJob
-            id="ChatJob"
-            control="stop"
-        />
-        <EmoteJob
-            id="EmoteJob"
-        />
     </children>
 
 </component>

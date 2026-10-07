@@ -45,18 +45,27 @@ sub Main(input as dynamic)
     m.scene.observeField("exitApp", m.port)
     m.scene.setFocus(true)
 
+    screenClosed = false
     while true
         msg = wait(0, m.port)
         msgType = type(msg)
         if msgType = "roSGScreenEvent"
             if msg.isScreenClosed()
-                return
+                screenClosed = true
+                exit while
             end if
         else if msgType = "roSGNodeEvent"
             field = msg.getField()
             if field = "exitApp"
-                return
+                exit while
             end if
         end if
     end while
+    m.scene.unobserveField("exitApp")
+    ' callFunc synchronizes with the render thread; only call while it is alive.
+    if not screenClosed
+        m.scene.callFunc("onDestroy")
+        screen.close()
+    end if
+    m.scene = invalid
 end sub

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="GamePage" extends="SceneManagerGroup" initialFocus="homeRowList">
     <interface>
+        <function name="onDestroy" />
         <field id="contentRequested" type="node" onChange="updatePage" />
         <field id="backgroundColor" type="string" alias="background.color" />
         <field id="pageTitle" type="string" alias="Header.text" />

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="Following" extends="SceneManagerGroup" initialFocus="homeRowList">
     <interface>
+        <function name="onDestroy" />
         <field id="doOffline" type="bool" value="false" />
     </interface>
     <script type="text/brightscript" uri="Following.brs" />

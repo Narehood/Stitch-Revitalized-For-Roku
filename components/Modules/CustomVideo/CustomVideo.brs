@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     ' Initialize UI elements
     m.top.enableUI = false
     m.top.enableTrickPlay = false
@@ -206,6 +207,7 @@ sub onPositionChange()
 end sub
 
 sub onVideoStateChange()
+    if m.disposed then return
     if m.top.state = "playing"
         m.controlButton.uri = "pkg:/images/pause.png"
         hideLoadingOverlay()
@@ -437,6 +439,7 @@ sub seekRelative(seconds)
         ? getLogTimestamp(); " [CustomVideo] Seeking disabled for live streams"
         return
     end if
+    if m.top.duration <= 0 then return
 
     if not m.isSeekMode
         m.currentPositionSeconds = m.top.position
@@ -459,6 +462,10 @@ sub showThumbnailPreview()
     if m.isLiveStream
         return ' No thumbnails for live streams
     end if
+    if m.top.duration <= 0 then return
+    info = m.top.thumbnailInfo
+    if info = invalid or info.interval = invalid or info.cols = invalid or info.count = invalid then return
+    if info.interval <= 0 or info.cols <= 0 or info.count <= 0 then return
 
     if m.top.thumbnailInfo <> invalid and m.top.thumbnailInfo.width <> invalid
         m.thumbnailPreview.visible = true
@@ -672,9 +679,7 @@ sub saveVideoBookmark()
         end if
 
         if get_user_setting("id", invalid) <> invalid
-            if m.bookmarkTask <> invalid
-                m.bookmarkTask = invalid
-            end if
+            m.bookmarkTask = destroyTask(m.bookmarkTask, "response")
             m.bookmarkTask = createObject("roSGNode", "TwitchApiTask")
             m.bookmarkTask.functionname = "updateUserViewedVideo"
             m.bookmarkTask.request = {
@@ -719,6 +724,7 @@ sub showMessage(title as string, message as string, duration as float)
 
     if m.messageTimer <> invalid
         m.messageTimer.control = "stop"
+        m.messageTimer.unobserveField("fire")
         m.messageTimer = invalid
     end if
 
@@ -737,6 +743,7 @@ sub hideMessage()
     end if
     if m.messageTimer <> invalid
         m.messageTimer.control = "stop"
+        m.messageTimer.unobserveField("fire")
         m.messageTimer = invalid
     end if
 end sub
@@ -907,6 +914,9 @@ function handleTimeTravelKeys(key) as boolean
 end function
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.bookmarkTask = destroyTask(m.bookmarkTask, "response")
     if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
         m.fadeAwayTimer.unobserveField("fire")
@@ -925,4 +935,7 @@ sub onDestroy()
     m.top.unobserveField("duration")
     m.top.unobserveField("bufferingStatus")
     m.top.unobserveField("video_type")
+    if m.loadingSpinner <> invalid then m.loadingSpinner.control = "stop"
+    if m.timeTravelDialog <> invalid then m.timeTravelDialog.visible = false
+    m.top.control = "stop"
 end sub

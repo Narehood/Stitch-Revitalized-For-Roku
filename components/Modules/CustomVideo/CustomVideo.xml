@@ -3,6 +3,10 @@
 <component name="CustomVideo" extends="Video">
 
     <interface>
+        <field id="supportsDisposal" type="boolean" value="true" />
+        <function name="onDestroy" />
+        <function name="showMessage" />
+        <function name="hideMessage" />
         <field id="thumbnailInfo" type="assocarray" />
         <field id="videoBookmarks" type="assocarray" />
         <field id="back" type="bool" value="false" />
@@ -23,6 +27,7 @@
     <script type="text/brightscript" uri="CustomVideo.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <children>
         <!-- Modern Time Travel Dialog -->
         <Group id="timeTravelDialog" visible="false" translation="[340,180]">

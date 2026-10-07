@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="RecentlyWatchedBar" extends="Group">
     <interface>
+        <function name="onDestroy" />
+        <field id="supportsDisposal" type="boolean" value="true" />
         <!-- Set true to give focus into the bar, false to release it back -->
         <field id="itemHasFocus" type="bool" value="false" onChange="onFocusToggle" alwaysNotify="true" />
         <!-- Emitted when user confirms a selection (OK key) -->

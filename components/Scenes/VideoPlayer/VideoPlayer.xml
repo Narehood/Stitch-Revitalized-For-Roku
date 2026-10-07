@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="VideoPlayer" extends="SceneManagerGroup" initialFocus="videoWindow">
     <interface>
+        <function name="onDestroy" />
         <field id="contentRequested" type="Node" onChange="handleContent" />
         <field id="contentStore" type="assocarray" />
         <field id="metadata" type="array" />
@@ -26,6 +27,7 @@
             translation="[960,0]"
             forceLive="false" />
         <TwitchApiTask
+            id="bookmarksTask"
             functionName="getTwitchBookmarks"
             control="run"
         />

@@ -47,10 +47,14 @@ function handleVideoError(errorCode as integer, errorMessage as string, video as
         delay: 0,
         newContent: invalid
     }
+    if m.currentRetryCount >= m.maxRetries
+        recovery.action = "fail"
+        return recovery
+    end if
+    m.currentRetryCount++
 
     if strategy = "retry_with_backoff"
         if m.currentRetryCount < m.maxRetries
-            m.currentRetryCount = m.currentRetryCount + 1
             recovery.shouldRetry = true
             recovery.action = "retry"
             recovery.delay = calculateBackoffDelay()
@@ -69,6 +73,7 @@ function handleVideoError(errorCode as integer, errorMessage as string, video as
             recovery.delay = 1000
             ' ? "[VideoErrorHandler] Switching to lower quality: "; newQuality.qualityID
         else
+            recovery.shouldRetry = true
             recovery.action = "retry"
             recovery.delay = 2000
         end if
@@ -203,6 +208,7 @@ function getNextLowerQuality(video as object) as object
     if currentIndex >= 0 and currentIndex < video.qualityOptions.count() - 1
         return {
             qualityID: video.qualityOptions[currentIndex + 1],
+            index: currentIndex + 1,
             isLowerQuality: true
         }
     end if
@@ -221,6 +227,7 @@ function getAlternativeQuality(video as object, contentRequested as object) as o
         midIndex = Int(qualityCount / 2)
         return {
             qualityID: video.qualityOptions[midIndex],
+            index: midIndex,
             isAlternative: true
         }
     end if

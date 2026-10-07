@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.top.observeField("focusedChild", "onGetfocus")
     ? "init"; TimeStamp()
     ' m.top.observeField("itemFocused", "onGetFocus")
@@ -221,6 +222,9 @@ function onKeyEvent(key as string, press as boolean) as boolean
 end function
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     if m.rowlist <> invalid
         m.rowlist.unobserveField("itemSelected")

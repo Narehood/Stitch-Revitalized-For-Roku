@@ -1,9 +1,11 @@
 sub init()
+    m.disposed = false
     m.top.observeField("itemHasFocus", "onGetfocus")
     m.code = m.top.findNode("code")
     m.loginText = m.top.findNode("topText")
     m.bottomText = m.top.findNode("bottomText")
     m.buttonGroup = m.top.findNode("buttonGroup")
+    m.buttonGroup.observeField("buttonSelected", "onLoginAction")
     m.qrCode = m.top.findNode("qrCode")
     RunContentTask()
 end sub
@@ -11,8 +13,12 @@ end sub
 sub handleOauthToken()
     ? "[LoginPage] - handleOauthToken"
     rsp = m.oauthtask.response
-    if rsp = invalid then return
+    if rsp = invalid
+        showLoginFailure("Sign-in expired or could not be completed. Try again to get a new code.")
+        return
+    end if
     set_user_setting("access_token", rsp.access_token)
+    if rsp.refresh_token <> invalid then set_user_setting("refresh_token", rsp.refresh_token)
     set_user_setting("device_code", get_user_setting("temp_device_code"))
     if get_user_setting("device_code") = get_user_setting("temp_device_code")
         unset_user_setting("temp_device_code")
@@ -23,23 +29,30 @@ end sub
 sub handleUserLogin()
     ? "[LoginPage] - handleUserLogin()"
     rsp = m.UserLoginTask.response
-    if rsp = invalid then return
+    if rsp = invalid
+        showLoginFailure("Twitch could not load your account. Check your connection and try again.")
+        return
+    end if
     currentUser = rsp.currentUser
     if currentUser <> invalid and currentUser.login <> invalid
         access_token = get_user_setting("access_token")
+        refresh_token = get_user_setting("refresh_token")
         device_code = get_user_setting("device_code")
         unset_user_setting("access_token")
+        unset_user_setting("refresh_token")
         unset_user_setting("device_code")
         set_setting("active_user", currentUser.login)
         set_user_setting("login", currentUser.login)
         set_user_setting("access_token", access_token)
+        if refresh_token <> invalid then set_user_setting("refresh_token", refresh_token)
         set_user_setting("device_code", device_code)
         ' TODO: Yet again with the static reference that should be fixed.
         ' Parent = heroScene, child 1 = MenuBar, child 3 = ButtonGroup, child 6 = loginIconButton
         ?"Set finished true"
         m.top.finished = true
+    else
+        showLoginFailure("Twitch could not confirm your account. Try signing in again.")
     end if
-    RunContentTask()
 end sub
 
 sub getUserLogin()
@@ -51,7 +64,10 @@ end sub
 sub handleRendezvouzToken()
     ? "handle Rendezvouz token"
     rsp = m.RendezvouzTask.response
-    if rsp = invalid then return
+    if rsp = invalid
+        showLoginFailure("Twitch could not create a sign-in code. Check your connection and try again.")
+        return
+    end if
     set_user_setting("temp_device_code", rsp.device_code)
     m.code.text = rsp.user_code
     m.OauthTask = createApiTask("getOauthToken", "handleOauthToken", { params: rsp })
@@ -96,22 +112,59 @@ sub onGetFocus()
 end sub
 
 sub RunContentTask()
+    if m.disposed then return
     ? "active User: "; get_setting("active_user", "$default$")
     if get_setting("active_user", "$default$") <> "$default$"
         ' Already logged in — dismiss LoginPage and return to the previous scene.
         m.top.backPressed = true
     else
         ? "[LoginPage] - RunContentTask"
+        m.RendezvouzTask = destroyTask(m.RendezvouzTask, "response")
+        m.OauthTask = destroyTask(m.OauthTask, "response")
+        m.UserLoginTask = destroyTask(m.UserLoginTask, "response")
+        m.loginText.text = tr("LoginPageTopText")
+        m.code.text = ""
         m.code.visible = true
         m.loginText.visible = true
         m.bottomText.visible = true
         m.buttonGroup.visible = false
+        m.buttonGroup.buttons = []
+        m.qrCode.unobserveField("loadStatus")
+        m.qrCode.uri = "pkg:/images/qr_activate.png"
         m.qrCode.visible = true
         m.RendezvouzTask = createApiTask("getRendezvouzToken", "handleRendezvouzToken")
     end if
 end sub
 
+sub showLoginFailure(message as string)
+    m.RendezvouzTask = destroyTask(m.RendezvouzTask, "response")
+    m.OauthTask = destroyTask(m.OauthTask, "response")
+    m.UserLoginTask = destroyTask(m.UserLoginTask, "response")
+    m.code.visible = false
+    m.qrCode.visible = false
+    m.loginText.text = message
+    m.bottomText.visible = false
+    m.buttonGroup.buttons = ["Try again", "Back to browsing"]
+    m.buttonGroup.translation = [100, 260]
+    m.buttonGroup.visible = true
+    m.buttonGroup.setFocus(true)
+end sub
+
+sub onLoginAction()
+    if m.disposed or not m.buttonGroup.visible then return
+    if m.buttonGroup.buttonSelected = 0
+        RunContentTask()
+    else
+        m.top.backPressed = true
+    end if
+end sub
+
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
+    m.top.unobserveField("itemHasFocus")
+    m.buttonGroup.unobserveField("buttonSelected")
     if m.qrCode <> invalid
         m.qrCode.unobserveField("loadStatus")
     end if
@@ -122,6 +175,9 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
-    m.top.backPressed = true
-    return true
+    if key = "back"
+        m.top.backPressed = true
+        return true
+    end if
+    return false
 end function

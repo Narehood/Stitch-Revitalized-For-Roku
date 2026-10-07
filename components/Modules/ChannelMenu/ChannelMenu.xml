@@ -20,6 +20,8 @@
     <ButtonGroupHoriz id="MenuOptions" layoutDirection="horiz" horizAlignment="left" />
   </children>
   <interface>
+    <function name="onDestroy" />
+    <field id="supportsDisposal" type="boolean" value="true" />
     <field id="buttonFocused" alias="MenuOptions.buttonFocused" />
     <field id="buttonSelected" alias="MenuOptions.buttonSelected" />
     <field

@@ -14,6 +14,8 @@
     <ButtonGroupHoriz id="IconOptions" layoutDirection="horiz" horizAlignment="left" />
   </children>
   <interface>
+    <function name="onDestroy" />
+    <field id="supportsDisposal" type="boolean" value="true" />
     <field id="buttonFocused" type="int" value="-1" alwaysNotify="true" />
     <field id="buttonSelected" type="int" value="-1" alwaysNotify="true" />
     <field

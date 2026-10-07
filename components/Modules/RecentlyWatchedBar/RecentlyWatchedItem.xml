@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="RecentlyWatchedItem" extends="Group">
     <interface>
+        <function name="onDestroy" />
+        <field id="supportsDisposal" type="boolean" value="true" />
         <!-- Set all item data at once via a single AA field -->
         <field id="itemData" type="assocarray" onChange="onDataChanged" />
         <!-- Parent bar drives focus state -->

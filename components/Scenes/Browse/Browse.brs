@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.top.observeField("focusedChild", "onGetFocus")
     m.rowList = m.top.findNode("browseRowList")
     m.rowList.observeField("itemSelected", "onItemSelected")
@@ -386,6 +387,9 @@ end function
 ' ─── Cleanup ─────────────────────────────────────────────────────────────────
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     if m.rowList <> invalid
         m.rowList.unobserveField("itemSelected")

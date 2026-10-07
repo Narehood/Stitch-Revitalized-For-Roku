@@ -1,6 +1,14 @@
 sub init()
+    m.disposed = false
     m.chatPanel = m.top.findNode("chatPanel")
+    m.chatBackground = m.top.findNode("chatBackground")
+    m.chatStatus = m.top.findNode("chatStatus")
     m.maskgroup = m.top.findNode("maskGroup")
+    m.chat = invalid
+    m.EmoteJob = invalid
+    m.emoteChannel = ""
+    m.top.observeField("visible", "onInvisible")
+    onBackgroundColorChange()
     setChatPanelSize()
     setSizingParameters()
     ' determines how far down the screen the first message will appear
@@ -33,6 +41,11 @@ sub setSizingParameters()
 end sub
 
 sub setChatPanelSize()
+    m.chatPanel.width = m.top.width
+    m.chatPanel.height = m.top.height
+    m.chatBackground.width = m.top.width
+    m.chatBackground.height = m.top.height
+    m.chatStatus.width = m.top.width - 24
     m.font_size = m.top.fontSize
     m.translation = m.chatPanel.height - m.font_size
     m.lower_bound = m.chatPanel.height - m.font_size
@@ -41,43 +54,111 @@ sub setChatPanelSize()
 end sub
 
 sub onInvisible()
-    if m.top.visible = false
-        m.chat.control = "stop"
+    if m.disposed then return
+    if m.top.visible
+        startChatJob()
     else
-        m.chat.control = "run"
+        stopChatJob()
     end if
+end sub
+
+sub onBackgroundColorChange()
+    if m.chatPanel <> invalid then m.chatPanel.color = m.top.backgroundColor
+    if m.chatBackground <> invalid then m.chatBackground.color = m.top.backgroundColor
 end sub
 
 ' Stops the ChatJob (IRC) and EmoteJob tasks and releases their observers.
 ' Called from VideoPlayer.exitPlayer() so the IRC socket loop and emote
-' fetcher are torn down at user-initiated exit, not just when SceneGraph
-' eventually fires onDestroy.
+' fetcher are torn down at user-initiated exit and explicit component disposal.
 '
 ' Uses destroyTask() per AGENTS.md: unobserve first so any in-flight
 ' nextCommentObj callback is suppressed before the task thread halts.
 sub stopJobs()
-    m.chat = destroyTask(m.chat, "nextCommentObj")
+    stopChatJob()
     if m.EmoteJob <> invalid
-        m.EmoteJob.control = "stop"
-        m.EmoteJob = invalid
+        emoteJob = m.EmoteJob
+        m.EmoteJob = destroyTask(m.EmoteJob, "state")
+        m.top.removeChild(emoteJob)
     end if
 end sub
 
 sub onVideoChange()
-    if not m.top.control
-        m.chat.control = "stop"
-        m.top.control = true
-    end if
+    if m.disposed then return
+    stopChatJob()
+    if m.top.control and m.top.visible then startChatJob()
 end sub
 
 sub onEnterChannel()
-    m.chat = m.top.findnode("ChatJob")
+    if m.disposed then return
+    stopJobs()
+    for each message in m.chatPanel.getChildren(-1, 0)
+        m.chatPanel.removeChild(message)
+    end for
+    m.translation = m.lower_bound - m.line_height
+    m.emoteChannel = ""
+    if m.top.channel = "" then return
+    m.global.setField("emoteCache", {})
+    if m.top.visible then startChatJob()
+    startEmoteJob()
+end sub
+
+sub startChatJob()
+    if m.disposed then return
+    if m.chat <> invalid or m.top.channel = "" then return
+    m.chat = createObject("roSGNode", "ChatJob")
+    m.top.appendChild(m.chat)
     m.chat.forceLive = m.top.forceLive
+    m.chat.delaySeconds = m.top.delaySeconds
     m.chat.observeField("nextCommentObj", "onNewCommentObj")
+    m.chat.observeField("connectionState", "onConnectionStateChange")
     m.chat.channel = m.top.channel
-    m.chat.control = "stop"
+    updateChatStatus("connecting")
     m.chat.control = "run"
-    m.EmoteJob = m.top.findnode("EmoteJob")
+end sub
+
+sub stopChatJob()
+    if m.chat <> invalid
+        m.chat.stopRequested = true
+        destroyTask(m.chat, "nextCommentObj")
+        m.top.removeChild(m.chat)
+        m.chat = destroyTask(m.chat, "connectionState")
+    end if
+    m.top.connectionState = "stopped"
+    updateChatStatus("stopped")
+end sub
+
+sub onConnectionStateChange()
+    if m.chat <> invalid
+        m.top.connectionState = m.chat.connectionState
+        updateChatStatus(m.chat.connectionState)
+    end if
+end sub
+
+sub updateChatStatus(state as string)
+    if m.chatStatus = invalid then return
+    m.chatStatus.visible = state <> "connected" and state <> "stopped"
+    if state = "connecting"
+        m.chatStatus.text = "Connecting to chat..."
+    else if state = "reconnecting"
+        m.chatStatus.text = "Chat disconnected. Reconnecting..."
+    else if state = "unavailable"
+        m.chatStatus.text = "Chat is unavailable. Close and reopen chat to retry."
+    end if
+end sub
+
+sub onChatTimingChange()
+    if m.chat <> invalid
+        m.chat.forceLive = m.top.forceLive
+        m.chat.delaySeconds = m.top.delaySeconds
+    end if
+end sub
+
+sub startEmoteJob()
+    if m.disposed then return
+    if m.emoteChannel = m.top.channel then return
+    m.EmoteJob = createObject("roSGNode", "EmoteJob")
+    m.top.appendChild(m.EmoteJob)
+    m.emoteChannel = m.top.channel
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
     m.EmoteJob.control = "run"
@@ -144,7 +225,7 @@ end function
 function buildUsername(display_name, color)
     username = createObject("roSGNode", "SimpleLabel")
     username.text = display_name
-    if color = ""
+    if not createObject("roRegex", "^[A-Fa-f0-9]{6}$", "").isMatch(color)
         color = "FFFFFF"
     end if
     username.color = "0x" + color + "FF"
@@ -238,11 +319,21 @@ function buildMessage(message, x_translation)
 end function
 
 sub onNewCommentObj()
+    if m.chat = invalid then return
     m.chat.readyForNextComment = false
+    try
+        renderComment()
+    catch e
+        ' A malformed message or unavailable font must not stall every subsequent message.
+    end try
+    if m.chat <> invalid then m.chat.readyForNextComment = true
+end sub
+
+sub renderComment()
     if m.chat.nextCommentObj <> invalid
         comment = m.chat.nextCommentObj
         display_name = comment.tags.display_name
-        message = comment.parameters.trim()
+        message = comment.parameters
         color = ""
         if comment?.tags?.color <> invalid
             color = comment.tags.color.replace("#", "")
@@ -259,19 +350,18 @@ sub onNewCommentObj()
             for each emote in comment.tags.emotes.Items()
                 value = { starts: [], length: 0 }
                 for each emote_instance in emote.value
-                    value.starts.push(Val(emote_instance.startposition))
-                    value.length = (Val(emote_instance.endposition) - Val(emote_instance.startposition)) + 1
+                    value.starts.push(emote_instance.startposition)
+                    value.length = (emote_instance.endposition - emote_instance.startposition) + 1
                 end for
                 emote_set[emote.key] = value
             end for
         end if
 
-        quoteRegex = createObject("roRegex", "[\x{2018}\x{2019}]", "")
-        message = quoteRegex.replace(message, "'")
+        ' Preserve original character offsets until Twitch emote ranges have been consumed.
         for each emoticon in emote_set.Items()
             e_start = emoticon.value.starts[0]
             emote_word = Mid(message, (e_start + 1), emoticon.value.length)
-            if not m.global.emoteCache.DoesExist(emote_word)
+            if not m.global.emoteCache.DoesExist(emote_word) and m.global.emoteCache.count() < 10000
                 emoteCache = m.global.emoteCache
                 if not emoteCache.DoesExist(emote_word)
                     emoteCache[emote_word] = "https://static-cdn.jtvnw.net/emoticons/v2/" + emoticon.key + "/static/light/1.0"
@@ -281,7 +371,6 @@ sub onNewCommentObj()
         end for
 
         if display_name = "" or message = ""
-            m.chat.readyForNextComment = true
             return
         end if
 
@@ -311,6 +400,9 @@ sub onNewCommentObj()
         group.appendChild(message_group)
         group.translation = [m.left_bound, m.translation]
         m.chatPanel.appendChild(group)
+        if m.chatPanel.getChildCount() > 160
+            m.chatPanel.removeChild(m.chatPanel.getChild(0))
+        end if
         y_translation = group.localBoundingRect().height + m.line_gap
         if m.translation + y_translation > m.chatPanel.height
             for each chatmessage in m.chatPanel.getChildren(-1, 0)
@@ -324,13 +416,11 @@ sub onNewCommentObj()
             m.translation += (y_translation)
         end if
     end if
-    m.chat.readyForNextComment = true
 end sub
 
 sub onDestroy()
-    m.chat = destroyTask(m.chat, "nextCommentObj")
-    if m.EmoteJob <> invalid
-        m.EmoteJob.control = "stop"
-        m.EmoteJob = invalid
-    end if
+    if m.disposed then return
+    m.disposed = true
+    m.top.unobserveField("visible")
+    stopJobs()
 end sub

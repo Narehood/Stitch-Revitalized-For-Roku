@@ -8,11 +8,8 @@
 ' Global props (app_version, is_dev, is_logged_in) are injected automatically
 ' on every outbound event so call-sites never need to include them.
 '
-' Respects the "analytics.enabled" registry setting (opt-out, default true).
+' Requires explicit opt-in and a maintainer-configured destination.
 ' When disabled, events are silently dropped.
-
-const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/"
-const POSTHOG_API_KEY = "phc_xfHnhpGgpwjwRCPGDYUeoNGLaazv8uZLu4npYa3huN58"
 
 sub init()
     m.top.functionName = "analyticsLoop"
@@ -23,7 +20,8 @@ sub analyticsLoop()
     m.deviceInfo = CreateObject("roDeviceInfo")
 
     ' Read once at startup. Change takes effect on next app launch.
-    m.enabled = get_user_setting("analytics.enabled", "true") <> "false"
+    m.config = getAnalyticsConfiguration()
+    if m.config = invalid then return
 
     ' Per-event rate limit state: tracks last send time per event name.
     m.rateLimits = {}
@@ -35,8 +33,6 @@ sub analyticsLoop()
     while true
         msg = wait(0, m.port)
         if type(msg) <> "roSGNodeEvent" then continue while
-
-        if not m.enabled then continue while
 
         field = msg.getField()
         data = msg.getData()
@@ -68,7 +64,7 @@ sub sendCapture(data as object)
     mergedProps["distinct_id"] = getDistinctId()
 
     payload = {
-        api_key: POSTHOG_API_KEY,
+        api_key: m.config.apiKey,
         event: event,
         distinct_id: getDistinctId(),
         properties: mergedProps
@@ -83,7 +79,7 @@ sub sendIdentify(data as object)
     if setProps = invalid then setProps = {}
 
     payload = {
-        api_key: POSTHOG_API_KEY,
+        api_key: m.config.apiKey,
         event: "$identify",
         distinct_id: getDistinctId(),
         properties: {
@@ -162,7 +158,7 @@ sub sendException(err as object)
     mergedProps["$device_model"] = m.deviceInfo.GetModel()
 
     payload = {
-        api_key: POSTHOG_API_KEY,
+        api_key: m.config.apiKey,
         event: "$exception",
         distinct_id: distinctId,
         properties: mergedProps
@@ -181,11 +177,10 @@ function getGlobalProps() as object
     }
 end function
 
-' Returns the anonymous distinct_id for this device+channel pair.
-' roDeviceInfo.GetChannelClientId() is Roku-assigned, anonymous, per-channel.
+' Use a session identifier rather than a persistent device identifier.
 function getDistinctId() as string
     if m.distinctId = invalid
-        m.distinctId = m.deviceInfo.GetChannelClientId()
+        m.distinctId = m.deviceInfo.GetRandomUUID()
     end if
     return m.distinctId
 end function
@@ -194,14 +189,14 @@ end function
 ' We are already in a background Task thread so blocking is safe.
 ' Synchronous avoids the GC risk of async transfers without a retained port.
 sub postToPostHog(payload as object)
-    transfer = CreateObject("roUrlTransfer")
-    if transfer = invalid then return
-    transfer.SetUrl(POSTHOG_CAPTURE_URL)
-    transfer.SetRequest("POST")
-    transfer.AddHeader("Content-Type", "application/json")
-    transfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
-    transfer.InitClientCertificates()
-    transfer.PostFromString(FormatJson(payload))
+    request = HttpRequest({
+        url: m.config.captureUrl,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        data: payload,
+        timeout: 5000
+    })
+    request.send()
 end sub
 
 ' Returns true if this event name was already sent within the last 10 seconds.
@@ -213,6 +208,13 @@ function isRateLimited(event as string) as boolean
         elapsed = m.rateLimits[event].TotalSeconds()
         if elapsed < 10 then return true
     end if
+    if m.rateLimits.Count() >= 128 then m.rateLimits.Clear()
     m.rateLimits[event] = now
     return false
 end function
+
+sub onDestroy()
+    m.top.unobserveField("capture")
+    m.top.unobserveField("identify")
+    m.top.unobserveField("captureException")
+end sub

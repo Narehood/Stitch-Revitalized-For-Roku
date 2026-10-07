@@ -38,13 +38,12 @@ function TwitchGraphQLRequest(data)
         data: data
     })
     rspData = req.send()
-    if rspData <> invalid
-        rsp = ParseJSON(rspData)
-        return rsp
-    else
+    rsp = decodeJsonResponse(rspData)
+    if rsp = invalid
         trackEvent("api_error", { api: "graphql", reason: "network_failure" })
         return invalid
     end if
+    return rsp
 end function
 
 sub TwitchHelixApiRequest()
@@ -74,7 +73,7 @@ sub TwitchHelixApiRequest()
         requestParams["data"] = m.top.request.params.data
     end if
     req = HttpRequest(requestParams)
-    rsp = ParseJSON(req.send())
+    rsp = decodeJsonResponse(req.send())
     if rsp <> invalid
         m.top.response = rsp
     else

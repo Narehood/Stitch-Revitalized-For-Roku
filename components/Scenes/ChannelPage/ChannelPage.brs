@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     if m.global.constants <> invalid
         m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     end if
@@ -152,6 +153,9 @@ sub updateRowListFocusFeedback()
 end sub
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     m.rowlist.unobserveField("itemSelected")
     m.GetContentTask = destroyTask(m.GetContentTask, "response")

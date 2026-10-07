@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     ' Initialize UI elements
     m.top.enableUI = false
     m.top.enableTrickPlay = false
@@ -187,6 +188,7 @@ sub onContentChange()
 end sub
 
 sub onVideoStateChange()
+    if m.disposed then return
     ? getLogTimestamp(); " [StitchVideo][state] state="; m.top.state; " pos="; m.top.position
     if m.top.state = "playing"
         m.controlButton.uri = "pkg:/images/pause.png"
@@ -205,7 +207,7 @@ sub onVideoStateChange()
         ' error-driven retryPlayback) so we don't fight the conditions that
         ' caused the stall by immediately re-anchoring at the live edge.
         if m.top.suppressStartupSeek
-            ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason=recovery"
+            ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason=disabled_or_recovery"
             m.startupSeekFired = true
         else
             startLiveEdgeStartupTimer()
@@ -354,9 +356,7 @@ sub issueLiveEdgeSeek(reason as string)
         return
     end if
 
-    ' Pre-seek latency snapshot. preLatencyMs stays invalid when the
-    ' segment isn't ready yet — we still fire the seek in that case so
-    ' we don't regress behavior when latency is unmeasurable.
+    ' Only run the experiment with a measured live-edge distance.
     seg = m.top.streamingSegment
     preLatency = "?"
     preLatencyMs = invalid
@@ -364,13 +364,11 @@ sub issueLiveEdgeSeek(reason as string)
         preLatency = seg.latency.toStr()
         preLatencyMs = seg.latency
     end if
+    if preLatencyMs = invalid or preLatencyMs < 0 then return
 
     ' Skip the seek if we're already close enough to live. The seek's
-    ' empirically observed steady-state floor is ~20s behind live, so
-    ' firing when already at <30s buys us nothing — we've seen latency
-    ' actually increase by ~1s in that range. 30s gives ~10s headroom
-    ' above the floor so the seek is only fired when it can meaningfully
-    ' help.
+    ' conservative threshold is a guard against unnecessary rebuffering,
+    ' not a promise of latency or evidence from this modernization's QA.
     if preLatencyMs <> invalid and preLatencyMs < 30000
         ? getLogTimestamp(); " [StitchVideo][seek] action=skip reason="; reason; " pre_live_edge_ms="; preLatency; " already_near_live=true"
         trackEvent("live_edge_seek", {
@@ -445,6 +443,7 @@ sub onQualityButtonSelect()
 
     selectedIndex = m.qualityDialog.buttonSelected
     totalButtons = m.qualityDialog.buttons.count()
+    changeIndex = invalid
 
     ' Hide dialog first
     m.qualityDialog.visible = false
@@ -459,8 +458,7 @@ sub onQualityButtonSelect()
         ' ? "[StitchVideo] Quality selected: "; selectedQuality
 
         m.top.selectedQuality = selectedQuality
-        m.top.QualityChangeRequest = selectedIndex
-        m.top.QualityChangeRequestFlag = true
+        changeIndex = selectedIndex
     else
         ' ? "[StitchVideo] Invalid selection index: "; selectedIndex
     end if
@@ -473,6 +471,11 @@ sub onQualityButtonSelect()
         focusButton(m.currentFocusedButton)
         m.fadeAwayTimer.control = "stop"
         m.fadeAwayTimer.control = "start"
+    end if
+    ' Emit last: the parent may destroy this node during its callback.
+    if changeIndex <> invalid
+        m.top.QualityChangeRequest = changeIndex
+        m.top.QualityChangeRequestFlag = true
     end if
 end sub
 
@@ -633,6 +636,7 @@ sub showMessage(title as string, message as string, duration as float)
     ' Clear any existing auto-hide timer
     if m.messageTimer <> invalid
         m.messageTimer.control = "stop"
+        m.messageTimer.unobserveField("fire")
         m.messageTimer = invalid
     end if
 
@@ -652,6 +656,7 @@ sub hideMessage()
     end if
     if m.messageTimer <> invalid
         m.messageTimer.control = "stop"
+        m.messageTimer.unobserveField("fire")
         m.messageTimer = invalid
     end if
 end sub
@@ -760,6 +765,8 @@ function handleMainKeys(key) as boolean
 end function
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
     if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
         m.fadeAwayTimer.unobserveField("fire")
@@ -778,6 +785,7 @@ sub onDestroy()
     end if
     if m.qualityDialog <> invalid
         m.qualityDialog.unobserveFieldScoped("buttonSelected")
+        m.qualityDialog.visible = false
     end if
     m.top.unobserveField("position")
     m.top.unobserveField("state")
@@ -787,4 +795,8 @@ sub onDestroy()
     m.top.unobserveField("bufferingStatus")
     m.top.unobserveField("qualityOptions")
     m.top.unobserveField("selectedQuality")
+    if m.loadingSpinner <> invalid then m.loadingSpinner.control = "stop"
+    m.pendingSeekReason = invalid
+    m.pendingSeekOutcomePreMs = invalid
+    m.top.control = "stop"
 end sub

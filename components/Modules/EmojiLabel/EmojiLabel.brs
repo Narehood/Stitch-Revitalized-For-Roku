@@ -1,6 +1,7 @@
 ' Copyright Kasper Gammeltoft and other contributors. Licensed under MIT
 ' https://github.com/KasperGam/EmojiOnRoku/blob/main/LICENSE
 sub init()
+    m.disposed = false
     m.components = m.top.findNode("layout")
     m.top.observeField("text", "setText")
     m.animation = m.top.findNode("testAnimation")
@@ -38,6 +39,7 @@ sub onTimerFireChange() as void
 end sub
 
 sub doScroll()
+    if m.disposed then return
     if m.animation = invalid or m.timer = invalid then return
     if m.top.repeatCount <> invalid
         if m.top.repeatCount <> 0
@@ -314,6 +316,8 @@ end sub
 
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
     if m.timer <> invalid
         m.timer.control = "stop"
         m.timer.unobserveField("fire")

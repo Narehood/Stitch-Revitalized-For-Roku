@@ -1,13 +1,18 @@
 sub init()
-    analyticsTask = CreateObject("roSGNode", "AnalyticsTask")
-    analyticsTask.control = "RUN"
-    m.global.addFields({ analyticsTask: analyticsTask })
+    m.disposed = false
+    m.global.addField("analyticsTask", "node", false)
+    if getAnalyticsConfiguration() <> invalid
+        analyticsTask = CreateObject("roSGNode", "AnalyticsTask")
+        m.global.analyticsTask = analyticsTask
+        analyticsTask.control = "RUN"
+    end if
 
     m.validateOauthToken = createApiTask("validateOauthToken", "ValidateUserLogin")
     VersionJobs()
     m.top.backgroundUri = ""
     m.top.backgroundColor = m.global.constants.colors.hinted.grey1
     m.activeNode = invalid
+    m.footprints = []
     m.recentBar = m.top.findNode("recentlyWatchedBar")
     m.recentBar.observeField("contentSelected", "onRecentSelected")
     m.menu = m.top.findNode("MenuBar")
@@ -27,8 +32,6 @@ sub init()
     else
         onMenuSelection()
     end if
-    m.footprints = []
-
     sendAppOpenedEvents()
 end sub
 
@@ -61,35 +64,16 @@ sub sendAppOpenedEvents()
 end sub
 
 sub cleanUserData()
-    active_user = get_setting("active_user", "$default$")
-    if active_user <> "$default$"
-        unset_user_setting("access_token")
-        unset_user_setting("device_code")
-        ? "default Registry keys: "; getRegistryKeys("$default$")
-        NukeRegistry(active_user)
-        set_setting("active_user", "$default$")
-        ? "active User: "; get_setting("active_user", "$default$")
-    else
-        for each key in getRegistryKeys("$default$")
-            if key <> "temp_device_code" and key <> "device_code"
-                unset_user_setting(key)
-            end if
-        end for
-    end if
+    signOutAccount()
 end sub
 
 sub ValidateUserLogin()
-    if m.validateOauthToken?.response?.tokenValid <> invalid
-        tokenValid = m.validateOauthToken.response.tokenValid
-    else
-        tokenValid = false
-    end if
-    if tokenValid
-        ? "User Token Seems Valid"
-    else
+    if m.disposed then return
+    response = m.validateOauthToken?.response
+    if response = invalid then return
+    if response.validationState = "invalid"
         cleanUserData()
         m.menu.updateUserIcon = true
-        ? "pause"
     end if
 end sub
 
@@ -182,6 +166,7 @@ sub onChangelogDialogClosed()
 end sub
 
 sub handleDeviceCode()
+    if m.disposed then return
     if m.getDeviceCodeTask <> invalid
         response = m.getDeviceCodeTask.response
         if response = invalid then return
@@ -234,24 +219,28 @@ end function
 ' transitions don't leave stale, detached scenes wired up with observers.
 sub teardownAllScenes()
     if m.activeNode <> invalid
-        m.activeNode.unobserveField("backPressed")
-        m.activeNode.unobserveField("contentSelected")
-        m.activeNode.unobserveField("finished")
-        m.top.removeChild(m.activeNode)
+        discardScene(m.activeNode)
         m.activeNode = invalid
     end if
     for each node in m.footprints
-        if node <> invalid
-            node.unobserveField("backPressed")
-            node.unobserveField("contentSelected")
-            node.unobserveField("finished")
-            m.top.removeChild(node)
-        end if
+        discardScene(node)
     end for
     m.footprints = []
 end sub
 
+sub discardScene(node as dynamic)
+    if node = invalid then return
+    ' Suppress navigation callbacks before component cleanup changes fields.
+    node.unobserveField("backPressed")
+    node.unobserveField("contentSelected")
+    node.unobserveField("finished")
+    node.lastFocus = invalid
+    disposeNodeTree(node)
+    m.top.removeChild(node)
+end sub
+
 sub onLoginFinished()
+    if m.disposed then return
     m.menu.updateUserIcon = true
     if get_user_setting("device_code") = invalid
         m.getDeviceCodeTask = createApiTask("getRendezvouzToken", "handleDeviceCode")
@@ -264,6 +253,7 @@ sub onLoginFinished()
 end sub
 
 sub onLogoutFinished()
+    if m.disposed then return
     m.menu.updateUserIcon = true
     teardownAllScenes()
     ' Rebuild Settings so the logout option disappears
@@ -274,6 +264,7 @@ sub onLogoutFinished()
 end sub
 
 sub onMenuSelection()
+    if m.disposed then return
     menuItem = focusedMenuItem()
     if menuItem <> ""
         trackEvent("tab_visited", { tab: menuItem })
@@ -281,6 +272,7 @@ sub onMenuSelection()
     isFirstLoad = (m.activeNode = invalid)
     ' If user is already logged in, show them their user page
     if menuItem = "LoginPage" and get_setting("active_user", "$default$") <> "$default$"
+        if m.activeNode = invalid then return
         content = createObject("roSGNode", "TwitchContentNode")
         content.streamerDisplayName = get_user_setting("display_name")
         content.streamerLogin = get_user_setting("login")
@@ -291,8 +283,7 @@ sub onMenuSelection()
     else
         if m.menu.focusedChild = invalid then return
         if m.activeNode <> invalid and m.activeNode.id.toStr() <> menuItem
-            m.top.removeChild(m.activeNode)
-            m.activeNode = invalid
+            teardownAllScenes()
         end if
         if m.activeNode = invalid
             m.activeNode = buildNode(menuItem)
@@ -306,6 +297,7 @@ sub onMenuSelection()
 end sub
 
 sub onRecentSelected()
+    if m.disposed then return
     content = m.recentBar.contentSelected
     if content = invalid then return
 
@@ -330,6 +322,7 @@ sub onRecentSelected()
 end sub
 
 sub onContentSelected()
+    if m.disposed then return
     if m.activeNode = invalid or m.activeNode.contentSelected = invalid then return
     id = invalid
     if m.activeNode.contentSelected.contentType = "STREAMER"
@@ -342,6 +335,7 @@ sub onContentSelected()
     if m.activeNode.playContent = true
         id = "VideoPlayer"
     end if
+    if id = invalid then return
     holdContent = m.activeNode.contentSelected.getFields()
     content = createObject("roSGNode", "TwitchContentNode")
     setTwitchContentFields(content, holdContent)
@@ -365,10 +359,11 @@ sub onContentSelected()
 end sub
 
 sub onBackPressed()
+    if m.disposed or m.activeNode = invalid then return
     if m.activeNode.backPressed = invalid or not m.activeNode.backPressed then return
     if m.footprints.Count() > 0
         if m.activeNode <> invalid
-            m.top.removeChild(m.activeNode)
+            discardScene(m.activeNode)
         end if
         m.activeNode = m.footprints.pop()
         ' Restore focus to previously focused child if available
@@ -426,9 +421,14 @@ function onKeyEvent(key, press) as boolean
 end function
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
     if m.changelogDialog <> invalid
         m.changelogDialog.unobserveField("buttonSelected")
         m.changelogDialog.unobserveField("wasClosed")
+        if m.top.dialog <> invalid
+            if m.top.dialog.isSameNode(m.changelogDialog) then m.top.dialog = invalid
+        end if
         m.changelogDialog = invalid
     end if
     if m.recentBar <> invalid
@@ -437,18 +437,13 @@ sub onDestroy()
     if m.menu <> invalid
         m.menu.unobserveField("buttonSelected")
     end if
-    if m.activeNode <> invalid
-        m.activeNode.unobserveField("backPressed")
-        m.activeNode.unobserveField("contentSelected")
-        m.activeNode.unobserveField("finished")
-    end if
-    for each node in m.footprints
-        if node <> invalid
-            node.unobserveField("backPressed")
-            node.unobserveField("contentSelected")
-            node.unobserveField("finished")
-        end if
-    end for
+    teardownAllScenes()
+    disposeNodeTree(m.recentBar)
+    disposeNodeTree(m.menu)
     m.validateOauthToken = destroyTask(m.validateOauthToken, "response")
     m.getDeviceCodeTask = destroyTask(m.getDeviceCodeTask, "response")
+    if m.global.analyticsTask <> invalid
+        m.global.analyticsTask.control = "stop"
+        m.global.analyticsTask = invalid
+    end if
 end sub

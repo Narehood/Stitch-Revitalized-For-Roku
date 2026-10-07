@@ -7,6 +7,7 @@
 ' Items scroll vertically when history exceeds the visible window.
 
 sub init()
+    m.disposed = false
     m.icon = m.top.findNode("icon")
 
     ' Layout constants
@@ -33,8 +34,12 @@ end sub
 ' Build (or rebuild) item nodes from registry history.
 ' Called on init and by refresh timer.
 sub buildItems()
+    if m.disposed then return
     ' Remove previously created item children (children 2+ are items; 0=bg, 1=icon)
     if m.items.Count() > 0
+        for each item in m.items
+            item.callFunc("onDestroy")
+        end for
         m.top.removeChildren(m.items)
         m.items = []
     end if
@@ -85,6 +90,7 @@ end sub
 ' rsp is an AA: login (lowercase) -> boolean
 ' Always resets all dots first so a failed/empty response clears stale state.
 sub onLiveStatusResponse()
+    if m.disposed or m.liveStatusTask = invalid then return
     rsp = m.liveStatusTask.response
 
     ' Clear all dots unconditionally — empty AA means failure or all-offline.
@@ -209,7 +215,17 @@ sub updateItemVisibility()
 end sub
 
 sub onDestroy()
-    m.refreshTimer = destroyTask(m.refreshTimer, "fire")
+    if m.disposed then return
+    m.disposed = true
+    if m.refreshTimer <> invalid
+        m.refreshTimer.control = "stop"
+        m.refreshTimer.unobserveField("fire")
+        m.refreshTimer = invalid
+    end if
     m.liveStatusTask = destroyTask(m.liveStatusTask, "response")
     m.top.unobserveField("itemHasFocus")
+    for each item in m.items
+        item.callFunc("onDestroy")
+    end for
+    m.items = []
 end sub

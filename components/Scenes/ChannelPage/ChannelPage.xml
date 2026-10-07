@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="ChannelPage" extends="SceneManagerGroup">
     <interface>
+        <function name="onDestroy" />
         <field id="contentRequested" type="node" onChange="updatePage" />
         <field id="backgroundColor" type="string" alias="background.color, background2.color" />
         <field id="selectedItem" type="node" />

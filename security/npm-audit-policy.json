@@ -1,0 +1,14 @@
+{
+  "minimumSeverity": "high",
+  "exceptions": {
+    "GHSA-vfj7-8cjw-p6xm": {
+      "package": "braces",
+      "versions": ["3.0.3"],
+      "publishedLatest": "3.0.3",
+      "developmentOnly": true,
+      "expires": "2026-11-06T00:00:00Z",
+      "reason": "No patched release is published. Only fixed repository-owned glob patterns reach this build dependency; it is absent from the Roku package and proxy runtime. Remove the exception as soon as a compatible fix is available.",
+      "reference": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm"
+    }
+  }
+}

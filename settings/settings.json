@@ -22,7 +22,7 @@
                 "id": "highest"
             },
             {
-                "title": "Lowest (Minimal latency for live streams)",
+                "title": "Lowest (Uses less bandwidth)",
                 "id": "lowest"
             }
         ]
@@ -137,11 +137,18 @@
         ]
     },
     {
-        "title": "Anonymous Analytics",
-        "description": "Share anonymous usage data to help improve Stitch. No personal information is collected. Changes take effect on next app start.",
+        "title": "Optional diagnostics",
+        "description": "Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.",
         "settingName": "analytics.enabled",
         "type": "bool",
-        "default": "true"
+        "default": "false"
+    },
+    {
+        "title": "Lower live latency (experimental)",
+        "description": "Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.",
+        "settingName": "playback.lowLatency",
+        "type": "bool",
+        "default": "false"
     },
     {
         "title": "Proxy URL",

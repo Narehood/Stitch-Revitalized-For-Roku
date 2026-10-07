@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.itemlabel = m.top.findNode("itemLabel")
     m.itemmask = m.top.findNode("itemMask")
     m.timestampRect = m.top.findNode("timestampRect")
@@ -30,6 +31,7 @@ sub resetVisibility()
 end sub
 
 sub showcontent()
+    if m.disposed then return
     resetVisibility()
     GlobalSettings()
     if m.top.itemContent.contentType = "GAME"
@@ -161,6 +163,7 @@ sub UserSettings()
 end sub
 
 sub onGetFocus()
+    if m.disposed then return
     if m.top.itemHasFocus
         if m.itemLabel.localBoundingRect().width > m.itemLabel.maxWidth
             m.itemLabel.repeatCount = -1
@@ -171,5 +174,12 @@ sub onGetFocus()
 end sub
 
 sub showrowfocus()
+    if m.disposed then return
     m.itemmask.opacity = 0.75 - (m.top.rowFocusPercent * 0.75)
+end sub
+
+sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    if m.itemlabel <> invalid then m.itemlabel.callFunc("onDestroy")
 end sub

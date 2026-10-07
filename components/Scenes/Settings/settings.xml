@@ -1,5 +1,6 @@
 <component name="Settings" extends="SceneManagerGroup" initialFocus="categoryList">
     <interface>
+        <function name="onDestroy" />
         <field id="finished" type="bool" />
     </interface>
     <children>
@@ -64,5 +65,6 @@
     </children>
     <script type="text/brightscript" uri="settings.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
 </component>
