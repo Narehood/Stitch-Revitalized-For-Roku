@@ -138,6 +138,7 @@ sub fixtureSpendRecovery(count as integer)
     m.reconnectAttempts = count
 end sub
 `);
+    await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
 }
 
 async function buildChatPackage(dir, marker) {

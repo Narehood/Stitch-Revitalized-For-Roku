@@ -973,5 +973,45 @@
             <source>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</source>
             <translation>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</translation>
         </message>
+        <message>
+            <source>Roku playback stopped</source>
+            <translation>Roku playback stopped</translation>
+        </message>
+        <message>
+            <source>The previous playback session could not finish cleaning up. Restart Stitch before trying on Roku again.</source>
+            <translation>The previous playback session could not finish cleaning up. Restart Stitch before trying on Roku again.</translation>
+        </message>
+        <message>
+            <source>Roku playback unavailable</source>
+            <translation>Roku playback unavailable</translation>
+        </message>
+        <message>
+            <source>This stream could not start on Roku. Try again, choose another quality, or configure the optional audio service.</source>
+            <translation>This stream could not start on Roku. Try again, choose another quality, or configure the optional audio service.</translation>
+        </message>
+        <message>
+            <source>Playing on this Roku at {0}. Automatic uses a fixed quality.</source>
+            <translation>Playing on this Roku at {0}. Automatic uses a fixed quality.</translation>
+        </message>
+        <message>
+            <source>This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service.</source>
+            <translation>This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service.</translation>
+        </message>
+        <message>
+            <source>Play on this Roku</source>
+            <translation>Play on this Roku</translation>
+        </message>
+        <message>
+            <source>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</source>
+            <translation>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</translation>
+        </message>
+        <message>
+            <source>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</source>
+            <translation>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</translation>
+        </message>
+        <message>
+            <source>Try on Roku</source>
+            <translation>Try on Roku</translation>
+        </message>
     </context>
 </TS>

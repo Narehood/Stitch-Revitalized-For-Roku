@@ -982,5 +982,45 @@
             <extracomment>Translation awaits native-speaker review.</extracomment>
             <translation>No se pudieron seleccionar de forma segura los datos de calidad de la transmisión. Vuelve a abrir el vídeo para actualizarlos.</translation>
         </message>
+        <message>
+            <source>Roku playback stopped</source>
+            <translation type="unfinished">Reproducción en Roku detenida</translation>
+        </message>
+        <message>
+            <source>The previous playback session could not finish cleaning up. Restart Stitch before trying on Roku again.</source>
+            <translation type="unfinished">La sesión anterior no pudo terminar de liberar sus recursos. Reinicia Stitch antes de volver a probar en Roku.</translation>
+        </message>
+        <message>
+            <source>Roku playback unavailable</source>
+            <translation type="unfinished">Reproducción en Roku no disponible</translation>
+        </message>
+        <message>
+            <source>This stream could not start on Roku. Try again, choose another quality, or configure the optional audio service.</source>
+            <translation type="unfinished">Esta transmisión no pudo iniciarse en Roku. Inténtalo de nuevo, elige otra calidad o configura el servicio de audio opcional.</translation>
+        </message>
+        <message>
+            <source>Playing on this Roku at {0}. Automatic uses a fixed quality.</source>
+            <translation type="unfinished">Reproduciendo en este Roku a {0}. Automática usa una calidad fija.</translation>
+        </message>
+        <message>
+            <source>This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service.</source>
+            <translation type="unfinished">Esta transmisión no pudo continuar en Roku. Inténtalo de nuevo, elige otra calidad o configura el servicio de audio opcional.</translation>
+        </message>
+        <message>
+            <source>Play on this Roku</source>
+            <translation type="unfinished">Reproducir en este Roku</translation>
+        </message>
+        <message>
+            <source>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</source>
+            <translation type="unfinished">Esta transmisión combina audio y video. Stitch puede intentar separar las pistas en este Roku, sin una computadora ni un contenedor.</translation>
+        </message>
+        <message>
+            <source>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</source>
+            <translation type="unfinished">Este modo experimental usa una calidad fija y puede detenerse si cambia el formato de la transmisión. También puedes configurar el servicio de audio opcional en Ajustes.</translation>
+        </message>
+        <message>
+            <source>Try on Roku</source>
+            <translation type="unfinished">Probar en Roku</translation>
+        </message>
     </context>
 </TS>

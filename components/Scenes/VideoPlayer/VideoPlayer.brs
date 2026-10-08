@@ -1,7 +1,9 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    if m.rokuSession = invalid then initRokuPlayback()
     stopPlaybackForDialog()
+    m.rokuChosen = false
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     m.reconnectAttempts = 0
     m.recoveryAttempts = 0
@@ -18,6 +20,7 @@ sub handleContent()
     m.PlayVideo = CreateObject("roSGNode", "GetTwitchContent")
     m.PlayVideo.observeField("response", "OnResponse")
     m.PlayVideo.contentRequested = m.top.contentRequested.getFields()
+    enableRokuDescriptor(m.PlayVideo)
     m.PlayVideo.functionName = "main"
     m.PlayVideo.control = "run"
 end sub
@@ -72,7 +75,7 @@ sub onResponse()
 
     ' Warn before playing Enhanced Broadcasting (transmux) streams
     if m.top.content <> invalid and m.top.content.isTransmux = true
-        if m.top.content.isProxied = true
+        if m.top.content.isProxied = true or (m.top.content.playbackTransport = "roku-demux" and m.rokuChosen)
             playContent()
         else
             showTransmuxWarning()
@@ -125,8 +128,12 @@ sub onQualityChangeRequested()
     new_content.setFields(m.top.metadata[index]) ' Includes URL, proxy flags and query forwarding
     m.top.content = new_content ' Update the main content node for VideoPlayer
     m.allowBreak = false
-    exitPlayer() ' This will clean up the old video
-    playContent() ' This will play the new m.top.content
+    if m.rokuSessionId = "" then exitPlayer() ' The session owner stops a local Video before replacement.
+    if new_content.isTransmux and not new_content.isProxied and not m.rokuChosen
+        showTransmuxWarning()
+    else
+        playContent()
+    end if
     m.allowBreak = true
 end sub
 
@@ -146,6 +153,7 @@ end function
 ' change) leave isRecovery=false so they get the low-latency seek.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    if prepareRokuPlayback(isRecovery) then return
     ' Reset reconnect/watchdog state on every (re)start so stale values
     ' from a prior playback session don't cause false triggers.
     m.isExiting = false
@@ -319,7 +327,13 @@ sub playContent(isRecovery = false as boolean)
         ' after content is applied, and the gate is checked in
         ' StitchVideo's onVideoStateChange.
         if isLiveContent
-            m.video.suppressStartupSeek = isRecovery or get_user_setting("playback.lowLatency", "false") <> "true"
+            m.video.suppressStartupSeek = m.rokuSessionId <> "" or isRecovery or get_user_setting("playback.lowLatency", "false") <> "true"
+        end if
+        if m.rokuSessionId <> ""
+            if not m.rokuSession.callFunc("attachVideo", m.rokuSessionId, m.video)
+                showErrorDialog(tr("Roku playback stopped"), tr("This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service."))
+                return
+            end if
         end if
         m.video.content = contentNodeToPlay
 
@@ -390,8 +404,10 @@ sub exitPlayer()
     end if
 
     if m.allowBreak
-        m.top.state = "done"
-        m.top.backpressed = true ' Ensure this signals back correctly
+        if not stopRokuPlayback(true)
+            m.top.state = "done"
+            m.top.backpressed = true ' Ensure this signals back correctly
+        end if
     end if
 end sub
 
@@ -408,6 +424,7 @@ end function
 
 sub init()
     m.disposed = false
+    initRokuPlayback()
     m.bookmarksTask = m.top.findNode("bookmarksTask")
     m.chatWindow = m.top.findNode("chat")
     if m.chatWindow <> invalid
@@ -566,7 +583,9 @@ sub onVideoStateChange()
         ' A demux error must remain actionable rather than silently exiting.
         if errorMsg.InStr("buffer:loop:demux") > -1 or errorMsg.InStr("970") > -1
             if tryNativePlaybackFallback() then return
-            if m.top.content.isProxied
+            if m.rokuSessionId <> ""
+                showErrorDialog(tr("Roku playback stopped"), tr("This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service."))
+            else if m.top.content.isProxied
                 showErrorDialog(tr("Audio/video format problem"), tr("The demux service could not provide playable audio and video. Check the service connection and version, then try again."))
             else
                 ' Fails closed: retrying cannot help until the service is set up.
@@ -841,6 +860,7 @@ sub doLiveReconnect()
     m.reconnectTask = CreateObject("roSGNode", "GetTwitchContent")
     m.reconnectTask.observeField("response", "onLiveReconnectResponse")
     m.reconnectTask.contentRequested = m.top.contentRequested.getFields()
+    enableRokuDescriptor(m.reconnectTask)
     m.reconnectTask.functionName = "main"
     m.reconnectTask.control = "run"
 end sub
@@ -880,7 +900,7 @@ sub onLiveReconnectResponse()
             end for
         end if
     end if
-    if refreshedContent.isTransmux
+    if refreshedContent.isTransmux and not (refreshedContent.playbackTransport = "roku-demux" and m.rokuChosen)
         showTransmuxWarning()
         return
     end if
@@ -1067,6 +1087,7 @@ sub retryAfterError()
     m.PlayVideo = CreateObject("roSGNode", "GetTwitchContent")
     m.PlayVideo.observeField("response", "OnResponse")
     m.PlayVideo.contentRequested = m.top.contentRequested.getFields()
+    enableRokuDescriptor(m.PlayVideo)
     m.PlayVideo.functionName = "main"
     m.PlayVideo.control = "run"
 end sub
@@ -1087,10 +1108,19 @@ end sub
 
 sub showTransmuxWarning()
     stopPlaybackForDialog()
+    closeTransmuxDialog()
     dialog = createObject("roSGNode", "StandardMessageDialog")
-    dialog.title = tr("Audio service needed")
-    dialog.message = [tr("This stream combines audio and video in CMAF segments. Roku needs separate tracks."), tr("Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream."), tr("The service runs directly in Python or in Docker; it does not re-encode your video.")]
-    dialog.buttons = [tr("Back")]
+    if canTryRokuPlayback()
+        dialog.title = tr("Play on this Roku")
+        dialog.message = [tr("This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container."), tr("This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.")]
+        dialog.buttons = [tr("Try on Roku"), tr("Back")]
+        m.transmuxDialogActions = ["roku", "back"]
+    else
+        dialog.title = tr("Audio service needed")
+        dialog.message = [tr("This stream combines audio and video in CMAF segments. Roku needs separate tracks."), tr("Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream."), tr("The service runs directly in Python or in Docker; it does not re-encode your video.")]
+        dialog.buttons = [tr("Back")]
+        m.transmuxDialogActions = ["back"]
+    end if
     applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "onTransmuxDialogButton")
     dialog.observeField("wasClosed", "onTransmuxDialogClosed")
@@ -1102,22 +1132,22 @@ sub showTransmuxWarning()
 end sub
 
 sub onTransmuxDialogButton()
-    scene = m.top.getScene()
-    if scene <> invalid and scene.dialog <> invalid
-        scene.dialog.close = true
+    if m.disposed or m.transmuxDialog = invalid then return
+    index = m.transmuxDialog.buttonSelected
+    action = "back"
+    if index >= 0 and index < m.transmuxDialogActions.count() then action = m.transmuxDialogActions[index]
+    closeTransmuxDialog()
+    if action = "roku" and canTryRokuPlayback()
+        m.rokuChosen = true
+        playContent()
+    else
+        exitPlayer()
     end if
 end sub
 
 sub onTransmuxDialogClosed()
-    if m.transmuxDialog <> invalid
-        m.transmuxDialog.unobserveField("buttonSelected")
-        m.transmuxDialog.unobserveField("wasClosed")
-        m.transmuxDialog = invalid
-    end if
-    scene = m.top.getScene()
-    if scene <> invalid
-        scene.dialog = invalid
-    end if
+    if m.transmuxDialog = invalid then return
+    closeTransmuxDialog()
     exitPlayer()
 end sub
 
@@ -1162,6 +1192,7 @@ end function
 sub stopPlaybackForDialog()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     cleanupReconnectTask()
+    ignored = stopRokuPlayback()
     if m.video <> invalid then m.video.control = "stop"
     if m.watchdogTimer <> invalid then m.watchdogTimer.control = "stop"
     if m.bufferCheckTimer <> invalid
@@ -1210,6 +1241,7 @@ sub onDestroy()
     if m.disposed then return
     m.disposed = true
     m.isExiting = true
+    destroyRokuPlayback()
     m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
     stopPlaybackForDialog()
     if m.watchdogTimer <> invalid then m.watchdogTimer.unobserveField("fire")

@@ -1,5 +1,6 @@
 sub init()
     m.disposed = false
+    m.top.localPlaybackSession = m.top.findNode("rokuPlaybackSession")
     m.global.addField("analyticsTask", "node", false)
     if getAnalyticsConfiguration() <> invalid
         analyticsTask = CreateObject("roSGNode", "AnalyticsTask")
@@ -337,6 +338,7 @@ sub onLoginFinished()
         startDeviceCode()
     end if
     teardownAllScenes()
+    if m.top.localPlaybackSession <> invalid then m.top.localPlaybackSession.callFunc("onDestroy")
     m.activeNode = buildNode("Following")
     if m.activeNode <> invalid
         m.menu.activeItem = "Following"

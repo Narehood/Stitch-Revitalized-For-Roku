@@ -16,6 +16,7 @@
         <field id="ChatStarted" type="bool" value="false" />
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
+    <script type="text/brightscript" uri="RokuPlayback.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />

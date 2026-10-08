@@ -32,6 +32,10 @@ The playback query now has a guarded, default-off local descriptor path. It pres
 
 ## Playback and audio
 
+The guarded full-app adapter is now implemented locally. An eligible combined AVC/AAC stream offers **Try on Roku**; accepting it starts one Task-owned splitter/server retained by a scene-owned session manager. The default server flag remains off, and merely preparing a descriptor performs no conversion. A real Video is attached before play; Back, retry and quality changes retain the previous owner until actual stop and safe cleanup. Automatic selects a fixed offered quality, preferring at most 720p. Explicit experimental cache budgets are 16 MiB at or below 720p and 32 MiB above it. Direct playback and the optional Python path remain available. No OS baseline or saved preference changes are introduced.
+
+Local formatting/check, lint, package, Rooibos compilation and nine offline suites /39 Node tests pass. New portable checks execute 451 server assertions, 143 real session-handler assertions and 137 real player-handler assertions at explicit transport/decoder/session boundaries. Grok's valid timer-replacement defect is fixed and mutation-tested; blocked cleanup has actionable restart copy without fabricated acknowledgment. Native full-app Auto/manual quality/Back/repeated-open, memory and broader device acceptance remain pending. This checkpoint does not transfer private-driver proof to the newly integrated application.
+
 Record packaging, codec, resolution, frame rate and whether the service was used. Use public streams and legitimate signed-in access where required; never bypass access restrictions.
 
 | Check | Expected behavior | Result / evidence |
