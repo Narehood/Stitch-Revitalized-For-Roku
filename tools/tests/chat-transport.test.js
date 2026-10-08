@@ -1,0 +1,117 @@
+'use strict';
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { spawn } = require('node:child_process');
+
+const root = path.resolve(__dirname, '../..');
+const production = path.join(root, 'components/Modules/Chat/ChatJob/ChatJob.brs');
+const fixture = path.join(__dirname, 'fixtures/chat-transport/main.brs');
+const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
+const prefix = 'stitch-chat-transport-';
+
+function extractTransport(source) {
+    assert.equal([...source.matchAll(/^function\s+openChatTransport\b/gim)].length, 1);
+    const matches = [...source.matchAll(/^function openChatTransport\(\) as dynamic\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
+    assert.equal(matches.length, 1, 'expected one complete production transport function');
+    const body = matches[0][0];
+    assert.equal([...body.matchAll(/^(?:sub|function)\b/gim)].length, 1, 'extraction crossed a function boundary');
+    return body;
+}
+
+function extractConnection(source) {
+    const matches = [...source.matchAll(/^sub runChatConnection\(transport as object\)\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
+    assert.equal(matches.length, 1, 'expected one complete production connection function');
+    assert.equal([...matches[0][0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
+    return matches[0][0];
+}
+
+async function runFixture(body, connection = '') {
+    // The interpreter has no native TCP/WebSocket implementation. Replace only
+    // object creation and waiting with explicit, deterministic OS boundaries.
+    // All production connection decisions, deadlines and cleanup execute.
+    const combined = body + '\n' + connection;
+    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, connection ? 9 : 4);
+    assert.equal([...combined.matchAll(/\bwait\(/gi)].length, connection ? 2 : 1);
+    const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(');
+    const marker = `STITCH_CHAT_TRANSPORT_PASS_${randomUUID()}`;
+    const main = (await fs.readFile(fixture, 'utf8')).replace('__PASS_MARKER__', marker)
+        .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    try {
+        await fs.writeFile(path.join(dir, 'transport.brs'), bounded);
+        await fs.writeFile(path.join(dir, 'main.brs'), main);
+        await fs.copyFile(path.join(root, 'source/utils/ircParser.brs'), path.join(dir, 'ircParser.brs'));
+        return await new Promise((resolve, reject) => {
+            const child = spawn(process.execPath, [cli, '--no-sg', '--root', dir, 'transport.brs', 'ircParser.brs', 'main.brs'],
+                { cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+            let output = '', bytes = 0, excessive = false, timedOut = false, startup;
+            const timeout = setTimeout(() => { timedOut = true; child.kill(); }, 15000);
+            const collect = data => {
+                bytes += data.length;
+                if (bytes > 1024 * 1024) { excessive = true; child.kill(); return; }
+                output += data.toString();
+            };
+            child.stdout.on('data', collect);
+            child.stderr.on('data', collect);
+            child.once('error', error => { startup = error; });
+            child.once('close', code => {
+                clearTimeout(timeout);
+                if (startup || timedOut || excessive || code !== 0) reject(Error(`Transport fixture process failed: ${startup || code}\n${output.slice(-10000)}`));
+                else resolve({ output, marker });
+            });
+        });
+    } finally {
+        assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(dir).startsWith(prefix) && path.basename(dir).length > prefix.length);
+        await fs.rm(dir, { recursive: true, force: true });
+    }
+}
+
+function acceptResult({ output, marker }) {
+    assert.doesNotMatch(output, /STITCH_CHAT_TRANSPORT_FAIL:|\bERROR\b|runtime error|EXIT_BRIGHTSCRIPT_CRASH|BrightScript Debugger/i, output.slice(-10000));
+    const summaries = output.split(/\r?\n/).filter(line => line.startsWith(`${marker}:`));
+    assert.equal(summaries.length, 1, 'expected one fresh nonzero assertion summary');
+    const count = summaries[0].match(/:\s*(\d+) assertions$/);
+    assert.ok(count && Number(count[1]) > 0, 'zero or malformed assertion count');
+    return Number(count[1]);
+}
+
+test('actual chat transport accepts writable TCP despite stale connected status and preserves failure/stop/TLS guards', async t => {
+    const body = extractTransport(await fs.readFile(production, 'utf8'));
+    const count = acceptResult(await runFixture(body));
+    t.diagnostic(`${count} actual transport assertions with simulated socket/time boundaries; native Twitch delivery is verified separately`);
+});
+
+test('the old connected-status gate is rejected even when BrightScript exits normally', async () => {
+    const body = extractTransport(await fs.readFile(production, 'utf8'));
+    const gate = 'if socket.isWritable() and socket.eOK()';
+    assert.equal(body.split(gate).length - 1, 1, 'mutation must target one production TCP gate');
+    const result = await runFixture(body.replace(gate, 'if socket.isConnected() and socket.isWritable()'));
+    assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: writable TCP with stale connected status must be usable/);
+    assert.throws(() => acceptResult(result));
+});
+
+test('actual TCP connection survives stale read readiness and still exits on EOF/error/stop', async t => {
+    const source = await fs.readFile(production, 'utf8');
+    const count = acceptResult(await runFixture(extractTransport(source), extractConnection(source)));
+    t.diagnostic(`${count} transport/receive assertions; real IRC parser with canned nonblocking socket results`);
+});
+
+test('the old empty-buffer disconnect rejects the pending-read case', async () => {
+    const source = await fs.readFile(production, 'utf8');
+    const connection = extractConnection(source);
+    const read = /^            if transport\.socket\.getCountRcvBuf\(\) > 0 or transport\.socket\.isReadable\(\)\r?\n[\s\S]*?^            if not transport\.socket\.eOK\(\) then return$/m;
+    assert.equal([...connection.matchAll(new RegExp(read.source, 'gm'))].length, 1);
+    const old = '            if transport.socket.getCountRcvBuf() > 0\n' +
+        '                chunk = transport.socket.receiveStr(4096)\n' +
+        '            else if transport.socket.isReadable() or not transport.socket.eOK()\n' +
+        '                return\n            end if';
+    const result = await runFixture(extractTransport(source), connection.replace(read, old));
+    assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: pending read must allow subsequent welcome and chat packet/);
+    assert.throws(() => acceptResult(result));
+});

@@ -10,7 +10,7 @@ For each device, record model name/number, Roku OS, display resolution, network 
 |---|---|---|
 | Existing OS 15.1-compatible device, AVC fallback | G204X, 6Series-58 TV, OS 15.3.4 build 2303 | Installation and 120-test run passed; diagnostic live AVC/AAC picture and sound confirmed for one stream |
 | HEVC-capable device, genuine 1440p broadcast | G204X reports HEVC main and main 10 at level 5.0 supported | Actual 1440p broadcast playback pending |
-| Device exposing native secure WebSocket IRC | G204X creates a native WebSocket object | TLS handshake and live message delivery pending |
+| Device permitting native secure WebSocket IRC | G204X creates the object but OS 15.3.4 rejects opening it with error 29 | Secure WebSocket acceptance pending on a permitting device/OS; anonymous TCP module verified below |
 
 One device can cover several groups. Unrepresented groups stay pending. Preserve the OS minimum unless verified evidence justifies a documented change.
 
@@ -65,11 +65,19 @@ Proxy health proves reachability. Synthetic demux tests cannot establish decoder
 
 ## Chat, accounts and remote navigation
 
+October 8 native chat verification exposed two TCP bugs on the G204X. `isConnected()` remained false even after the socket received Twitch's welcome, joined the channel and received messages. Separately, readable readiness remained set after draining the capability reply; a subsequent empty nonblocking receive returned EAGAIN (status 11), which the original empty-buffer shortcut treated as a disconnected peer. The repair uses writable readiness with the existing bounded login/welcome checks, and distinguishes pending reads from successful empty EOF and hard errors. TLS verification, anonymous-only plaintext login, cancellation and finite recovery remain intact.
+
+A fresh 48-second private scene used the production ChatJob and Chat renderer byte-for-byte, with read-only snapshots in an inherited probe. It recorded 15 connected samples before hiding chat, three hidden samples with the first chat task stopped, and 27 connected samples after reopening with a fresh running task. Rendered message count increased from two before hiding to four afterward. Explicit disposal stopped both retained tasks, released their component references and cleared the name-color cache; the regular application package was restored. This verifies the anonymous module, hide/show and bounded teardown, not full-player integration, emote-provider coverage, TV readability, sustained reconnect or signed-in chat.
+
+The same TV creates `roWebSocket` but opening it returns native error 29, "WebSockets are not allowed." A certificate-verified HTTPS request to the same Twitch host completes with HTTP 400; that result does not establish WebSocket permission. The working anonymous TCP fallback preserves the device baseline. Secure WebSocket chat still requires separate device acceptance.
+
+The regression executes 23 assertions against current transport/receive functions with explicit socket/time boundaries and the real IRC parser. Both historical connection-gate and empty-buffer mutations fail the fixture despite normal interpreter exit. All nine offline suites and 49 Node tests pass, along with formatting/check, lint, packaging and Rooibos compilation. These modeled regressions supplement the native run; they do not replace it.
+
 | Check | Expected behavior | Result / evidence |
 |---|---|---|
-| Anonymous live chat | Messages/emotes; readable status and bounded reconnect | Pending |
+| Anonymous live chat | Messages/emotes; readable status and bounded reconnect | Native message rendering and hide/show verified; full player, emotes, readability and sustained reconnect pending |
 | Signed-in secure chat | Credentials used only by secure transport; correct account state | Pending |
-| Older anonymous IRC fallback | No account token sent; usable chat | Pending |
+| Older anonymous IRC fallback | No account token sent; usable chat | Production anonymous module received/rendered four messages on OS 15.3.4; full player/readability pending |
 | Hide/show, channel changes and network interruption | Correct channel, one active connection, no stale messages | Pending |
 | VOD/clip chat button | Unavailable-chat notice; no recorded playback joined to live chat | Pending |
 | Login pending / denied / expired / network error | Useful retry/browse options; no endless poll | Pending |
@@ -97,4 +105,4 @@ Keep the experiment off by default. If unreliable on a capability group, adjust 
 
 ## Release decision
 
-Complete the native UI, both requested independent reviews, CI and this record before describing the modernization as usable on tested hardware. Record untested device groups and limitations in the PR. Keep the PR draft while required checks are pending; do not merge automatically.
+Complete the remaining native acceptance, CI and this record before declaring release readiness. Further Kimi and Grok rounds are deferred at the user's request; preserve completed reviews and explicitly incomplete newer coverage. Record untested device groups and limitations in the PR. Keep the PR draft while required checks are pending; do not merge automatically.

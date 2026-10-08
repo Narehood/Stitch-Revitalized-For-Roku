@@ -37,7 +37,9 @@ function openChatTransport() as dynamic
     socket.connect()
     deadline = createObject("roTimespan")
     while deadline.totalMilliseconds() < 8000 and not m.top.stopRequested
-        if socket.isConnected() and socket.isWritable()
+        ' Some Roku OS versions keep isConnected() false after a successful TCP
+        ' handshake. Writable readiness starts our bounded login/welcome checks.
+        if socket.isWritable() and socket.eOK()
             socket.notifyWritable(false)
             return { socket: socket, secure: false }
         end if
@@ -144,11 +146,13 @@ sub runChatConnection(transport as object)
                 end if
             end if
         else
-            if transport.socket.getCountRcvBuf() > 0
+            if transport.socket.getCountRcvBuf() > 0 or transport.socket.isReadable()
                 chunk = transport.socket.receiveStr(4096)
-            else if transport.socket.isReadable() or not transport.socket.eOK()
-                return
+                ' Readiness can remain set after draining a packet. Only an empty
+                ' successful receive is EOF; EAGAIN still allows later messages.
+                if chunk = "" and transport.socket.eSuccess() then return
             end if
+            if not transport.socket.eOK() then return
         end if
         if chunk <> ""
             if chunk.len() > 65536 then return
