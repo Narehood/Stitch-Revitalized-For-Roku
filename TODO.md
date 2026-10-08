@@ -5,7 +5,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
 | P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
-| P1 | Finish independent review acceptance | Kimi's full review found no blockers; verify the fragment-reference follow-up. Grok's final review remains open after provider startup failures; hardware gates remain open |
+| P1 | Complete focused clip-correction review acceptance | Both full reviews found no blockers; the valid clip fallback fix passes actual-function regressions and project checks; focused follow-up and hardware gates remain open |
 | P1 | Remove temporary build dependency exception when patched | Exact policy expires November 6, 2026; new advisory/version/patch fails CI until reviewed |
 | P2 | Handle declared external launch/deep-link input | Manifest advertises input launch; main does not dispatch launch content |
 | P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |

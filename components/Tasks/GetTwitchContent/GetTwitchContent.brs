@@ -261,15 +261,24 @@ function getClipUrlViaGraphQL(slug as string) as dynamic
     clip = rsp.data.clip
     if GetInterface(clip.videoQualities, "ifArray") = invalid then return invalid
     best = invalid
+    lowest = invalid
     for each quality in clip.videoQualities
-        if quality.sourceURL <> invalid and quality.sourceURL <> "" and Val(quality.quality) <= 1080
-            if best = invalid
-                best = quality
-            else if Val(quality.quality) > Val(best.quality)
-                best = quality
+        if quality.sourceURL <> invalid and quality.sourceURL <> ""
+            if lowest = invalid
+                lowest = quality
+            else if Val(quality.quality) < Val(lowest.quality)
+                lowest = quality
+            end if
+            if Val(quality.quality) <= 1080
+                if best = invalid
+                    best = quality
+                else if Val(quality.quality) > Val(best.quality)
+                    best = quality
+                end if
             end if
         end if
     end for
+    if best = invalid then best = lowest
     if best = invalid then return invalid
     url = best.sourceURL
     token = clip.playbackAccessToken
