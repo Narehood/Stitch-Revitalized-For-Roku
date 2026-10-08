@@ -1,98 +1,104 @@
 [
     {
-        "title": "Support Stitch",
-        "description": "Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!",
-        "settingName": "support",
+        "title": "Sign out",
+        "description": "Signing out keeps your settings and recent channels on this Roku. You can still watch public streams.",
+        "settingName": "logout",
         "type": "action",
-        "action": "support_stitch"
+        "action": "logout"
     },
     {
-        "title": "Preferred Video Quality",
-        "description": "Determines the default behavior of video quality selection when starting a stream.",
+        "title": "Video quality",
+        "description": "The quality a stream starts at. You can change it while watching with the Quality button.",
         "settingName": "playback.video.quality",
         "type": "radio",
         "default": "auto",
         "options": [
             {
-                "title": "Automatic (Adjust based on network conditions)",
+                "title": "Automatic",
                 "id": "auto"
             },
             {
-                "title": "Highest (Choose highest possible option)",
+                "title": "Highest available",
                 "id": "highest"
             },
             {
-                "title": "Lowest (Uses less bandwidth)",
+                "title": "Lowest (uses less data)",
                 "id": "lowest"
             }
         ]
     },
     {
-        "title": "Chat On-By-Default",
-        "description": "Determines default state of chat window when opening a stream",
+        "title": "Lower live latency",
+        "description": "Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.",
+        "experimental": true,
+        "settingName": "playback.lowLatency",
+        "type": "bool",
+        "default": "false"
+    },
+    {
+        "title": "Show chat when a stream starts",
+        "description": "Opens live chat beside the video. You can show or hide chat while watching. Chat is available for live streams.",
         "settingName": "ChatOption",
         "type": "bool",
         "default": "false"
     },
-
     {
-        "title": "Chat Font Size",
-        "description": "Base font size for chat while watching a stream. Emotes/Badges/Etc scale based on this value.",
+        "title": "Chat text size",
+        "description": "Size of chat messages. Emotes and badges scale with it.",
         "settingName": "ChatFontSize",
         "type": "radio",
-        "default": "14",
+        "default": "16",
         "options": [
             {
-                "title": "10",
+                "title": "Extra small (10)",
                 "id": "10"
             },
             {
-                "title": "12",
+                "title": "Small (12)",
                 "id": "12"
             },
             {
-                "title": "14",
+                "title": "Medium (14)",
                 "id": "14"
             },
             {
-                "title": "16",
+                "title": "Large (16)",
                 "id": "16"
             },
             {
-                "title": "18",
+                "title": "Extra large (18)",
                 "id": "18"
             },
             {
-                "title": "20",
+                "title": "Largest (20)",
                 "id": "20"
             }
         ]
     },
-
     {
-        "title": "BetterTTV Emotes",
-        "description": "Enables or Disables BetterTTV Emotes",
+        "title": "BetterTTV emotes",
+        "description": "Show BetterTTV emotes in live chat.",
         "settingName": "BetterTTVEmote",
         "type": "bool",
         "default": "true"
     },
     {
-        "title": "7TV Emotes",
-        "description": "Enables or Disables 7TV Emotes",
+        "title": "7TV emotes",
+        "description": "Show 7TV emotes in live chat.",
         "settingName": "7tvEmote",
         "type": "bool",
         "default": "true"
     },
     {
-        "title": "FrankerFaceZ Emotes",
-        "description": "Enables or Disables FrankerFaceZ Emotes",
+        "title": "FrankerFaceZ emotes",
+        "description": "Show FrankerFaceZ emotes in live chat.",
         "settingName": "FFZEmote",
         "type": "bool",
         "default": "true"
     },
     {
-        "title": "Live Channel Sorting",
-        "description": "Determines how the LiveChannels page results are sorted.",
+        "title": "Browse: live channel order",
+        "description": "How live channels are ordered on the Browse page.",
         "settingName": "LiveChannelSorting",
         "type": "radio",
         "default": "VIEWER_COUNT",
@@ -116,8 +122,8 @@
         ]
     },
     {
-        "title": "Offline Follow Sorting",
-        "description": "Determines how the offline channels on the following page are sorted.",
+        "title": "Following: offline channel order",
+        "description": "How offline channels you follow are ordered on the Following page.",
         "settingName": "FollowPageSorting",
         "type": "radio",
         "default": "streamerLogin",
@@ -137,6 +143,13 @@
         ]
     },
     {
+        "title": "Demux service URL (optional)",
+        "description": "Some Twitch streams package audio and video together in a way Roku can't play directly. If you run Stitch's optional demux service on your network, enter its address, for example http://192.168.1.20:8080. Leave empty to turn it off.",
+        "settingName": "proxy.url",
+        "type": "text",
+        "default": ""
+    },
+    {
         "title": "Optional diagnostics",
         "description": "Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.",
         "settingName": "analytics.enabled",
@@ -144,24 +157,10 @@
         "default": "false"
     },
     {
-        "title": "Lower live latency (experimental)",
-        "description": "Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.",
-        "settingName": "playback.lowLatency",
-        "type": "bool",
-        "default": "false"
-    },
-    {
-        "title": "Proxy URL",
-        "description": "URL of the fmp4-demux-proxy server for Enhanced Broadcasting streams (e.g. http://192.168.1.x:8080). Leave empty to disable.",
-        "settingName": "proxy.url",
-        "type": "text",
-        "default": ""
-    },
-    {
-        "title": "Log Out",
-        "description": "Sign out of your Twitch account.",
-        "settingName": "logout",
+        "title": "Support Stitch",
+        "description": "Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!",
+        "settingName": "support",
         "type": "action",
-        "action": "logout"
+        "action": "support_stitch"
     }
 ]

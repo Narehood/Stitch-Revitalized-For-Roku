@@ -292,7 +292,7 @@ sub testMenu(scene as object, fixtureGlobal as object)
     fixtureGlobal.fixtureSigned = true
     s.icons.buttonFocused = 1
     s.icons.buttonFocused = 2
-    check(s.label.text = "Fixture Viewer", "signed-in account caption uses the supplied display name")
+    check(s.label.text = "Account · Fixture Viewer", "signed-in account caption names the Account panel and supplied display name")
     s.tabs.setFocus(true)
     check(not s.caption.visible, "leaving icon focus hides the menu caption")
     oldColor = s.tabs.getChild(0).textColor

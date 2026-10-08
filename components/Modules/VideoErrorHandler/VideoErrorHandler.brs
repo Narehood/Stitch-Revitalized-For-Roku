@@ -281,66 +281,69 @@ function getErrorStatistics() as object
     return stats
 end function
 
+' Copy for the playback error dialog. Classification is unchanged; the dialog
+' offers Try again and Back. A 401/403 only says Twitch refused this video:
+' public streams play without an account, so it never claims sign-in is needed.
 function getUserFriendlyErrorMessage(errorCode as integer, errorType as string) as object
     messages = {
         "connection_error": {
-            title: "Connection Problem",
-            message: "Unable to connect to the stream. Please check your internet connection and try again.",
-            suggestion: "Check your network connection"
+            title: tr("Can't connect to the stream"),
+            message: tr("Stitch lost its connection to Twitch while loading this video."),
+            suggestion: tr("Check your internet connection, then try again.")
         },
         "buffer_timeout": {
-            title: "Stream Loading Issue",
-            message: "The stream is taking too long to load. This may be due to network congestion.",
-            suggestion: "Try selecting a lower video quality"
+            title: tr("The stream is loading slowly"),
+            message: tr("The video took too long to load. The network may be busy."),
+            suggestion: tr("Try again, or choose a lower video quality.")
         },
         "stream_unavailable": {
-            title: "Stream Unavailable",
-            message: "This stream is temporarily unavailable. The broadcaster may have ended the stream.",
-            suggestion: "Try refreshing or check back later"
+            title: tr("Stream unavailable"),
+            message: tr("This stream isn't available right now. The broadcaster may have ended it."),
+            suggestion: tr("Try again in a moment, or check back later.")
         },
         "stream_not_found": {
-            title: "Stream Not Found",
-            message: "This stream could not be found. It may have been deleted or moved.",
-            suggestion: "Return to browse for other streams"
+            title: tr("Couldn't find this stream"),
+            message: tr("It may have been deleted or moved."),
+            suggestion: tr("Go back and choose another stream.")
         },
         "authentication_error": {
-            title: "Authentication Required",
-            message: "You need to sign in again to access this content.",
-            suggestion: "Please sign in to continue"
+            title: tr("Twitch didn't authorize this video"),
+            message: tr("It may need a Twitch account or have other restrictions, such as subscriber-only access."),
+            suggestion: tr("Public streams play without signing in. Try again, or choose another video.")
         },
         "excessive_buffering": {
-            title: "Playback Issue",
-            message: "The stream is experiencing frequent interruptions.",
-            suggestion: "Try lowering the video quality or check your connection speed"
+            title: tr("Playback keeps stopping"),
+            message: tr("The stream is being interrupted often."),
+            suggestion: tr("Try a lower video quality, or check your connection speed.")
         },
         "stream_format_error": {
-            title: "Stream Format Error",
-            message: "Unable to play this stream format. The stream may be using an incompatible encoding.",
-            suggestion: "Try a different quality setting or contact support"
+            title: tr("Can't play this stream format"),
+            message: tr("The stream may use an encoding this Roku can't play."),
+            suggestion: tr("Try again, or choose a different video quality.")
         },
         "media_decode_error": {
-            title: "Playback Error",
-            message: "There was a problem playing the video stream.",
-            suggestion: "Try selecting a different video quality"
+            title: tr("Couldn't play this video"),
+            message: tr("There was a problem decoding the video stream."),
+            suggestion: tr("Try again, or choose a different video quality.")
         },
         "server_error": {
-            title: "Service Issue",
-            message: "The streaming service is experiencing problems. Please try again later.",
-            suggestion: "Wait a moment and try again"
+            title: tr("Twitch is having problems"),
+            message: tr("Twitch's video service returned an error."),
+            suggestion: tr("Wait a moment, then try again.")
         },
         "codec_incompatible": {
-            title: "Video Format Not Supported",
-            message: "This video cannot be played on your Roku device due to codec or resolution incompatibility.",
-            suggestion: "Try selecting a lower quality setting (720p or below) from the stream options"
+            title: tr("Video format not supported"),
+            message: tr("This Roku can't play this video's codec or resolution."),
+            suggestion: tr("Try a lower video quality, 720p or below.")
         }
     }
 
     ' Default message if error type not found
     if messages[errorType] = invalid
         return {
-            title: "Playback Error",
-            message: "Unable to play this stream. Error code: " + errorCode.toStr(),
-            suggestion: "Please try again later"
+            title: tr("Couldn't play this video"),
+            message: tr("Error code: {0}").replace("{0}", errorCode.toStr()),
+            suggestion: tr("Try again later.")
         }
     end if
 

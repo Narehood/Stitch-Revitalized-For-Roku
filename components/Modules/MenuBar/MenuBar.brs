@@ -193,11 +193,11 @@ function iconCaptionText(iconId as string) as string
     if iconId = "Search" then return tr("Search")
     if iconId = "LoginPage"
         if get_setting("active_user", "$default$") = "$default$" then return tr("Sign in")
-        ' Signed in, the avatar opens the user's own channel.
+        ' Signed in, the avatar opens the Account panel.
         name = get_user_setting("display_name")
         if name = invalid or name = "" then name = get_user_setting("login", "")
-        if name <> "" then return name
-        return tr("Your channel")
+        if name <> "" then return tr("Account") + " · " + name
+        return tr("Account")
     end if
     return iconId
 end function

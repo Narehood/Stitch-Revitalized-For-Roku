@@ -37,6 +37,8 @@ function build_LoginPage()
     node.id = "LoginPage"
     node.translation = [0, 0]
     node.observeField("finished", "onLoginFinished")
+    ' Sign-out confirmed in the Account panel.
+    node.observeField("signedOut", "onLogoutFinished")
     return node
 end function
 

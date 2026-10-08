@@ -4,7 +4,7 @@
 
     <interface>
         <field id="supportsDisposal" type="boolean" value="true" />
-        <field id="backgroundColor" type="string" value="0x000000FF" onChange="onBackgroundColorChange" />
+        <field id="backgroundColor" type="string" value="0x0E0E10FF" onChange="onBackgroundColorChange" />
         <field id="channel" type="string" onChange="onEnterChannel" alwaysNotify="true" />
         <field id="channel_id" type="string" />
         <field id="focusable" type="Boolean" value="true" />
@@ -26,6 +26,7 @@
     <script type="text/brightscript" uri="Chat.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/uiContrast.brs" />
     <children>
         <MaskGroup
             id="MaskGroup" maskUri="pkg:/images/white-square-mask.png" visible="true">
@@ -44,7 +45,7 @@
                 opacity="1"
                 translation="[0,0]" />
         </MaskGroup>
-        <Label id="chatStatus" translation="[12, 12]" width="251" height="130" wrap="true" numLines="5" visible="false" color="0xFFFFFFFF">
+        <Label id="chatStatus" translation="[12, 12]" width="251" height="130" wrap="true" numLines="5" visible="false" color="0xEFEFF1FF">
             <font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
         </Label>
         <!-- <SimpleLabel

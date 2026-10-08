@@ -280,5 +280,690 @@
             <source>Search isn't working right now. Check your connection, then edit your search to try again.</source>
             <translation>Search isn't working right now. Check your connection, then edit your search to try again.</translation>
         </message>
+        <!-- Interface phase 2 strings -->
+        <message>
+            <source>Sign-in expired or could not be completed. Try again to get a new code.</source>
+            <translation>Sign-in expired or could not be completed. Try again to get a new code.</translation>
+        </message>
+        <message>
+            <source>Twitch could not load your account. Check your connection and try again.</source>
+            <translation>Twitch could not load your account. Check your connection and try again.</translation>
+        </message>
+        <message>
+            <source>Twitch could not confirm your account. Try signing in again.</source>
+            <translation>Twitch could not confirm your account. Try signing in again.</translation>
+        </message>
+        <message>
+            <source>Twitch could not create a sign-in code. Check your connection and try again.</source>
+            <translation>Twitch could not create a sign-in code. Check your connection and try again.</translation>
+        </message>
+        <message>
+            <source>Waiting for you to approve…</source>
+            <translation>Waiting for you to approve…</translation>
+        </message>
+        <message>
+            <source>This code works for about {0} minutes.</source>
+            <translation>This code works for about {0} minutes.</translation>
+        </message>
+        <message>
+            <source>Sign in to Twitch</source>
+            <translation>Sign in to Twitch</translation>
+        </message>
+        <message>
+            <source>On your phone or computer, go to twitch.tv/activate and enter this code:</source>
+            <translation>On your phone or computer, go to twitch.tv/activate and enter this code:</translation>
+        </message>
+        <message>
+            <source>Or scan the QR code with your phone.</source>
+            <translation>Or scan the QR code with your phone.</translation>
+        </message>
+        <message>
+            <source>Getting a sign-in code…</source>
+            <translation>Getting a sign-in code…</translation>
+        </message>
+        <message>
+            <source>Signing in is optional — you can watch public streams without an account. Press Back to keep browsing.</source>
+            <translation>Signing in is optional — you can watch public streams without an account. Press Back to keep browsing.</translation>
+        </message>
+        <message>
+            <source>Couldn't sign in</source>
+            <translation>Couldn't sign in</translation>
+        </message>
+        <message>
+            <source>Back to browsing</source>
+            <translation>Back to browsing</translation>
+        </message>
+        <message>
+            <source>Signed in to Twitch as {0}.</source>
+            <translation>Signed in to Twitch as {0}.</translation>
+        </message>
+        <message>
+            <source>Signing out keeps your settings and recent channels on this Roku.</source>
+            <translation>Signing out keeps your settings and recent channels on this Roku.</translation>
+        </message>
+        <message>
+            <source>Sign out</source>
+            <translation>Sign out</translation>
+        </message>
+        <message>
+            <source>Experimental</source>
+            <translation>Experimental</translation>
+        </message>
+        <message>
+            <source>Account</source>
+            <translation>Account</translation>
+        </message>
+        <message>
+            <source>Not signed in. Use the account button at the top right to sign in. Signing in is optional.</source>
+            <translation>Not signed in. Use the account button at the top right to sign in. Signing in is optional.</translation>
+        </message>
+        <message>
+            <source>Signed in as {0}.</source>
+            <translation>Signed in as {0}.</translation>
+        </message>
+        <message>
+            <source>Not signed in</source>
+            <translation>Not signed in</translation>
+        </message>
+        <message>
+            <source>On</source>
+            <translation>On</translation>
+        </message>
+        <message>
+            <source>Off</source>
+            <translation>Off</translation>
+        </message>
+        <message>
+            <source>Not set</source>
+            <translation>Not set</translation>
+        </message>
+        <message>
+            <source>Current: {0}</source>
+            <translation>Current: {0}</translation>
+        </message>
+        <message>
+            <source>Save</source>
+            <translation>Save</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>Cancel</translation>
+        </message>
+        <message>
+            <source>Checking the service…</source>
+            <translation>Checking the service…</translation>
+        </message>
+        <message>
+            <source>The address changed. Press Save to check it.</source>
+            <translation>The address changed. Press Save to check it.</translation>
+        </message>
+        <message>
+            <source>Couldn't check the service. Try again.</source>
+            <translation>Couldn't check the service. Try again.</translation>
+        </message>
+        <message>
+            <source>Couldn't reach the service: {0}. Check the address and that the service is running.</source>
+            <translation>Couldn't reach the service: {0}. Check the address and that the service is running.</translation>
+        </message>
+        <message>
+            <source>Sign out of Twitch?</source>
+            <translation>Sign out of Twitch?</translation>
+        </message>
+        <message>
+            <source>Your settings and recent channels stay on this Roku. You can still watch public streams.</source>
+            <translation>Your settings and recent channels stay on this Roku. You can still watch public streams.</translation>
+        </message>
+        <message>
+            <source>Low-latency mode (experimental)</source>
+            <translation>Low-latency mode (experimental)</translation>
+        </message>
+        <message>
+            <source>Loading stream…</source>
+            <translation>Loading stream…</translation>
+        </message>
+        <message>
+            <source>Exit player</source>
+            <translation>Exit player</translation>
+        </message>
+        <message>
+            <source>Hide chat</source>
+            <translation>Hide chat</translation>
+        </message>
+        <message>
+            <source>Show chat</source>
+            <translation>Show chat</translation>
+        </message>
+        <message>
+            <source>Play</source>
+            <translation>Play</translation>
+        </message>
+        <message>
+            <source>Pause</source>
+            <translation>Pause</translation>
+        </message>
+        <message>
+            <source>Quality · {0}</source>
+            <translation>Quality · {0}</translation>
+        </message>
+        <message>
+            <source>Quality</source>
+            <translation>Quality</translation>
+        </message>
+        <message>
+            <source>Video format not supported</source>
+            <translation>Video format not supported</translation>
+        </message>
+        <message>
+            <source>This stream can't be played on this Roku.</source>
+            <translation>This stream can't be played on this Roku.</translation>
+        </message>
+        <message>
+            <source>Stream problem</source>
+            <translation>Stream problem</translation>
+        </message>
+        <message>
+            <source>Having trouble loading the live stream. Retrying…</source>
+            <translation>Having trouble loading the live stream. Retrying…</translation>
+        </message>
+        <message>
+            <source>Video quality</source>
+            <translation>Video quality</translation>
+        </message>
+        <message>
+            <source>Now playing: {0}</source>
+            <translation>Now playing: {0}</translation>
+        </message>
+        <message>
+            <source>{0} (current)</source>
+            <translation>{0} (current)</translation>
+        </message>
+        <message>
+            <source>Loading video…</source>
+            <translation>Loading video…</translation>
+        </message>
+        <message>
+            <source>Jump to time</source>
+            <translation>Jump to time</translation>
+        </message>
+        <message>
+            <source>Enter the time you want to jump to.</source>
+            <translation>Enter the time you want to jump to.</translation>
+        </message>
+        <message>
+            <source>Hours</source>
+            <translation>Hours</translation>
+        </message>
+        <message>
+            <source>Minutes</source>
+            <translation>Minutes</translation>
+        </message>
+        <message>
+            <source>Seconds</source>
+            <translation>Seconds</translation>
+        </message>
+        <message>
+            <source>Use ← → to move between digits and ↑ ↓ to change them.</source>
+            <translation>Use ← → to move between digits and ↑ ↓ to change them.</translation>
+        </message>
+        <message>
+            <source>Jump</source>
+            <translation>Jump</translation>
+        </message>
+        <message>
+            <source>Back 10 seconds</source>
+            <translation>Back 10 seconds</translation>
+        </message>
+        <message>
+            <source>Jump to {0}</source>
+            <translation>Jump to {0}</translation>
+        </message>
+        <message>
+            <source>Forward 10 seconds</source>
+            <translation>Forward 10 seconds</translation>
+        </message>
+        <message>
+            <source>Chat replay unavailable</source>
+            <translation>Chat replay unavailable</translation>
+        </message>
+        <message>
+            <source>Buffering stream…</source>
+            <translation>Buffering stream…</translation>
+        </message>
+        <message>
+            <source>Buffering video…</source>
+            <translation>Buffering video…</translation>
+        </message>
+        <message>
+            <source>This video can't be played on this Roku.</source>
+            <translation>This video can't be played on this Roku.</translation>
+        </message>
+        <message>
+            <source>Having trouble loading the video. Retrying…</source>
+            <translation>Having trouble loading the video. Retrying…</translation>
+        </message>
+        <message>
+            <source>Press OK or Play to jump to {0}. Press Back to cancel.</source>
+            <translation>Press OK or Play to jump to {0}. Press Back to cancel.</translation>
+        </message>
+        <message>
+            <source>Press Play to jump to {0}. Press Back to cancel.</source>
+            <translation>Press Play to jump to {0}. Press Back to cancel.</translation>
+        </message>
+        <message>
+            <source>Video length: {0}</source>
+            <translation>Video length: {0}</translation>
+        </message>
+        <message>
+            <source>Couldn't load this video</source>
+            <translation>Couldn't load this video</translation>
+        </message>
+        <message>
+            <source>Twitch didn't return a playlist for it. Check your connection, then try again.</source>
+            <translation>Twitch didn't return a playlist for it. Check your connection, then try again.</translation>
+        </message>
+        <message>
+            <source>Twitch couldn't provide this video.</source>
+            <translation>Twitch couldn't provide this video.</translation>
+        </message>
+        <message>
+            <source>This video is only available to subscribers</source>
+            <translation>This video is only available to subscribers</translation>
+        </message>
+        <message>
+            <source>This video has expired and is no longer available</source>
+            <translation>This video has expired and is no longer available</translation>
+        </message>
+        <message>
+            <source>This video has been deleted</source>
+            <translation>This video has been deleted</translation>
+        </message>
+        <message>
+            <source>Select the video again from Browse.</source>
+            <translation>Select the video again from Browse.</translation>
+        </message>
+        <message>
+            <source>Audio/video format problem</source>
+            <translation>Audio/video format problem</translation>
+        </message>
+        <message>
+            <source>The demux service could not provide playable audio and video. Check the service connection and version, then try again.</source>
+            <translation>The demux service could not provide playable audio and video. Check the service connection and version, then try again.</translation>
+        </message>
+        <message>
+            <source>Video format needs the audio service</source>
+            <translation>Video format needs the audio service</translation>
+        </message>
+        <message>
+            <source>This stream uses combined audio/video CMAF segments. Configure the optional demux service in Settings, or choose another stream.</source>
+            <translation>This stream uses combined audio/video CMAF segments. Configure the optional demux service in Settings, or choose another stream.</translation>
+        </message>
+        <message>
+            <source>Reconnecting…</source>
+            <translation>Reconnecting…</translation>
+        </message>
+        <message>
+            <source>Switching to a lower quality…</source>
+            <translation>Switching to a lower quality…</translation>
+        </message>
+        <message>
+            <source>Refreshing video access…</source>
+            <translation>Refreshing video access…</translation>
+        </message>
+        <message>
+            <source>Adjusting quality for smoother playback…</source>
+            <translation>Adjusting quality for smoother playback…</translation>
+        </message>
+        <message>
+            <source>Playback stopped after several recovery attempts.</source>
+            <translation>Playback stopped after several recovery attempts.</translation>
+        </message>
+        <message>
+            <source>Playback interrupted</source>
+            <translation>Playback interrupted</translation>
+        </message>
+        <message>
+            <source>This video kept buffering after several recovery attempts. Check your connection, then try again.</source>
+            <translation>This video kept buffering after several recovery attempts. Check your connection, then try again.</translation>
+        </message>
+        <message>
+            <source>Stream frozen</source>
+            <translation>Stream frozen</translation>
+        </message>
+        <message>
+            <source>Twitch playback stopped and couldn't be recovered automatically.</source>
+            <translation>Twitch playback stopped and couldn't be recovered automatically.</translation>
+        </message>
+        <message>
+            <source>Reconnecting… ({0}/{1})</source>
+            <translation>Reconnecting… ({0}/{1})</translation>
+        </message>
+        <message>
+            <source>Trying again…</source>
+            <translation>Trying again…</translation>
+        </message>
+        <message>
+            <source>Audio service needed</source>
+            <translation>Audio service needed</translation>
+        </message>
+        <message>
+            <source>This stream combines audio and video in CMAF segments. Roku needs separate tracks.</source>
+            <translation>This stream combines audio and video in CMAF segments. Roku needs separate tracks.</translation>
+        </message>
+        <message>
+            <source>Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream.</source>
+            <translation>Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream.</translation>
+        </message>
+        <message>
+            <source>The service runs directly in Python or in Docker; it does not re-encode your video.</source>
+            <translation>The service runs directly in Python or in Docker; it does not re-encode your video.</translation>
+        </message>
+        <message>
+            <source>Audio service unavailable. Switching to a compatible quality…</source>
+            <translation>Audio service unavailable. Switching to a compatible quality…</translation>
+        </message>
+        <message>
+            <source>Chat is unavailable for this video</source>
+            <translation>Chat is unavailable for this video</translation>
+        </message>
+        <message>
+            <source>Stitch currently supports chat during live streams. Chat replay is unavailable for VODs and clips. Your video will continue playing.</source>
+            <translation>Stitch currently supports chat during live streams. Chat replay is unavailable for VODs and clips. Your video will continue playing.</translation>
+        </message>
+        <message>
+            <source>Continue watching</source>
+            <translation>Continue watching</translation>
+        </message>
+        <message>
+            <source>Can't connect to the stream</source>
+            <translation>Can't connect to the stream</translation>
+        </message>
+        <message>
+            <source>Stitch lost its connection to Twitch while loading this video.</source>
+            <translation>Stitch lost its connection to Twitch while loading this video.</translation>
+        </message>
+        <message>
+            <source>Check your internet connection, then try again.</source>
+            <translation>Check your internet connection, then try again.</translation>
+        </message>
+        <message>
+            <source>The stream is loading slowly</source>
+            <translation>The stream is loading slowly</translation>
+        </message>
+        <message>
+            <source>The video took too long to load. The network may be busy.</source>
+            <translation>The video took too long to load. The network may be busy.</translation>
+        </message>
+        <message>
+            <source>Try again, or choose a lower video quality.</source>
+            <translation>Try again, or choose a lower video quality.</translation>
+        </message>
+        <message>
+            <source>Stream unavailable</source>
+            <translation>Stream unavailable</translation>
+        </message>
+        <message>
+            <source>This stream isn't available right now. The broadcaster may have ended it.</source>
+            <translation>This stream isn't available right now. The broadcaster may have ended it.</translation>
+        </message>
+        <message>
+            <source>Try again in a moment, or check back later.</source>
+            <translation>Try again in a moment, or check back later.</translation>
+        </message>
+        <message>
+            <source>Couldn't find this stream</source>
+            <translation>Couldn't find this stream</translation>
+        </message>
+        <message>
+            <source>It may have been deleted or moved.</source>
+            <translation>It may have been deleted or moved.</translation>
+        </message>
+        <message>
+            <source>Go back and choose another stream.</source>
+            <translation>Go back and choose another stream.</translation>
+        </message>
+        <message>
+            <source>Twitch didn't authorize this video</source>
+            <translation>Twitch didn't authorize this video</translation>
+        </message>
+        <message>
+            <source>It may need a Twitch account or have other restrictions, such as subscriber-only access.</source>
+            <translation>It may need a Twitch account or have other restrictions, such as subscriber-only access.</translation>
+        </message>
+        <message>
+            <source>Public streams play without signing in. Try again, or choose another video.</source>
+            <translation>Public streams play without signing in. Try again, or choose another video.</translation>
+        </message>
+        <message>
+            <source>Playback keeps stopping</source>
+            <translation>Playback keeps stopping</translation>
+        </message>
+        <message>
+            <source>The stream is being interrupted often.</source>
+            <translation>The stream is being interrupted often.</translation>
+        </message>
+        <message>
+            <source>Try a lower video quality, or check your connection speed.</source>
+            <translation>Try a lower video quality, or check your connection speed.</translation>
+        </message>
+        <message>
+            <source>Can't play this stream format</source>
+            <translation>Can't play this stream format</translation>
+        </message>
+        <message>
+            <source>The stream may use an encoding this Roku can't play.</source>
+            <translation>The stream may use an encoding this Roku can't play.</translation>
+        </message>
+        <message>
+            <source>Try again, or choose a different video quality.</source>
+            <translation>Try again, or choose a different video quality.</translation>
+        </message>
+        <message>
+            <source>Couldn't play this video</source>
+            <translation>Couldn't play this video</translation>
+        </message>
+        <message>
+            <source>There was a problem decoding the video stream.</source>
+            <translation>There was a problem decoding the video stream.</translation>
+        </message>
+        <message>
+            <source>Twitch is having problems</source>
+            <translation>Twitch is having problems</translation>
+        </message>
+        <message>
+            <source>Twitch's video service returned an error.</source>
+            <translation>Twitch's video service returned an error.</translation>
+        </message>
+        <message>
+            <source>Wait a moment, then try again.</source>
+            <translation>Wait a moment, then try again.</translation>
+        </message>
+        <message>
+            <source>This Roku can't play this video's codec or resolution.</source>
+            <translation>This Roku can't play this video's codec or resolution.</translation>
+        </message>
+        <message>
+            <source>Try a lower video quality, 720p or below.</source>
+            <translation>Try a lower video quality, 720p or below.</translation>
+        </message>
+        <message>
+            <source>Error code: {0}</source>
+            <translation>Error code: {0}</translation>
+        </message>
+        <message>
+            <source>Try again later.</source>
+            <translation>Try again later.</translation>
+        </message>
+        <message>
+            <source>Connecting to chat…</source>
+            <translation>Connecting to chat…</translation>
+        </message>
+        <message>
+            <source>Chat disconnected. Reconnecting…</source>
+            <translation>Chat disconnected. Reconnecting…</translation>
+        </message>
+        <message>
+            <source>Chat is unavailable. Close and reopen chat to retry.</source>
+            <translation>Chat is unavailable. Close and reopen chat to retry.</translation>
+        </message>
+        <message>
+            <source>Signing out keeps your settings and recent channels on this Roku. You can still watch public streams.</source>
+            <translation>Signing out keeps your settings and recent channels on this Roku. You can still watch public streams.</translation>
+        </message>
+        <message>
+            <source>The quality a stream starts at. You can change it while watching with the Quality button.</source>
+            <translation>The quality a stream starts at. You can change it while watching with the Quality button.</translation>
+        </message>
+        <message>
+            <source>Automatic</source>
+            <translation>Automatic</translation>
+        </message>
+        <message>
+            <source>Highest available</source>
+            <translation>Highest available</translation>
+        </message>
+        <message>
+            <source>Lowest (uses less data)</source>
+            <translation>Lowest (uses less data)</translation>
+        </message>
+        <message>
+            <source>Lower live latency</source>
+            <translation>Lower live latency</translation>
+        </message>
+        <message>
+            <source>Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.</source>
+            <translation>Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.</translation>
+        </message>
+        <message>
+            <source>Show chat when a stream starts</source>
+            <translation>Show chat when a stream starts</translation>
+        </message>
+        <message>
+            <source>Opens live chat beside the video. You can show or hide chat while watching. Chat is available for live streams.</source>
+            <translation>Opens live chat beside the video. You can show or hide chat while watching. Chat is available for live streams.</translation>
+        </message>
+        <message>
+            <source>Chat text size</source>
+            <translation>Chat text size</translation>
+        </message>
+        <message>
+            <source>Size of chat messages. Emotes and badges scale with it.</source>
+            <translation>Size of chat messages. Emotes and badges scale with it.</translation>
+        </message>
+        <message>
+            <source>Extra small (10)</source>
+            <translation>Extra small (10)</translation>
+        </message>
+        <message>
+            <source>Small (12)</source>
+            <translation>Small (12)</translation>
+        </message>
+        <message>
+            <source>Medium (14)</source>
+            <translation>Medium (14)</translation>
+        </message>
+        <message>
+            <source>Large (16)</source>
+            <translation>Large (16)</translation>
+        </message>
+        <message>
+            <source>Extra large (18)</source>
+            <translation>Extra large (18)</translation>
+        </message>
+        <message>
+            <source>Largest (20)</source>
+            <translation>Largest (20)</translation>
+        </message>
+        <message>
+            <source>BetterTTV emotes</source>
+            <translation>BetterTTV emotes</translation>
+        </message>
+        <message>
+            <source>Show BetterTTV emotes in live chat.</source>
+            <translation>Show BetterTTV emotes in live chat.</translation>
+        </message>
+        <message>
+            <source>7TV emotes</source>
+            <translation>7TV emotes</translation>
+        </message>
+        <message>
+            <source>Show 7TV emotes in live chat.</source>
+            <translation>Show 7TV emotes in live chat.</translation>
+        </message>
+        <message>
+            <source>FrankerFaceZ emotes</source>
+            <translation>FrankerFaceZ emotes</translation>
+        </message>
+        <message>
+            <source>Show FrankerFaceZ emotes in live chat.</source>
+            <translation>Show FrankerFaceZ emotes in live chat.</translation>
+        </message>
+        <message>
+            <source>Browse: live channel order</source>
+            <translation>Browse: live channel order</translation>
+        </message>
+        <message>
+            <source>How live channels are ordered on the Browse page.</source>
+            <translation>How live channels are ordered on the Browse page.</translation>
+        </message>
+        <message>
+            <source>Recommended</source>
+            <translation>Recommended</translation>
+        </message>
+        <message>
+            <source>Viewers (High to Low)</source>
+            <translation>Viewers (High to Low)</translation>
+        </message>
+        <message>
+            <source>Viewers (Low to High)</source>
+            <translation>Viewers (Low to High)</translation>
+        </message>
+        <message>
+            <source>Recently Started</source>
+            <translation>Recently Started</translation>
+        </message>
+        <message>
+            <source>Following: offline channel order</source>
+            <translation>Following: offline channel order</translation>
+        </message>
+        <message>
+            <source>How offline channels you follow are ordered on the Following page.</source>
+            <translation>How offline channels you follow are ordered on the Following page.</translation>
+        </message>
+        <message>
+            <source>Streamer Name</source>
+            <translation>Streamer Name</translation>
+        </message>
+        <message>
+            <source>Followers (High to Low)</source>
+            <translation>Followers (High to Low)</translation>
+        </message>
+        <message>
+            <source>Followers (Low to High)</source>
+            <translation>Followers (Low to High)</translation>
+        </message>
+        <message>
+            <source>Demux service URL (optional)</source>
+            <translation>Demux service URL (optional)</translation>
+        </message>
+        <message>
+            <source>Some Twitch streams package audio and video together in a way Roku can't play directly. If you run Stitch's optional demux service on your network, enter its address, for example http://192.168.1.20:8080. Leave empty to turn it off.</source>
+            <translation>Some Twitch streams package audio and video together in a way Roku can't play directly. If you run Stitch's optional demux service on your network, enter its address, for example http://192.168.1.20:8080. Leave empty to turn it off.</translation>
+        </message>
+        <message>
+            <source>Optional diagnostics</source>
+            <translation>Optional diagnostics</translation>
+        </message>
+        <message>
+            <source>Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.</source>
+            <translation>Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.</translation>
+        </message>
+        <message>
+            <source>Support Stitch</source>
+            <translation>Support Stitch</translation>
+        </message>
+        <message>
+            <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
+            <translation>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</translation>
+        </message>
     </context>
 </TS>

@@ -8,9 +8,16 @@ sub init()
     m.controlOverlay = m.top.findNode("controlOverlay")
     m.controlOverlay.visible = false
 
-    ' Progress bar elements
-    m.progressBarBase = m.top.findNode("progressBarBase")
-    m.progressBarProgress = m.top.findNode("progressBarProgress")
+    ' Overlay layout elements (sized to the video area in layoutOverlay)
+    m.scrim = m.top.findNode("scrim")
+    m.scrimFade = m.top.findNode("scrimFade")
+    m.scrimFadeFill = m.top.findNode("scrimFadeFill")
+    m.controls = m.top.findNode("controls")
+    m.caption = m.top.findNode("caption")
+    m.captionPlate = m.top.findNode("captionPlate")
+    m.captionLabel = m.top.findNode("captionLabel")
+    m.latencyTag = m.top.findNode("latencyTag")
+    m.latencyTag.text = tr("Low-latency mode (experimental)")
 
     ' Control buttons
     m.backGroup = m.top.findNode("backGroup")
@@ -27,20 +34,24 @@ sub init()
     m.playPauseFocus = m.top.findNode("playPauseFocus")
     m.qualityFocus = m.top.findNode("qualityFocus")
 
-    ' Other elements
-    m.liveIndicator = m.top.findNode("liveIndicator")
-
     ' Video info
     m.videoTitle = m.top.findNode("videoTitle")
     m.channelUsername = m.top.findNode("channelUsername")
     m.avatar = m.top.findNode("avatar")
 
+    ' Other elements
+    m.liveIndicator = m.top.findNode("liveIndicator")
+    initLiveBadge()
+
     ' Loading overlay
     m.loadingOverlay = m.top.findNode("loadingOverlay")
     m.loadingSpinner = m.top.findNode("loadingSpinner")
+    m.loadingText = m.top.findNode("loadingText")
+    if m.loadingText <> invalid then m.loadingText.text = tr("Loading stream…")
 
     ' Quality dialog
     m.qualityDialog = m.top.findNode("QualityDialog")
+    applyDialogPalette(m.qualityDialog)
     ' Set up quality dialog observer once during initialization
     m.qualityDialog.observeFieldScopedEx("buttonSelected", "onQualityButtonSelect")
 
@@ -110,7 +121,7 @@ sub init()
     m.top.observeField("selectedQuality", "onSelectedQualityChange")
 
     ' Initialize UI
-    updateProgressBar()
+    layoutOverlay()
     setupLiveUI()
 
     ' Show loading overlay initially
@@ -121,49 +132,91 @@ end sub
 
 sub createMessageOverlay()
     if m.messageOverlay = invalid
-        m.messageOverlay = CreateObject("roSGNode", "Group")
-        m.messageOverlay.visible = false
-
-        messageBg = CreateObject("roSGNode", "Rectangle")
-        messageBg.width = 600
-        messageBg.height = 150
-        messageBg.color = "0x000000CC"
-        messageBg.translation = [340, 285]
-
-        messageTitle = CreateObject("roSGNode", "Label")
-        messageTitle.id = "messageTitle"
-        messageTitle.font = "font:MediumBoldSystemFont"
-        messageTitle.text = ""
-        messageTitle.horizAlign = "center"
-        messageTitle.vertAlign = "center"
-        messageTitle.width = 600
-        messageTitle.height = 50
-        messageTitle.translation = [340, 300]
-
-        messageText = CreateObject("roSGNode", "Label")
-        messageText.id = "messageText"
-        messageText.font = "font:SmallSystemFont"
-        messageText.text = ""
-        messageText.horizAlign = "center"
-        messageText.vertAlign = "center"
-        messageText.width = 600
-        messageText.height = 50
-        messageText.translation = [340, 350]
-
-        m.messageOverlay.appendChild(messageBg)
-        m.messageOverlay.appendChild(messageTitle)
-        m.messageOverlay.appendChild(messageText)
+        m.messageOverlay = createPlayerMessageOverlay()
         m.top.appendChild(m.messageOverlay)
     end if
 end sub
 
 sub setupLiveUI()
-    ' Set up UI specifically for live streams
-    m.progressBarProgress.width = m.progressBarBase.width ' Full bar for live
-
-    ' Live indicator is only visible when overlay is shown
-    m.liveIndicator.visible = m.isOverlayVisible
+    ' The LIVE badge sits in the info row, so it shows with the controls.
+    m.liveIndicator.visible = true
+    updateLatencyTag()
 end sub
+
+' Sizes the red badge to the localized LIVE text and starts the channel
+' name after it.
+sub initLiveBadge()
+    width = fitLabelPlate(m.top.findNode("liveLabel"), m.top.findNode("liveBadge"), tr("LIVE"), 16, 56)
+    if m.channelUsername <> invalid then m.channelUsername.translation = [64 + width + 12, 0]
+end sub
+
+' The video area is 1280 wide, or 960 when chat is shown beside it. The
+' scrim, caption, tag and controls stay inside that area's safe margins.
+function videoAreaWidth() as integer
+    if m.top.chatIsVisible = true then return 960
+    return 1280
+end function
+
+sub layoutOverlay()
+    width = videoAreaWidth()
+    m.scrim.width = width
+    m.scrimFadeFill.width = width
+    m.scrimFade.maskSize = [width, 48]
+    m.latencyTag.translation = [width - 48 - 360, 69]
+    if width < 1280
+        m.videoTitle.maxWidth = 660
+    else
+        m.videoTitle.maxWidth = 900
+    end if
+    ' Four 64 px buttons with 12 px gaps, centered in the video area.
+    m.controls.translation = [Int((width - 292) / 2), 178]
+    if m.loadingOverlay <> invalid then m.loadingOverlay.translation = [Int(width / 2), 360]
+    if m.messageOverlay <> invalid then m.messageOverlay.translation = [Int((width - 640) / 2), 0]
+    updateCaption()
+end sub
+
+' VideoPlayer clears suppressStartupSeek only for a user-started session with
+' the experiment enabled. The tag states the mode, never a measured result.
+sub updateLatencyTag()
+    m.latencyTag.visible = (m.top.suppressStartupSeek = false)
+end sub
+
+function captionForButton(index as integer) as string
+    if index = 0
+        return tr("Exit player")
+    else if index = 1
+        if m.top.chatIsVisible = true then return tr("Hide chat")
+        return tr("Show chat")
+    else if index = 2
+        if m.top.state = "paused" then return tr("Play")
+        return tr("Pause")
+    else if index = 3
+        quality = m.top.selectedQuality
+        if quality <> invalid and quality <> "" then return tr("Quality · {0}").replace("{0}", quality)
+        return tr("Quality")
+    end if
+    return ""
+end function
+
+' Every focused control names itself in a caption above it.
+sub updateCaption()
+    if m.caption = invalid then return
+    if not m.isOverlayVisible
+        m.caption.visible = false
+        return
+    end if
+    plateWidth = fitLabelPlate(m.captionLabel, m.captionPlate, captionForButton(m.currentFocusedButton), 24, 96)
+    center = m.controls.translation[0] + m.currentFocusedButton * 76 + 32
+    m.caption.translation = [clampToVideoArea(center - Int(plateWidth / 2), plateWidth), 140]
+    m.caption.visible = true
+end sub
+
+function clampToVideoArea(x as integer, width as integer) as integer
+    limit = videoAreaWidth() - 48 - width
+    if x > limit then x = limit
+    if x < 48 then x = 48
+    return x
+end function
 
 
 sub onPositionChange()
@@ -184,6 +237,7 @@ sub onContentChange()
         m.top.recentSeekTimestamp = 0
         m.pendingSeekReason = invalid
         m.pendingSeekOutcomePreMs = invalid
+        updateLatencyTag()
     end if
 end sub
 
@@ -192,6 +246,7 @@ sub onVideoStateChange()
     ? getLogTimestamp(); " [StitchVideo][state] state="; m.top.state; " pos="; m.top.position
     if m.top.state = "playing"
         m.controlButton.uri = "pkg:/images/pause.png"
+        if m.currentFocusedButton = 2 then updateCaption()
         hideLoadingOverlay()
         ' Reaching "playing" ends any post-seek re-buffer; re-enable the
         ' loading overlay for future, non-seek-related buffering events.
@@ -214,6 +269,7 @@ sub onVideoStateChange()
         end if
     else if m.top.state = "paused"
         m.controlButton.uri = "pkg:/images/play.png"
+        if m.currentFocusedButton = 2 then updateCaption()
         hideLoadingOverlay()
         stopLatencyLog()
         stopLiveEdgeStartupTimer()
@@ -235,9 +291,9 @@ sub onVideoStateChange()
         stopLatencyLog()
         stopLiveEdgeStartupTimer()
         if m.top.errorStr <> invalid and (m.top.errorStr.InStr("970") > -1 or m.top.errorStr.InStr("buffer:loop:demux") > -1)
-            showErrorMessage("Incompatible Video Format", "This stream cannot be played on your device")
+            showErrorMessage(tr("Video format not supported"), tr("This stream can't be played on this Roku."))
         else
-            showErrorMessage("Stream Error", "Having trouble loading the live stream. Retrying...")
+            showErrorMessage(tr("Stream problem"), tr("Having trouble loading the live stream. Retrying…"))
         end if
     else if m.top.state = "finished" or m.top.state = "stopped"
         m.suppressLoadingOverlayUntilPlaying = false
@@ -398,16 +454,11 @@ sub issueLiveEdgeSeek(reason as string)
 end sub
 
 sub onChatVisibilityChange()
-    if m.top.chatIsVisible
-        m.progressBarBase.width = 900
-    else
-        m.progressBarBase.width = 1160
-    end if
-    updateProgressBar()
+    layoutOverlay()
 end sub
 
 sub onDurationChange()
-    updateProgressBar()
+    ' Live streams show the LIVE badge instead of a progress bar.
 end sub
 
 sub onBufferingStatusChange()
@@ -421,18 +472,32 @@ end sub
 
 sub onSelectedQualityChange()
     setupLiveUI()
+    if m.currentFocusedButton = 3 then updateCaption()
+    if not m.qualityDialog.visible then setupQualityDialog()
 end sub
 
+' Buttons keep the qualityOptions order with Cancel last, so a selected index
+' still maps to the same option. Only the label marks the current quality.
 sub setupQualityDialog()
     if m.top.qualityOptions <> invalid and m.top.qualityOptions.count() > 0
-        m.qualityDialog.title = "Please Choose Your Video Quality"
-        m.qualityDialog.message = ["Choose video quality:"]
+        current = m.top.selectedQuality
+        if current = invalid then current = ""
+        m.qualityDialog.title = tr("Video quality")
+        if current <> ""
+            m.qualityDialog.message = [tr("Now playing: {0}").replace("{0}", current)]
+        else
+            m.qualityDialog.message = []
+        end if
 
         buttons = []
         for each quality in m.top.qualityOptions
-            buttons.push(quality)
+            if current <> "" and quality = current
+                buttons.push(tr("{0} (current)").replace("{0}", quality))
+            else
+                buttons.push(quality)
+            end if
         end for
-        buttons.push("Cancel")
+        buttons.push(tr("Cancel"))
 
         m.qualityDialog.buttons = buttons
     end if
@@ -479,15 +544,10 @@ sub onQualityButtonSelect()
     end if
 end sub
 
-sub updateProgressBar()
-    ' For live streams, always show full progress bar in Twitch purple
-    m.progressBarProgress.width = m.progressBarBase.width
-end sub
-
 sub showOverlay()
     m.isOverlayVisible = true
     m.controlOverlay.visible = true
-    m.liveIndicator.visible = true
+    updateLatencyTag()
     focusButton(m.currentFocusedButton)
 
     ' Start fade timer
@@ -498,8 +558,8 @@ end sub
 sub hideOverlay()
     m.isOverlayVisible = false
     m.controlOverlay.visible = false
-    m.liveIndicator.visible = false
     clearAllButtonFocus()
+    updateCaption()
 end sub
 
 sub onFadeAway()
@@ -522,6 +582,7 @@ sub focusButton(buttonIndex)
     else if buttonIndex = 3 ' Quality
         m.qualityFocus.visible = true
     end if
+    updateCaption()
 end sub
 
 sub clearAllButtonFocus()
@@ -562,6 +623,7 @@ sub showQualityDialog()
     if m.top.qualityOptions <> invalid and m.top.qualityOptions.count() > 0
         ' Stop the fade timer when showing dialog
         m.fadeAwayTimer.control = "stop"
+        setupQualityDialog()
 
         ' Show dialog and give it focus
         ' (Observer is already set up in init() function)
@@ -614,23 +676,8 @@ end sub
 
 sub showMessage(title as string, message as string, duration as float)
     createMessageOverlay()
-    if m.messageOverlay <> invalid
-        titleNode = m.messageOverlay.findNode("messageTitle")
-        if titleNode <> invalid
-            titleNode.text = title
-            titleNode.visible = (title <> "")
-        end if
-        messageNode = m.messageOverlay.findNode("messageText")
-        if messageNode <> invalid
-            messageNode.text = message
-            if title = ""
-                messageNode.translation = [340, 335]
-            else
-                messageNode.translation = [340, 350]
-            end if
-        end if
-    end if
-
+    m.messageOverlay.translation = [Int((videoAreaWidth() - 640) / 2), 0]
+    setPlayerMessage(m.messageOverlay, title, message)
     m.messageOverlay.visible = true
 
     ' Clear any existing auto-hide timer

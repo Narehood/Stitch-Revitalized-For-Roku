@@ -7,6 +7,12 @@ sub init()
     m.chat = invalid
     m.EmoteJob = invalid
     m.emoteChannel = ""
+    ' Rendering helpers built once per chat instance, not per message or word.
+    m.hexColorRegex = CreateObject("roRegex", "^[A-Fa-f0-9]{6}$", "")
+    m.urlRegex = CreateObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
+    m.nameColorCache = {}
+    m.linkColor = "0xBF94FFFF"
+    if m.global?.constants?.ui?.color?.link <> invalid then m.linkColor = m.global.constants.ui.color.link
     m.top.observeField("visible", "onInvisible")
     onBackgroundColorChange()
     setChatPanelSize()
@@ -65,6 +71,8 @@ end sub
 sub onBackgroundColorChange()
     if m.chatPanel <> invalid then m.chatPanel.color = m.top.backgroundColor
     if m.chatBackground <> invalid then m.chatBackground.color = m.top.backgroundColor
+    ' Readable name colors depend on the background.
+    m.nameColorCache = {}
 end sub
 
 ' Stops the ChatJob (IRC) and EmoteJob tasks and releases their observers.
@@ -138,11 +146,11 @@ sub updateChatStatus(state as string)
     if m.chatStatus = invalid then return
     m.chatStatus.visible = state <> "connected" and state <> "stopped"
     if state = "connecting"
-        m.chatStatus.text = "Connecting to chat..."
+        m.chatStatus.text = tr("Connecting to chat…")
     else if state = "reconnecting"
-        m.chatStatus.text = "Chat disconnected. Reconnecting..."
+        m.chatStatus.text = tr("Chat disconnected. Reconnecting…")
     else if state = "unavailable"
-        m.chatStatus.text = "Chat is unavailable. Close and reopen chat to retry."
+        m.chatStatus.text = tr("Chat is unavailable. Close and reopen chat to retry.")
     end if
 end sub
 
@@ -225,14 +233,28 @@ end function
 function buildUsername(display_name, color)
     username = createObject("roSGNode", "SimpleLabel")
     username.text = display_name
-    if not createObject("roRegex", "^[A-Fa-f0-9]{6}$", "").isMatch(color)
-        color = "FFFFFF"
-    end if
-    username.color = "0x" + color + "FF"
+    username.color = "0x" + readableNameColor(color) + "FF"
     username.visible = true
     username.fontSize = m.font_size
     username.fontUri = "pkg:/fonts/Archivo-Bold.otf"
     return username
+end function
+
+' Twitch name colors are chosen by each user. Colors below 4.5:1 against the
+' chat background are lightened toward white just enough to reach it, keeping
+' their hue. Results are cached per chat instance; the cache holds at most
+' 128 colors and starts over when full. Unset or malformed colors stay white.
+function readableNameColor(color as dynamic) as string
+    if color = invalid or GetInterface(color, "ifString") = invalid then return "FFFFFF"
+    if not m.hexColorRegex.isMatch(color) then return "FFFFFF"
+    key = UCase(color)
+    cached = m.nameColorCache[key]
+    if cached <> invalid then return cached
+    readable = uiReadableColor(key, m.top.backgroundColor, 4.5)
+    if readable = "" then readable = "FFFFFF"
+    if m.nameColorCache.count() >= 128 then m.nameColorCache = {}
+    m.nameColorCache[key] = readable
+    return readable
 end function
 
 function buildColon()
@@ -255,7 +277,7 @@ function wordOrImage(word, isUrl = false)
         message_text.visible = true
         message_text.text = word + " "
         if isUrl
-            message_text.color = m.global.constants.colors.twitch.purple9
+            message_text.color = m.linkColor
         end if
         return message_text
     end if
@@ -272,8 +294,7 @@ function buildMessage(message, x_translation)
             ? "Found invalid character"
         end if
         ' Make room for emotes just in case
-        urlRegex = createObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
-        isUrl = urlRegex.IsMatch(word)
+        isUrl = m.urlRegex.IsMatch(word)
 
         block = wordOrImage(word, isUrl)
         block_width = block.localBoundingRect().width
@@ -290,7 +311,7 @@ function buildMessage(message, x_translation)
                 charNode.visible = true
                 charNode.text = char
                 if isUrl
-                    charNode.color = m.global.constants.colors.twitch.purple9
+                    charNode.color = m.linkColor
                 end if
                 charWidth = charNode.localBoundingRect().width
                 if (charLineAvailableSpace - charWidth) < 0
@@ -423,4 +444,5 @@ sub onDestroy()
     m.disposed = true
     m.top.unobserveField("visible")
     stopJobs()
+    m.nameColorCache = {}
 end sub

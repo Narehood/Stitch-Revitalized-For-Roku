@@ -286,5 +286,690 @@
             <source>Search isn't working right now. Check your connection, then edit your search to try again.</source>
             <translation>A pesquisa não está funcionando agora. Verifique sua conexão e edite sua pesquisa para tentar novamente.</translation>
         </message>
+        <!-- Interface phase 2 strings below: drafted Portuguese translations, not yet reviewed by a native speaker. -->
+        <message>
+            <source>Sign-in expired or could not be completed. Try again to get a new code.</source>
+            <translation>O login expirou ou não pôde ser concluído. Tente novamente para obter um novo código.</translation>
+        </message>
+        <message>
+            <source>Twitch could not load your account. Check your connection and try again.</source>
+            <translation>A Twitch não conseguiu carregar sua conta. Verifique sua conexão e tente novamente.</translation>
+        </message>
+        <message>
+            <source>Twitch could not confirm your account. Try signing in again.</source>
+            <translation>A Twitch não conseguiu confirmar sua conta. Tente entrar novamente.</translation>
+        </message>
+        <message>
+            <source>Twitch could not create a sign-in code. Check your connection and try again.</source>
+            <translation>A Twitch não conseguiu criar um código de login. Verifique sua conexão e tente novamente.</translation>
+        </message>
+        <message>
+            <source>Waiting for you to approve…</source>
+            <translation>Aguardando sua aprovação…</translation>
+        </message>
+        <message>
+            <source>This code works for about {0} minutes.</source>
+            <translation>Este código funciona por cerca de {0} minutos.</translation>
+        </message>
+        <message>
+            <source>Sign in to Twitch</source>
+            <translation>Entre na Twitch</translation>
+        </message>
+        <message>
+            <source>On your phone or computer, go to twitch.tv/activate and enter this code:</source>
+            <translation>No seu celular ou computador, acesse twitch.tv/activate e digite este código:</translation>
+        </message>
+        <message>
+            <source>Or scan the QR code with your phone.</source>
+            <translation>Ou escaneie o QR code com seu celular.</translation>
+        </message>
+        <message>
+            <source>Getting a sign-in code…</source>
+            <translation>Obtendo um código de login…</translation>
+        </message>
+        <message>
+            <source>Signing in is optional — you can watch public streams without an account. Press Back to keep browsing.</source>
+            <translation>Entrar é opcional: você pode assistir a transmissões públicas sem uma conta. Pressione Voltar para continuar navegando.</translation>
+        </message>
+        <message>
+            <source>Couldn't sign in</source>
+            <translation>Não foi possível entrar</translation>
+        </message>
+        <message>
+            <source>Back to browsing</source>
+            <translation>Voltar a navegar</translation>
+        </message>
+        <message>
+            <source>Signed in to Twitch as {0}.</source>
+            <translation>Conectado à Twitch como {0}.</translation>
+        </message>
+        <message>
+            <source>Signing out keeps your settings and recent channels on this Roku.</source>
+            <translation>Ao sair, suas configurações e canais recentes continuam neste Roku.</translation>
+        </message>
+        <message>
+            <source>Sign out</source>
+            <translation>Sair</translation>
+        </message>
+        <message>
+            <source>Experimental</source>
+            <translation>Experimental</translation>
+        </message>
+        <message>
+            <source>Account</source>
+            <translation>Conta</translation>
+        </message>
+        <message>
+            <source>Not signed in. Use the account button at the top right to sign in. Signing in is optional.</source>
+            <translation>Você não está conectado. Use o botão de conta no canto superior direito para entrar. Entrar é opcional.</translation>
+        </message>
+        <message>
+            <source>Signed in as {0}.</source>
+            <translation>Conectado como {0}.</translation>
+        </message>
+        <message>
+            <source>Not signed in</source>
+            <translation>Não conectado</translation>
+        </message>
+        <message>
+            <source>On</source>
+            <translation>Ligado</translation>
+        </message>
+        <message>
+            <source>Off</source>
+            <translation>Desligado</translation>
+        </message>
+        <message>
+            <source>Not set</source>
+            <translation>Não definido</translation>
+        </message>
+        <message>
+            <source>Current: {0}</source>
+            <translation>Atual: {0}</translation>
+        </message>
+        <message>
+            <source>Save</source>
+            <translation>Salvar</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>Cancelar</translation>
+        </message>
+        <message>
+            <source>Checking the service…</source>
+            <translation>Verificando o serviço…</translation>
+        </message>
+        <message>
+            <source>The address changed. Press Save to check it.</source>
+            <translation>O endereço mudou. Pressione Salvar para verificá-lo.</translation>
+        </message>
+        <message>
+            <source>Couldn't check the service. Try again.</source>
+            <translation>Não foi possível verificar o serviço. Tente novamente.</translation>
+        </message>
+        <message>
+            <source>Couldn't reach the service: {0}. Check the address and that the service is running.</source>
+            <translation>Não foi possível acessar o serviço: {0}. Verifique o endereço e se o serviço está em execução.</translation>
+        </message>
+        <message>
+            <source>Sign out of Twitch?</source>
+            <translation>Sair da Twitch?</translation>
+        </message>
+        <message>
+            <source>Your settings and recent channels stay on this Roku. You can still watch public streams.</source>
+            <translation>Suas configurações e canais recentes continuam neste Roku. Você ainda pode assistir a transmissões públicas.</translation>
+        </message>
+        <message>
+            <source>Low-latency mode (experimental)</source>
+            <translation>Modo de baixa latência (experimental)</translation>
+        </message>
+        <message>
+            <source>Loading stream…</source>
+            <translation>Carregando transmissão…</translation>
+        </message>
+        <message>
+            <source>Exit player</source>
+            <translation>Sair do player</translation>
+        </message>
+        <message>
+            <source>Hide chat</source>
+            <translation>Ocultar chat</translation>
+        </message>
+        <message>
+            <source>Show chat</source>
+            <translation>Mostrar chat</translation>
+        </message>
+        <message>
+            <source>Play</source>
+            <translation>Reproduzir</translation>
+        </message>
+        <message>
+            <source>Pause</source>
+            <translation>Pausar</translation>
+        </message>
+        <message>
+            <source>Quality · {0}</source>
+            <translation>Qualidade · {0}</translation>
+        </message>
+        <message>
+            <source>Quality</source>
+            <translation>Qualidade</translation>
+        </message>
+        <message>
+            <source>Video format not supported</source>
+            <translation>Formato de vídeo não compatível</translation>
+        </message>
+        <message>
+            <source>This stream can't be played on this Roku.</source>
+            <translation>Esta transmissão não pode ser reproduzida neste Roku.</translation>
+        </message>
+        <message>
+            <source>Stream problem</source>
+            <translation>Problema na transmissão</translation>
+        </message>
+        <message>
+            <source>Having trouble loading the live stream. Retrying…</source>
+            <translation>Problemas ao carregar a transmissão ao vivo. Tentando novamente…</translation>
+        </message>
+        <message>
+            <source>Video quality</source>
+            <translation>Qualidade do vídeo</translation>
+        </message>
+        <message>
+            <source>Now playing: {0}</source>
+            <translation>Reproduzindo: {0}</translation>
+        </message>
+        <message>
+            <source>{0} (current)</source>
+            <translation>{0} (atual)</translation>
+        </message>
+        <message>
+            <source>Loading video…</source>
+            <translation>Carregando vídeo…</translation>
+        </message>
+        <message>
+            <source>Jump to time</source>
+            <translation>Ir para um momento</translation>
+        </message>
+        <message>
+            <source>Enter the time you want to jump to.</source>
+            <translation>Digite o momento para o qual você quer ir.</translation>
+        </message>
+        <message>
+            <source>Hours</source>
+            <translation>Horas</translation>
+        </message>
+        <message>
+            <source>Minutes</source>
+            <translation>Minutos</translation>
+        </message>
+        <message>
+            <source>Seconds</source>
+            <translation>Segundos</translation>
+        </message>
+        <message>
+            <source>Use ← → to move between digits and ↑ ↓ to change them.</source>
+            <translation>Use ← → para mover entre os dígitos e ↑ ↓ para alterá-los.</translation>
+        </message>
+        <message>
+            <source>Jump</source>
+            <translation>Ir</translation>
+        </message>
+        <message>
+            <source>Back 10 seconds</source>
+            <translation>Voltar 10 segundos</translation>
+        </message>
+        <message>
+            <source>Jump to {0}</source>
+            <translation>Ir para {0}</translation>
+        </message>
+        <message>
+            <source>Forward 10 seconds</source>
+            <translation>Avançar 10 segundos</translation>
+        </message>
+        <message>
+            <source>Chat replay unavailable</source>
+            <translation>Replay do chat indisponível</translation>
+        </message>
+        <message>
+            <source>Buffering stream…</source>
+            <translation>Carregando buffer da transmissão…</translation>
+        </message>
+        <message>
+            <source>Buffering video…</source>
+            <translation>Carregando buffer do vídeo…</translation>
+        </message>
+        <message>
+            <source>This video can't be played on this Roku.</source>
+            <translation>Este vídeo não pode ser reproduzido neste Roku.</translation>
+        </message>
+        <message>
+            <source>Having trouble loading the video. Retrying…</source>
+            <translation>Problemas ao carregar o vídeo. Tentando novamente…</translation>
+        </message>
+        <message>
+            <source>Press OK or Play to jump to {0}. Press Back to cancel.</source>
+            <translation>Pressione OK ou Reproduzir para ir para {0}. Pressione Voltar para cancelar.</translation>
+        </message>
+        <message>
+            <source>Press Play to jump to {0}. Press Back to cancel.</source>
+            <translation>Pressione Reproduzir para ir para {0}. Pressione Voltar para cancelar.</translation>
+        </message>
+        <message>
+            <source>Video length: {0}</source>
+            <translation>Duração do vídeo: {0}</translation>
+        </message>
+        <message>
+            <source>Couldn't load this video</source>
+            <translation>Não foi possível carregar este vídeo</translation>
+        </message>
+        <message>
+            <source>Twitch didn't return a playlist for it. Check your connection, then try again.</source>
+            <translation>A Twitch não retornou uma playlist para ele. Verifique sua conexão e tente novamente.</translation>
+        </message>
+        <message>
+            <source>Twitch couldn't provide this video.</source>
+            <translation>A Twitch não conseguiu fornecer este vídeo.</translation>
+        </message>
+        <message>
+            <source>This video is only available to subscribers</source>
+            <translation>Este vídeo está disponível apenas para inscritos</translation>
+        </message>
+        <message>
+            <source>This video has expired and is no longer available</source>
+            <translation>Este vídeo expirou e não está mais disponível</translation>
+        </message>
+        <message>
+            <source>This video has been deleted</source>
+            <translation>Este vídeo foi excluído</translation>
+        </message>
+        <message>
+            <source>Select the video again from Browse.</source>
+            <translation>Selecione o vídeo novamente em Navegar.</translation>
+        </message>
+        <message>
+            <source>Audio/video format problem</source>
+            <translation>Problema no formato de áudio e vídeo</translation>
+        </message>
+        <message>
+            <source>The demux service could not provide playable audio and video. Check the service connection and version, then try again.</source>
+            <translation>O serviço de demux não conseguiu fornecer áudio e vídeo reproduzíveis. Verifique a conexão e a versão do serviço e tente novamente.</translation>
+        </message>
+        <message>
+            <source>Video format needs the audio service</source>
+            <translation>Este formato de vídeo precisa do serviço de áudio</translation>
+        </message>
+        <message>
+            <source>This stream uses combined audio/video CMAF segments. Configure the optional demux service in Settings, or choose another stream.</source>
+            <translation>Esta transmissão usa segmentos CMAF com áudio e vídeo combinados. Configure o serviço opcional de demux em Configurações ou escolha outra transmissão.</translation>
+        </message>
+        <message>
+            <source>Reconnecting…</source>
+            <translation>Reconectando…</translation>
+        </message>
+        <message>
+            <source>Switching to a lower quality…</source>
+            <translation>Mudando para uma qualidade menor…</translation>
+        </message>
+        <message>
+            <source>Refreshing video access…</source>
+            <translation>Renovando o acesso ao vídeo…</translation>
+        </message>
+        <message>
+            <source>Adjusting quality for smoother playback…</source>
+            <translation>Ajustando a qualidade para uma reprodução mais estável…</translation>
+        </message>
+        <message>
+            <source>Playback stopped after several recovery attempts.</source>
+            <translation>A reprodução parou após várias tentativas de recuperação.</translation>
+        </message>
+        <message>
+            <source>Playback interrupted</source>
+            <translation>Reprodução interrompida</translation>
+        </message>
+        <message>
+            <source>This video kept buffering after several recovery attempts. Check your connection, then try again.</source>
+            <translation>Este vídeo continuou carregando o buffer após várias tentativas de recuperação. Verifique sua conexão e tente novamente.</translation>
+        </message>
+        <message>
+            <source>Stream frozen</source>
+            <translation>Transmissão congelada</translation>
+        </message>
+        <message>
+            <source>Twitch playback stopped and couldn't be recovered automatically.</source>
+            <translation>A reprodução da Twitch parou e não pôde ser recuperada automaticamente.</translation>
+        </message>
+        <message>
+            <source>Reconnecting… ({0}/{1})</source>
+            <translation>Reconectando… ({0}/{1})</translation>
+        </message>
+        <message>
+            <source>Trying again…</source>
+            <translation>Tentando novamente…</translation>
+        </message>
+        <message>
+            <source>Audio service needed</source>
+            <translation>Serviço de áudio necessário</translation>
+        </message>
+        <message>
+            <source>This stream combines audio and video in CMAF segments. Roku needs separate tracks.</source>
+            <translation>Esta transmissão combina áudio e vídeo em segmentos CMAF. O Roku precisa de faixas separadas.</translation>
+        </message>
+        <message>
+            <source>Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream.</source>
+            <translation>Configure a URL do serviço opcional de demux em Configurações ou volte para Navegar e escolha uma transmissão compatível.</translation>
+        </message>
+        <message>
+            <source>The service runs directly in Python or in Docker; it does not re-encode your video.</source>
+            <translation>O serviço roda diretamente em Python ou no Docker; ele não recodifica seu vídeo.</translation>
+        </message>
+        <message>
+            <source>Audio service unavailable. Switching to a compatible quality…</source>
+            <translation>Serviço de áudio indisponível. Mudando para uma qualidade compatível…</translation>
+        </message>
+        <message>
+            <source>Chat is unavailable for this video</source>
+            <translation>O chat não está disponível para este vídeo</translation>
+        </message>
+        <message>
+            <source>Stitch currently supports chat during live streams. Chat replay is unavailable for VODs and clips. Your video will continue playing.</source>
+            <translation>No momento, o Stitch oferece chat durante transmissões ao vivo. O replay do chat não está disponível para VODs e clipes. Seu vídeo continuará sendo reproduzido.</translation>
+        </message>
+        <message>
+            <source>Continue watching</source>
+            <translation>Continuar assistindo</translation>
+        </message>
+        <message>
+            <source>Can't connect to the stream</source>
+            <translation>Não foi possível conectar à transmissão</translation>
+        </message>
+        <message>
+            <source>Stitch lost its connection to Twitch while loading this video.</source>
+            <translation>O Stitch perdeu a conexão com a Twitch ao carregar este vídeo.</translation>
+        </message>
+        <message>
+            <source>Check your internet connection, then try again.</source>
+            <translation>Verifique sua conexão com a internet e tente novamente.</translation>
+        </message>
+        <message>
+            <source>The stream is loading slowly</source>
+            <translation>A transmissão está carregando devagar</translation>
+        </message>
+        <message>
+            <source>The video took too long to load. The network may be busy.</source>
+            <translation>O vídeo demorou demais para carregar. A rede pode estar congestionada.</translation>
+        </message>
+        <message>
+            <source>Try again, or choose a lower video quality.</source>
+            <translation>Tente novamente ou escolha uma qualidade de vídeo menor.</translation>
+        </message>
+        <message>
+            <source>Stream unavailable</source>
+            <translation>Transmissão indisponível</translation>
+        </message>
+        <message>
+            <source>This stream isn't available right now. The broadcaster may have ended it.</source>
+            <translation>Esta transmissão não está disponível agora. O streamer pode tê-la encerrado.</translation>
+        </message>
+        <message>
+            <source>Try again in a moment, or check back later.</source>
+            <translation>Tente novamente em instantes ou volte mais tarde.</translation>
+        </message>
+        <message>
+            <source>Couldn't find this stream</source>
+            <translation>Não foi possível encontrar esta transmissão</translation>
+        </message>
+        <message>
+            <source>It may have been deleted or moved.</source>
+            <translation>Ela pode ter sido excluída ou movida.</translation>
+        </message>
+        <message>
+            <source>Go back and choose another stream.</source>
+            <translation>Volte e escolha outra transmissão.</translation>
+        </message>
+        <message>
+            <source>Twitch didn't authorize this video</source>
+            <translation>A Twitch não autorizou este vídeo</translation>
+        </message>
+        <message>
+            <source>It may need a Twitch account or have other restrictions, such as subscriber-only access.</source>
+            <translation>Ele pode exigir uma conta da Twitch ou ter outras restrições, como acesso apenas para inscritos.</translation>
+        </message>
+        <message>
+            <source>Public streams play without signing in. Try again, or choose another video.</source>
+            <translation>Transmissões públicas são reproduzidas sem entrar. Tente novamente ou escolha outro vídeo.</translation>
+        </message>
+        <message>
+            <source>Playback keeps stopping</source>
+            <translation>A reprodução continua parando</translation>
+        </message>
+        <message>
+            <source>The stream is being interrupted often.</source>
+            <translation>A transmissão está sendo interrompida com frequência.</translation>
+        </message>
+        <message>
+            <source>Try a lower video quality, or check your connection speed.</source>
+            <translation>Tente uma qualidade de vídeo menor ou verifique a velocidade da sua conexão.</translation>
+        </message>
+        <message>
+            <source>Can't play this stream format</source>
+            <translation>Não é possível reproduzir este formato de transmissão</translation>
+        </message>
+        <message>
+            <source>The stream may use an encoding this Roku can't play.</source>
+            <translation>A transmissão pode usar uma codificação que este Roku não consegue reproduzir.</translation>
+        </message>
+        <message>
+            <source>Try again, or choose a different video quality.</source>
+            <translation>Tente novamente ou escolha outra qualidade de vídeo.</translation>
+        </message>
+        <message>
+            <source>Couldn't play this video</source>
+            <translation>Não foi possível reproduzir este vídeo</translation>
+        </message>
+        <message>
+            <source>There was a problem decoding the video stream.</source>
+            <translation>Houve um problema ao decodificar o fluxo de vídeo.</translation>
+        </message>
+        <message>
+            <source>Twitch is having problems</source>
+            <translation>A Twitch está com problemas</translation>
+        </message>
+        <message>
+            <source>Twitch's video service returned an error.</source>
+            <translation>O serviço de vídeo da Twitch retornou um erro.</translation>
+        </message>
+        <message>
+            <source>Wait a moment, then try again.</source>
+            <translation>Aguarde um momento e tente novamente.</translation>
+        </message>
+        <message>
+            <source>This Roku can't play this video's codec or resolution.</source>
+            <translation>Este Roku não consegue reproduzir o codec ou a resolução deste vídeo.</translation>
+        </message>
+        <message>
+            <source>Try a lower video quality, 720p or below.</source>
+            <translation>Tente uma qualidade de vídeo menor, de 720p ou inferior.</translation>
+        </message>
+        <message>
+            <source>Error code: {0}</source>
+            <translation>Código de erro: {0}</translation>
+        </message>
+        <message>
+            <source>Try again later.</source>
+            <translation>Tente novamente mais tarde.</translation>
+        </message>
+        <message>
+            <source>Connecting to chat…</source>
+            <translation>Conectando ao chat…</translation>
+        </message>
+        <message>
+            <source>Chat disconnected. Reconnecting…</source>
+            <translation>Chat desconectado. Reconectando…</translation>
+        </message>
+        <message>
+            <source>Chat is unavailable. Close and reopen chat to retry.</source>
+            <translation>O chat está indisponível. Feche e abra o chat novamente para tentar de novo.</translation>
+        </message>
+        <message>
+            <source>Signing out keeps your settings and recent channels on this Roku. You can still watch public streams.</source>
+            <translation>Ao sair, suas configurações e canais recentes continuam neste Roku. Você ainda pode assistir a transmissões públicas.</translation>
+        </message>
+        <message>
+            <source>The quality a stream starts at. You can change it while watching with the Quality button.</source>
+            <translation>A qualidade inicial de uma transmissão. Você pode alterá-la enquanto assiste com o botão Qualidade.</translation>
+        </message>
+        <message>
+            <source>Automatic</source>
+            <translation>Automática</translation>
+        </message>
+        <message>
+            <source>Highest available</source>
+            <translation>A mais alta disponível</translation>
+        </message>
+        <message>
+            <source>Lowest (uses less data)</source>
+            <translation>A mais baixa (usa menos dados)</translation>
+        </message>
+        <message>
+            <source>Lower live latency</source>
+            <translation>Menor latência ao vivo</translation>
+        </message>
+        <message>
+            <source>Try to stay closer to the live broadcast. May cause more buffering on some devices or connections. Takes effect when opening a stream.</source>
+            <translation>Tenta ficar mais perto da transmissão ao vivo. Pode causar mais carregamento de buffer em alguns aparelhos ou conexões. Vale ao abrir uma transmissão.</translation>
+        </message>
+        <message>
+            <source>Show chat when a stream starts</source>
+            <translation>Mostrar o chat ao iniciar uma transmissão</translation>
+        </message>
+        <message>
+            <source>Opens live chat beside the video. You can show or hide chat while watching. Chat is available for live streams.</source>
+            <translation>Abre o chat ao vivo ao lado do vídeo. Você pode mostrar ou ocultar o chat enquanto assiste. O chat está disponível em transmissões ao vivo.</translation>
+        </message>
+        <message>
+            <source>Chat text size</source>
+            <translation>Tamanho do texto do chat</translation>
+        </message>
+        <message>
+            <source>Size of chat messages. Emotes and badges scale with it.</source>
+            <translation>Tamanho das mensagens do chat. Emotes e insígnias acompanham o tamanho.</translation>
+        </message>
+        <message>
+            <source>Extra small (10)</source>
+            <translation>Extrapequeno (10)</translation>
+        </message>
+        <message>
+            <source>Small (12)</source>
+            <translation>Pequeno (12)</translation>
+        </message>
+        <message>
+            <source>Medium (14)</source>
+            <translation>Médio (14)</translation>
+        </message>
+        <message>
+            <source>Large (16)</source>
+            <translation>Grande (16)</translation>
+        </message>
+        <message>
+            <source>Extra large (18)</source>
+            <translation>Extragrande (18)</translation>
+        </message>
+        <message>
+            <source>Largest (20)</source>
+            <translation>O maior (20)</translation>
+        </message>
+        <message>
+            <source>BetterTTV emotes</source>
+            <translation>Emotes do BetterTTV</translation>
+        </message>
+        <message>
+            <source>Show BetterTTV emotes in live chat.</source>
+            <translation>Mostra emotes do BetterTTV no chat ao vivo.</translation>
+        </message>
+        <message>
+            <source>7TV emotes</source>
+            <translation>Emotes do 7TV</translation>
+        </message>
+        <message>
+            <source>Show 7TV emotes in live chat.</source>
+            <translation>Mostra emotes do 7TV no chat ao vivo.</translation>
+        </message>
+        <message>
+            <source>FrankerFaceZ emotes</source>
+            <translation>Emotes do FrankerFaceZ</translation>
+        </message>
+        <message>
+            <source>Show FrankerFaceZ emotes in live chat.</source>
+            <translation>Mostra emotes do FrankerFaceZ no chat ao vivo.</translation>
+        </message>
+        <message>
+            <source>Browse: live channel order</source>
+            <translation>Navegar: ordem dos canais ao vivo</translation>
+        </message>
+        <message>
+            <source>How live channels are ordered on the Browse page.</source>
+            <translation>Como os canais ao vivo são ordenados na página Navegar.</translation>
+        </message>
+        <message>
+            <source>Recommended</source>
+            <translation>Recomendados</translation>
+        </message>
+        <message>
+            <source>Viewers (High to Low)</source>
+            <translation>Espectadores (do maior para o menor)</translation>
+        </message>
+        <message>
+            <source>Viewers (Low to High)</source>
+            <translation>Espectadores (do menor para o maior)</translation>
+        </message>
+        <message>
+            <source>Recently Started</source>
+            <translation>Iniciados recentemente</translation>
+        </message>
+        <message>
+            <source>Following: offline channel order</source>
+            <translation>Seguindo: ordem dos canais offline</translation>
+        </message>
+        <message>
+            <source>How offline channels you follow are ordered on the Following page.</source>
+            <translation>Como os canais offline que você segue são ordenados na página Seguindo.</translation>
+        </message>
+        <message>
+            <source>Streamer Name</source>
+            <translation>Nome do streamer</translation>
+        </message>
+        <message>
+            <source>Followers (High to Low)</source>
+            <translation>Seguidores (do maior para o menor)</translation>
+        </message>
+        <message>
+            <source>Followers (Low to High)</source>
+            <translation>Seguidores (do menor para o maior)</translation>
+        </message>
+        <message>
+            <source>Demux service URL (optional)</source>
+            <translation>URL do serviço de demux (opcional)</translation>
+        </message>
+        <message>
+            <source>Some Twitch streams package audio and video together in a way Roku can't play directly. If you run Stitch's optional demux service on your network, enter its address, for example http://192.168.1.20:8080. Leave empty to turn it off.</source>
+            <translation>Algumas transmissões da Twitch empacotam áudio e vídeo juntos de um jeito que o Roku não consegue reproduzir diretamente. Se você executa o serviço opcional de demux do Stitch na sua rede, digite o endereço dele, por exemplo http://192.168.1.20:8080. Deixe vazio para desativá-lo.</translation>
+        </message>
+        <message>
+            <source>Optional diagnostics</source>
+            <translation>Diagnóstico opcional</translation>
+        </message>
+        <message>
+            <source>Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.</source>
+            <translation>Compartilhe o uso do app e detalhes do aparelho para ajudar a melhorar o Stitch. Desligado por padrão. As alterações valem na próxima vez que o app for aberto.</translation>
+        </message>
+        <message>
+            <source>Support Stitch</source>
+            <translation>Apoie o Stitch</translation>
+        </message>
+        <message>
+            <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
+            <translation>O Stitch é um cliente gratuito da Twitch feito pela comunidade. Se ele for útil para você, escaneie o QR code para apoiar o desenvolvimento no Buy Me a Coffee. Obrigado!</translation>
+        </message>
     </context>
 </TS>

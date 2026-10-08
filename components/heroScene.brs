@@ -323,6 +323,7 @@ sub discardScene(node as dynamic)
     node.unobserveField("backPressed")
     node.unobserveField("contentSelected")
     node.unobserveField("finished")
+    if node.hasField("signedOut") then node.unobserveField("signedOut")
     if node.hasField("menuRequest") then node.unobserveField("menuRequest")
     node.lastFocus = invalid
     disposeNodeTree(node)
@@ -345,12 +346,20 @@ end sub
 
 sub onLogoutFinished()
     if m.disposed then return
+    ' Signing out from the Account panel returns to anonymous browsing;
+    ' Settings rebuilds itself so its account row updates.
+    target = "Settings"
+    if m.activeNode <> invalid and m.activeNode.id = "LoginPage" then target = "Following"
     m.menu.updateUserIcon = true
     teardownAllScenes()
-    ' Rebuild Settings so the logout option disappears
-    m.activeNode = buildNode("Settings")
+    if target = "Following"
+        m.menu.focusItem = target
+        openPage(target)
+        return
+    end if
+    m.activeNode = buildNode(target)
     if m.activeNode <> invalid
-        m.menu.activeItem = "Settings"
+        m.menu.activeItem = target
         m.activeNode.setFocus(true)
     end if
 end sub
@@ -361,20 +370,9 @@ sub onMenuSelection()
     if menuItem <> ""
         trackEvent("tab_visited", { tab: menuItem })
     end if
-    ' If user is already logged in, show them their user page
-    if menuItem = "LoginPage" and get_setting("active_user", "$default$") <> "$default$"
-        if m.activeNode = invalid then return
-        content = createObject("roSGNode", "TwitchContentNode")
-        content.streamerDisplayName = get_user_setting("display_name")
-        content.streamerLogin = get_user_setting("login")
-        content.streamerId = get_user_setting("id")
-        content.streamerProfileImageUrl = get_user_setting("profile_image_url")
-        content.contentType = "STREAMER"
-        m.activeNode.contentSelected = content
-    else
-        if m.menu.focusedChild = invalid then return
-        openPage(menuItem)
-    end if
+    if m.menu.focusedChild = invalid then return
+    ' Signed in, the account button opens the Account panel (LoginPage).
+    openPage(menuItem)
 end sub
 
 sub openPage(menuItem as string)

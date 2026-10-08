@@ -5,7 +5,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
 | P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
-| P1 | Implement completed Opus UI specification and finish Kimi/Grok reviews | Plan section 5; bounded phases, preserved features, actual checked files required |
+| P1 | Finish Kimi/Grok reviews of the complete modernization diff | Native implementation and root checks are complete; final independent findings and hardware release gates remain open |
 | P1 | Remove temporary build dependency exception when patched | Exact policy expires November 6, 2026; new advisory/version/patch fails CI until reviewed |
 | P2 | Handle declared external launch/deep-link input | Manifest advertises input launch; main does not dispatch launch content |
 | P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |
@@ -15,9 +15,12 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P2 | Make tagged channel releases validate their exact source | Release currently relies on main CI; gate tag artifacts on lint/audit/tests/package checks |
 | P2 | Expand production resolver and container reproducibility coverage | Add create_app resolver-wiring regression; consider digest-pinned Python base image |
 | P2 | Measure native UI rendering and per-instance regex caching | Actual TV typography/contrast/overscan, older-device scrolling and before/after card recycle timing; simulator gaps remain unproven |
-| P2 | Complete locale coverage for new status and recovery copy | Inventory translations and verify long-string layouts |
-| P2 | Verify own-channel live-row content type during Account work | Account requests use STREAMER while shared row config supports LIVE/USER; normalize with actual channel data and preserve playback metadata |
-| P2 | Give recorded-video seek holds an initial delay during the player redesign | The current 0.1 s repeating timer starts on press; the simulator's 150 ms tap adds a second 10 s step. Test tap versus hold and confirm timing with a physical remote |
+| P2 | Review Spanish/Portuguese interface strings and native long-string fit | All new copy is covered; phase-two translations remain flagged for native-speaker review |
+| P2 | Verify own-channel navigation and live playback on Roku | Account emits LIVE content by login; actual handler/Back regressions pass, native playback remains pending |
+| P2 | Verify delayed sign-in failure focus on Roku | Minimal focus guard and tracked late-failure/menu/return/Retry/disposal regressions pass; confirm native focus |
+| P2 | Verify recorded seek tap/hold timing on physical and mobile remotes | One tap advances ten seconds; a 0.4-second initial delay precedes accelerated repeats. Actual engine regressions pass; hardware timing remains pending |
+| P2 | Verify native child quality-dialog keys | Simulator diverges on child StandardMessageDialog Up/Down/OK/Back; option/index semantics pass, native keys remain a release gate |
+| P3 | Supply storyboard thumbnails after capturing a supported source | Thumbnail consumer is preserved; no producer exists at baseline or current source. Do not widen playback queries without verified evidence |
 | P3 | Keep row geometry arrays aligned for future content types | Push labels, sizes and heights together only for supported rows; current produced types are covered |
 | P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
 | P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |

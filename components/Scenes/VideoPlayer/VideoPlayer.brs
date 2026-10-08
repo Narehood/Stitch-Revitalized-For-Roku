@@ -7,6 +7,8 @@ sub handleContent()
     m.recoveryAttempts = 0
     m.resumePosition = invalid
     m.nativeFallbackTried = false
+    m.manualRetryPending = false
+    m.preferredQuality = invalid
     m.errorHandler.callFunc("resetErrorState")
     m.top.chatStarted = false
     if m.chatWindow <> invalid
@@ -21,16 +23,19 @@ sub handleContent()
 end sub
 
 sub onResponse()
-    if m.PlayVideo = invalid then return
+    if m.disposed or m.PlayVideo = invalid then return
+    m.manualRetryPending = false
     if m.PlayVideo.response = invalid
         m.PlayVideo = destroyTask(m.PlayVideo, "response")
-        showErrorDialog("Unable to load video", "The video playlist could not be loaded. Check your connection and try again.")
+        showErrorDialog(tr("Couldn't load this video"), tr("Twitch didn't return a playlist for it. Check your connection, then try again."))
         return
     end if
     if m.PlayVideo.response <> invalid and m.PlayVideo.response.contentType = "ERROR"
         ' Display error message to user
-        errorTitle = "Error while loading this video"
-        errorMessage = "Unable to play this content"
+        errorTitle = tr("Couldn't load this video")
+        errorMessage = tr("Twitch couldn't provide this video.")
+        ' Restricted, expired and deleted videos cannot succeed on retry.
+        canRetry = true
 
         if m.PlayVideo.response.description <> invalid and m.PlayVideo.response.description <> ""
             errorMessage = m.PlayVideo.response.description
@@ -38,11 +43,14 @@ sub onResponse()
 
         if m.PlayVideo.response.errorCode <> invalid
             if m.PlayVideo.response.errorCode = "vod_manifest_restricted"
-                errorMessage = "This video is only available to subscribers"
+                errorMessage = tr("This video is only available to subscribers")
+                canRetry = false
             else if m.PlayVideo.response.errorCode = "vod_manifest_expired"
-                errorMessage = "This video has expired and is no longer available"
+                errorMessage = tr("This video has expired and is no longer available")
+                canRetry = false
             else if m.PlayVideo.response.errorCode = "vod_manifest_missing"
-                errorMessage = "This video has been deleted"
+                errorMessage = tr("This video has been deleted")
+                canRetry = false
             end if
         end if
 
@@ -52,13 +60,14 @@ sub onResponse()
             streamer_login: m.top.contentRequested?.streamerLogin,
             content_type: m.top.contentRequested?.contentType
         })
-        showErrorDialog(errorTitle, errorMessage)
+        showErrorDialog(errorTitle, errorMessage, canRetry)
         m.PlayVideo = destroyTask(m.PlayVideo, "response")
         return
     end if
 
     m.top.content = m.PlayVideo.response
     m.top.metadata = m.PlayVideo.metadata
+    applyPreferredQuality()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
 
     ' Warn before playing Enhanced Broadcasting (transmux) streams
@@ -144,7 +153,7 @@ sub playContent(isRecovery = false as boolean)
     m.lastGoodPosition = invalid
     m.stallSeconds = 0
     if m.top.content = invalid
-        showErrorDialog("Unable to load video", "Select the video again from Browse.")
+        showErrorDialog(tr("Couldn't load this video"), tr("Select the video again from Browse."))
         return
     end if
 
@@ -257,6 +266,9 @@ sub playContent(isRecovery = false as boolean)
     m.video.observeField("position", "onPositionChanged")
     m.video.observeField("state", "onVideoStateChange")
     m.video.observeField("duration", "onDurationChanged")
+    ' A wrapper recreated for a quality change, recovery or Try again lays
+    ' out its controls beside chat that is already open.
+    if m.chatWindow <> invalid and m.chatWindow.visible then onChatVisibilityChange()
 
     videoBookmarks = get_user_setting("VideoBookmarks", "")
     m.video.video_type = m.top.contentRequested.contentType
@@ -555,9 +567,10 @@ sub onVideoStateChange()
         if errorMsg.InStr("buffer:loop:demux") > -1 or errorMsg.InStr("970") > -1
             if tryNativePlaybackFallback() then return
             if m.top.content.isProxied
-                showErrorDialog("Audio/video format problem", "The demux service could not provide playable audio and video. Check the service connection and version, then try again.")
+                showErrorDialog(tr("Audio/video format problem"), tr("The demux service could not provide playable audio and video. Check the service connection and version, then try again."))
             else
-                showErrorDialog("Video format needs the audio service", "This stream uses combined audio/video CMAF segments. Configure the optional demux service in Settings, or choose another stream.")
+                ' Fails closed: retrying cannot help until the service is set up.
+                showErrorDialog(tr("Video format needs the audio service"), tr("This stream uses combined audio/video CMAF segments. Configure the optional demux service in Settings, or choose another stream."), false)
             end if
             return
         end if
@@ -599,7 +612,7 @@ sub handleStreamError(errorStr = invalid as dynamic)
     if recovery.shouldRetry
         if recovery.action = "retry"
             ? getLogTimestamp(); " [VideoPlayer] Retry delay="; recovery.delay; " code="; errorCode
-            showTemporaryMessage("Reconnecting...")
+            showTemporaryMessage(tr("Reconnecting…"))
 
             ' Cancel any in-flight retry timer before creating a new one
             if m.retryTimer <> invalid
@@ -615,7 +628,7 @@ sub handleStreamError(errorStr = invalid as dynamic)
 
         else if recovery.action = "change_quality" and recovery.newContent <> invalid
             ' Show quality change message
-            showTemporaryMessage("Switching to lower quality...")
+            showTemporaryMessage(tr("Switching to a lower quality…"))
 
             ' Switch to different quality
             m.video.qualityChangeRequest = recovery.newContent.index
@@ -623,14 +636,14 @@ sub handleStreamError(errorStr = invalid as dynamic)
 
         else if recovery.action = "refresh_auth"
             ' Show auth message
-            showTemporaryMessage("Refreshing authentication...")
+            showTemporaryMessage(tr("Refreshing video access…"))
 
             ' Refresh authentication and retry
             refreshAuthAndRetry()
 
         else if recovery.action = "force_lower_quality"
             ' Show quality message
-            showTemporaryMessage("Adjusting quality for better playback...")
+            showTemporaryMessage(tr("Adjusting quality for smoother playback…"))
 
             ' Force switch to lowest available quality
             if m.video.qualityOptions <> invalid and m.video.qualityOptions.count() > 0
@@ -641,11 +654,14 @@ sub handleStreamError(errorStr = invalid as dynamic)
         else if recovery.action = "fail_immediately"
             ' Get user-friendly error message
             errorInfo = m.errorHandler.callFunc("getUserFriendlyErrorMessage", errorCode, errorType)
-            showErrorDialog(errorInfo.title, errorInfo.message + Chr(10) + Chr(10) + "Suggestion: " + errorInfo.suggestion)
+            showErrorDialog(errorInfo.title, errorInfo.message + Chr(10) + errorInfo.suggestion)
         end if
     else
         errorInfo = m.errorHandler.callFunc("getUserFriendlyErrorMessage", errorCode, errorType)
-        showErrorDialog(errorInfo.title, errorInfo.message + Chr(10) + "Playback stopped after bounded recovery. Reopen the video to try again.")
+        ' Only say recovery ran out when it did; other errors get the advice.
+        detail = errorInfo.suggestion
+        if recovery.action = "fail" or m.recoveryAttempts >= m.maxRecoveryAttempts then detail = tr("Playback stopped after several recovery attempts.")
+        showErrorDialog(errorInfo.title, errorInfo.message + Chr(10) + detail)
     end if
 end sub
 
@@ -667,7 +683,7 @@ sub handleBufferingState()
                 lowerQuality = findLowerQuality()
                 if lowerQuality <> invalid
                     if m.recoveryAttempts >= m.maxRecoveryAttempts
-                        showErrorDialog("Playback interrupted", "This video kept buffering after several recovery attempts. Check your connection and reopen it to try again.")
+                        showErrorDialog(tr("Playback interrupted"), tr("This video kept buffering after several recovery attempts. Check your connection, then try again."))
                         return
                     end if
                     m.recoveryAttempts++
@@ -780,7 +796,7 @@ sub beginLiveReconnect(reason as string)
     m.reconnectAttempts = m.reconnectAttempts + 1
     m.recoveryAttempts++
     if m.reconnectAttempts > m.maxReconnectAttempts or m.recoveryAttempts > m.maxRecoveryAttempts
-        showErrorDialog("Stream frozen", "Twitch playback froze after an ad and could not be recovered.")
+        showErrorDialog(tr("Stream frozen"), tr("Twitch playback stopped and couldn't be recovered automatically."))
         return
     end if
 
@@ -792,7 +808,7 @@ sub beginLiveReconnect(reason as string)
     if delaySec > 16 then delaySec = 16
 
     ? getLogTimestamp(); " [VideoPlayer] beginLiveReconnect reason="; reason; " attempt="; m.reconnectAttempts; "/"; m.maxReconnectAttempts
-    showTemporaryMessage("Reconnecting... (" + m.reconnectAttempts.toStr() + "/" + m.maxReconnectAttempts.toStr() + ")")
+    showTemporaryMessage(tr("Reconnecting… ({0}/{1})").replace("{0}", m.reconnectAttempts.toStr()).replace("{1}", m.maxReconnectAttempts.toStr()))
 
     if m.watchdogTimer <> invalid
         m.watchdogTimer.control = "stop"
@@ -940,15 +956,31 @@ function findLowerQuality() as dynamic
     return invalid
 end function
 
-sub showErrorDialog(title as string, message as string)
-    if m.errorDialog <> invalid then return
+' Playback stops behind the dialog. Try again makes one fresh attempt for the
+' same video; Back (button or remote) leaves the player as before. Errors
+' that a retry cannot fix pass allowRetry=false and offer only Back.
+sub showErrorDialog(title as string, message as string, allowRetry = true as boolean)
+    if m.disposed or m.errorDialog <> invalid then return
+    rememberRetryState()
     stopPlaybackForDialog()
-    dialog = CreateObject("roSGNode", "Dialog")
+    m.manualRetryPending = false
+    dialog = CreateObject("roSGNode", "StandardMessageDialog")
     dialog.title = title
-    dialog.message = message
-    dialog.buttons = ["OK"]
-    dialog.observeField("buttonSelected", "onErrorDialogDismissed")
-    dialog.observeField("wasClosed", "onErrorDialogDismissed")
+    paragraphs = []
+    for each paragraph in message.split(Chr(10))
+        if paragraph.trim() <> "" then paragraphs.push(paragraph)
+    end for
+    dialog.message = paragraphs
+    if allowRetry and m.top.contentRequested <> invalid
+        m.errorDialogActions = ["retry", "back"]
+        dialog.buttons = [tr("Try again"), tr("Back")]
+    else
+        m.errorDialogActions = ["back"]
+        dialog.buttons = [tr("Back")]
+    end if
+    applyDialogPalette(dialog)
+    dialog.observeField("buttonSelected", "onErrorDialogButton")
+    dialog.observeField("wasClosed", "onErrorDialogClosed")
     ' Use the scene's dialog property, not m.top.dialog
     scene = m.top.getScene()
     if scene <> invalid
@@ -957,25 +989,109 @@ sub showErrorDialog(title as string, message as string)
     m.errorDialog = dialog
 end sub
 
-sub onErrorDialogDismissed()
-    if m.errorDialog <> invalid
-        m.errorDialog.unobserveField("buttonSelected")
-        m.errorDialog.unobserveField("wasClosed")
+sub onErrorDialogButton()
+    dialog = m.errorDialog
+    if dialog = invalid then return
+    action = "back"
+    index = dialog.buttonSelected
+    if index >= 0 and index < m.errorDialogActions.count() then action = m.errorDialogActions[index]
+    closeErrorDialog()
+    if action = "retry"
+        retryAfterError()
+    else
+        exitPlayer()
     end if
-    scene = m.top.getScene()
-    if scene <> invalid
-        scene.dialog = invalid
-    end if
-    m.errorDialog = invalid
+end sub
+
+sub onErrorDialogClosed()
+    if m.errorDialog = invalid then return
+    closeErrorDialog()
     exitPlayer()
+end sub
+
+' Idempotent: unobserves first, so a second button event or a close that
+' follows a choice cannot act again.
+sub closeErrorDialog()
+    dialog = m.errorDialog
+    if dialog = invalid then return
+    m.errorDialog = invalid
+    dialog.unobserveField("buttonSelected")
+    dialog.unobserveField("wasClosed")
+    scene = m.top.getScene()
+    if scene <> invalid and scene.dialog <> invalid
+        if scene.dialog.isSameNode(dialog) then scene.dialog = invalid
+    end if
+end sub
+
+' Keeps the recorded position or the live quality a Try again should reuse.
+sub rememberRetryState()
+    m.retryPosition = invalid
+    m.retryQuality = invalid
+    if m.video = invalid or m.top.contentRequested = invalid then return
+    if m.top.contentRequested.contentType = "LIVE"
+        quality = m.video.selectedQuality
+        if quality <> invalid and quality <> "" then m.retryQuality = quality
+    else
+        position = m.video.position
+        if position <> invalid and position > 0 then m.retryPosition = position
+        if m.retryPosition = invalid then m.retryPosition = m.resumePosition
+    end if
+end sub
+
+' One explicit Try again is one fresh content request for the same video, the
+' same work as reopening it, so the session recovery budget starts over. The
+' pending flag ignores repeated presses until that request answers; the old
+' wrapper keeps only its Back/chat observers, so no stale state change can
+' start automatic recovery meanwhile. Disposal destroys the request.
+sub retryAfterError()
+    if m.disposed or m.manualRetryPending then return
+    if m.top.contentRequested = invalid
+        exitPlayer()
+        return
+    end if
+    m.manualRetryPending = true
+    stopPlaybackForDialog()
+    if m.video <> invalid
+        m.video.unobserveField("position")
+        m.video.unobserveField("state")
+        m.video.unobserveField("duration")
+        if m.video.isSubtype("StitchVideo") then m.video.unobserveField("QualityChangeRequestFlag")
+        m.video.callFunc("showMessage", "", tr("Trying again…"), 0)
+    end if
+    m.reconnectAttempts = 0
+    m.recoveryAttempts = 0
+    m.nativeFallbackTried = false
+    if m.errorHandler <> invalid then m.errorHandler.callFunc("resetErrorState")
+    m.resumePosition = m.retryPosition
+    m.preferredQuality = m.retryQuality
+    m.PlayVideo = CreateObject("roSGNode", "GetTwitchContent")
+    m.PlayVideo.observeField("response", "OnResponse")
+    m.PlayVideo.contentRequested = m.top.contentRequested.getFields()
+    m.PlayVideo.functionName = "main"
+    m.PlayVideo.control = "run"
+end sub
+
+' A Try again keeps the live quality that was playing when the error appeared,
+' with that entry's URL and proxy flags, as a quality change would.
+sub applyPreferredQuality()
+    quality = m.preferredQuality
+    m.preferredQuality = invalid
+    if quality = invalid or m.top.content = invalid or m.top.metadata = invalid then return
+    for each entry in m.top.metadata
+        if entry.QualityID = quality
+            m.top.content.setFields(entry)
+            return
+        end if
+    end for
 end sub
 
 sub showTransmuxWarning()
     stopPlaybackForDialog()
     dialog = createObject("roSGNode", "StandardMessageDialog")
-    dialog.title = "Audio service needed"
-    dialog.message = ["This stream combines audio and video in CMAF segments. Roku needs separate tracks.", "Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream.", "The service runs directly in Python or in Docker; it does not re-encode your video."]
-    dialog.buttons = ["Go Back"]
+    dialog.title = tr("Audio service needed")
+    dialog.message = [tr("This stream combines audio and video in CMAF segments. Roku needs separate tracks."), tr("Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream."), tr("The service runs directly in Python or in Docker; it does not re-encode your video.")]
+    dialog.buttons = [tr("Back")]
+    applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "onTransmuxDialogButton")
     dialog.observeField("wasClosed", "onTransmuxDialogClosed")
     m.transmuxDialog = dialog
@@ -1034,7 +1150,7 @@ function tryNativePlaybackFallback() as boolean
         entry = m.top.metadata[index]
         if not entry.isProxied and not entry.isTransmux
             m.recoveryAttempts++
-            showTemporaryMessage("Audio service unavailable. Switching to a native compatible quality...")
+            showTemporaryMessage(tr("Audio service unavailable. Switching to a compatible quality…"))
             m.video.qualityChangeRequest = index
             onQualityChangeRequested()
             return true
@@ -1067,10 +1183,11 @@ end sub
 
 sub showChatUnavailableNotice()
     if m.infoDialog <> invalid then return
-    dialog = CreateObject("roSGNode", "Dialog")
-    dialog.title = "Chat is unavailable for this video"
-    dialog.message = "Stitch currently supports chat during live streams. Chat replay is unavailable for VODs and clips. Your video will continue playing."
-    dialog.buttons = ["Continue watching"]
+    dialog = CreateObject("roSGNode", "StandardMessageDialog")
+    dialog.title = tr("Chat is unavailable for this video")
+    dialog.message = [tr("Stitch currently supports chat during live streams. Chat replay is unavailable for VODs and clips. Your video will continue playing.")]
+    dialog.buttons = [tr("Continue watching")]
+    applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "dismissChatNotice")
     dialog.observeField("wasClosed", "dismissChatNotice")
     m.infoDialog = dialog

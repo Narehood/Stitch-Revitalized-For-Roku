@@ -46,6 +46,10 @@ Proxy health proves reachability. Synthetic demux tests cannot establish decoder
 | Validation interruption and sign-out | Temporary failure preserves account; sign-out preserves preferences | Pending |
 | All pages and recent rail | Visible D-pad focus, reliable Back and focus restoration | Pending |
 | Settings, proxy entry, dialogs and player overlays | No trapped focus, clipped text or inaccessible actions | Pending |
+| Child quality dialog Up/Down/OK/Back, then player Back | Correct option/index, Cancel and exit behavior; simulator key routing diverges | Pending |
+| Recorded seek tap/hold/apply/cancel while playing and paused | One tap is ten seconds; held press accelerates after initial delay; prior play state restored | Pending |
+| Account own-channel/Back and delayed sign-in failure | Correct live channel route; retained page/focus; late failure preserves menu focus | Pending |
+| Archivo text, long strings, chat contrast and overscan | Readable at couch distance on lowest available device; no clipped targets or scrolling regression | Pending |
 | Repeated permanent and back-stack transitions | Permanent scenes clean up; retained scenes remain reusable | Pending |
 
 ## Low-latency comparison
