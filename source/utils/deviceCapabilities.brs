@@ -129,7 +129,7 @@ function isTwitchVariantSupported(variant as object, device = invalid as dynamic
         end if
         for each level in levels
             if GetInterface(level, "ifString") = invalid then return false
-            if validLevels.InStr("," + level + ",") < 0 then return false
+            if level.InStr(",") >= 0 or validLevels.InStr("," + level + ",") < 0 then return false
         end for
         for each level in levels
             if Val(level) < Val(format.level) then continue for

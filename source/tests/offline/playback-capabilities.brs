@@ -174,7 +174,7 @@ function playbackLevelNegotiationChecks() as boolean
         if not playbackCapabilityExpect(device.calls.Count() = 1, "validate entire level list before querying " + index.ToStr()) then return false
     end for
 
-    invalidLevelStrings = ["4.3", "04.1", "4", "4.10", "4.1x", "4.1 ", " 4.1", "4.1e0", "4.1" + Chr(10), "NaN", "Infinity", "-4.1", "+4.1", "3.4", "7.0", "", "1000000000000000.0"]
+    invalidLevelStrings = ["4.3", "04.1", "4", "4.10", "4.1x", "4.1 ", " 4.1", "4.1e0", "4.1" + Chr(10), "NaN", "Infinity", "-4.1", "+4.1", "3.4", "7.0", "", "1000000000000000.0", "4.1,4.2", "5.0,5.1", "4.1,4.2,5.0"]
     for each level in invalidLevelStrings
         device = playbackLevelDecoder([{ result: false, updated: "level", level: ["4.1", level] }, { result: true }])
         if not playbackCapabilityExpect(not isTwitchVariantSupported(main31, device), "noncanonical level cannot coerce to capacity " + FormatJson(level)) then return false

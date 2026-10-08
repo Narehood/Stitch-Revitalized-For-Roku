@@ -11,7 +11,7 @@ from aiohttp import web
 
 from fmp4_demux_proxy.config import Config, get_config
 from fmp4_demux_proxy.routes.health import health_handler
-from fmp4_demux_proxy.routes.m3u8_route import m3u8_handler
+from fmp4_demux_proxy.routes.m3u8_route import m3u8_handler, selected_m3u8_handler
 from fmp4_demux_proxy.routes.segment_route import (
     STORE_KEY,
     SegmentStore,
@@ -66,5 +66,6 @@ def create_app(config: Config | None = None) -> web.Application:
     app.cleanup_ctx.append(segment_store_cleanup_ctx)
     app.router.add_get("/health", health_handler)
     app.router.add_get("/m3u8", m3u8_handler)
+    app.router.add_get("/m3u8/selected", selected_m3u8_handler)
     app.router.add_get("/s", segment_handler)
     return app

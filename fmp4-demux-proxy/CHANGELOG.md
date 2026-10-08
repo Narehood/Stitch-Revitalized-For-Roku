@@ -2,6 +2,13 @@
 
 All notable changes to `fmp4-demux-proxy` are documented here.
 
+## [0.3.0] - Unreleased
+
+### Fixed
+- Preserve filtered adaptive qualities when Twitch rotates rendition URLs between master requests. A separate `/m3u8/selected` endpoint matches complete URL-free rendition and referenced-group descriptions, selects only fresh approved URLs and inspects their current tracks.
+- Reject changed, missing, ambiguous or shared-URL selections before serving media. Preserve existing exact-URL contracts, DNS/redirect protections, limits and signed query strings; older services return 404 for the new endpoint.
+- Add 126 selection/schema/security/resource regressions, bringing the proxy suite to 309 tests on Python 3.12 and 3.14. Client-produced request interoperability is also verified.
+
 ## [0.2.0] - Unreleased
 
 - Resolve exact init URL/range for every media request; coalesce audio/video fetches and fail closed on missing tracks or unsupported sample addressing.

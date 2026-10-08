@@ -5,6 +5,8 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
 | P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
+| P1 | Verify approved adaptive qualities across rotating Twitch master URLs | Client/service0.3.0 strict descriptors implemented; local309 proxy/9offline/30Node checks pass; fresh native Automatic picture/audio user-confirmed; adaptation/sustained checks and new review remain open |
+| P1 | Test Roku-only combined-CMAF conversion feasibility | Native finite loopback HTTP and stop-before-client cleanup pass on G204X; native Video/media, bounded splitting, sustained throughput/memory and broader-device cleanup remain required before replacing the separate Python service |
 | P1 | Remove temporary build dependency exception when patched | Exact policy expires November 6, 2026; new advisory/version/patch fails CI until reviewed |
 | P2 | Handle declared external launch/deep-link input | Manifest advertises input launch; main does not dispatch launch content |
 | P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |
@@ -26,6 +28,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |
 | P3 | Profile emote-ID parser regex reuse on busy chats | The task thread compiles this pattern per tagged message; measure older-device CPU before adding a per-task cache |
 | P3 | Extend the outgoing GraphQL guard for future nested writes and string defaults | Current requests pass; detect deeper dotted object writes and parse quoted `#` in future operation defaults before introducing those constructions |
+| P3 | Consider deduplicating advertised decoder capacities | Optional Kimi review note; malformed lists are rejected and work stays capped at nine native queries; no correctness defect from duplicate sufficient capacities |
 | P3 | Assess a future FHD-native interface | Keep current HD layout until broad hardware/focus validation |
 | P3 | Track the simulator's ButtonGroup role-font boundary | Font role nodes become focusable children in brs-engine; tests/probes remove those nodes explicitly. Keep production fonts and verify native rendering |
 | P3 | Recheck menu callback timing on native hardware | One recovery probe printed a menu callback before its single Following build, with no visible failure; the probe does not establish a production defect |

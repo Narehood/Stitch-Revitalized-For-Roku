@@ -141,6 +141,102 @@ function buildProxyM3u8Url(proxyUrl as string, streamUrl as string, hints as dyn
     return url
 end function
 
+' Selection identities retain declared metadata, never expiring media URLs.
+function playbackSelectionAttributes(source as dynamic, omitted as object) as dynamic
+    if GetInterface(source, "ifAssociativeArray") = invalid then return invalid
+    attributes = {}
+    names = CreateObject("roRegex", "^[A-Z0-9-]{1,128}$", "")
+    for each key in source
+        if omitted.DoesExist(key) then continue for
+        if key = "URL" or key = "URI" or key = "SEPARATE-AUDIO" then return invalid
+        if not names.IsMatch(key) then return invalid
+        value = source[key]
+        if GetInterface(value, "ifString") = invalid then return invalid
+        if value.Len() > 4096 then return invalid
+        attributes[key] = value
+        if attributes.Count() > 64 then return invalid
+    end for
+    return attributes
+end function
+
+function playbackSelectionDescriptor(variant as object, media as object) as dynamic
+    attributes = playbackSelectionAttributes(variant, { "URL": true, "SEPARATE-AUDIO": true })
+    if attributes = invalid or GetInterface(media, "ifArray") = invalid then return invalid
+    groups = []
+    for each groupType in ["AUDIO", "VIDEO", "SUBTITLES", "CLOSED-CAPTIONS"]
+        groupId = attributes[groupType]
+        if groupId = invalid or groupId = "NONE" then continue for
+        for each member in media
+            if GetInterface(member, "ifAssociativeArray") = invalid then return invalid
+            if member["TYPE"] = groupType and member["GROUP-ID"] = groupId
+                groupAttributes = playbackSelectionAttributes(member, { "URI": true })
+                if groupAttributes = invalid then return invalid
+                ' Quote mixed-case JSON keys: native BrightScript lowercases identifiers.
+                groups.Push({ "attributes": groupAttributes, "hasUri": member.DoesExist("URI") })
+                if groups.Count() > 64 then return invalid
+            end if
+        end for
+    end for
+    return { "attributes": attributes, "groups": groups }
+end function
+
+function playbackSelectionAttributeBytes(attributes as object, remaining as integer) as integer
+    bytes = CreateObject("roByteArray")
+    total = 0
+    for each key in attributes
+        bytes.FromAsciiString(FormatJSON(key))
+        total += bytes.Count()
+        bytes.FromAsciiString(FormatJSON(attributes[key]))
+        total += bytes.Count()
+        if total > remaining then exit for
+    end for
+    return total
+end function
+
+function playbackSelectionJson(selections as dynamic) as dynamic
+    if GetInterface(selections, "ifArray") = invalid then return invalid
+    if selections.Count() < 1 or selections.Count() > 32 then return invalid
+    minimumBytes = 0
+    for each selection in selections
+        if GetInterface(selection, "ifAssociativeArray") = invalid then return invalid
+        if selection.Count() <> 2 then return invalid
+        for each key in selection
+            if key <> "attributes" and key <> "groups" then return invalid
+        end for
+        attributes = playbackSelectionAttributes(selection.attributes, {})
+        if attributes = invalid then return invalid
+        ' Bound encoded leaf bytes before allocating the complete JSON array.
+        ' This is a lower bound; the exact final check also includes punctuation.
+        minimumBytes += playbackSelectionAttributeBytes(attributes, 32768 - minimumBytes)
+        if minimumBytes > 32768 then return invalid
+        if GetInterface(selection.groups, "ifArray") = invalid then return invalid
+        if selection.groups.Count() > 64 then return invalid
+        for each member in selection.groups
+            if GetInterface(member, "ifAssociativeArray") = invalid then return invalid
+            if member.Count() <> 2 then return invalid
+            for each key in member
+                if key <> "attributes" and key <> "hasUri" then return invalid
+            end for
+            attributes = playbackSelectionAttributes(member.attributes, {})
+            if attributes = invalid then return invalid
+            minimumBytes += playbackSelectionAttributeBytes(attributes, 32768 - minimumBytes)
+            if minimumBytes > 32768 then return invalid
+            if GetInterface(member["hasUri"], "ifBoolean") = invalid then return invalid
+        end for
+    end for
+    json = FormatJSON(selections)
+    bytes = CreateObject("roByteArray")
+    bytes.FromAsciiString(json) ' Documented UTF-8 conversion, despite the method name.
+    if bytes.Count() > 32768 then return invalid
+    return json
+end function
+
+function buildProxySelectedM3u8Url(proxyUrl as string, masterUrl as string, selections as dynamic) as dynamic
+    json = playbackSelectionJson(selections)
+    if json = invalid then return invalid
+    return proxyUrl + "/m3u8/selected?u=" + masterUrl.EncodeUriComponent() + "&selections=" + json.EncodeUriComponent()
+end function
+
 ' A quality entry is a complete playback contract, not just a display label.
 function playbackQualityEntry(variant as object, url as string, isTransmux as boolean, isProxied as boolean) as object
     quality = playbackQualityLabel(variant)
@@ -164,14 +260,21 @@ function playbackQualityEntry(variant as object, url as string, isTransmux as bo
     }
 end function
 
-function playbackAutomaticEntry(metadata as object, masterUrl as string, proxyUrl as string, allowedUrls as object, allSupported as boolean, hasMuxed as boolean, hasSeparateAudio as boolean, demuxUrls = invalid as dynamic) as dynamic
+function playbackAutomaticEntry(metadata as object, masterUrl as string, proxyUrl as string, allowedUrls as object, allSupported as boolean, hasMuxed as boolean, hasSeparateAudio as boolean, demuxUrls = invalid as dynamic, selections = invalid as dynamic) as dynamic
     if metadata.Count() = 0 then return invalid
     entry = {}
     entry.Append(metadata[0])
     entry.QualityID = "Automatic"
     if proxyUrl <> "" and (hasMuxed or hasSeparateAudio or not allSupported)
-        entry.url = buildProxyM3u8Url(proxyUrl, masterUrl, invalid) + "&variants=" + FormatJSON(allowedUrls).EncodeUriComponent()
-        if demuxUrls <> invalid then entry.url += "&demuxVariants=" + FormatJSON(demuxUrls).EncodeUriComponent()
+        if selections <> invalid
+            selectedUrl = buildProxySelectedM3u8Url(proxyUrl, masterUrl, selections)
+            if selectedUrl = invalid then return invalid
+            entry.url = selectedUrl
+        else
+            ' Compatibility for older helper callers; the task always supplies selections.
+            entry.url = buildProxyM3u8Url(proxyUrl, masterUrl, invalid) + "&variants=" + FormatJSON(allowedUrls).EncodeUriComponent()
+            if demuxUrls <> invalid then entry.url += "&demuxVariants=" + FormatJSON(demuxUrls).EncodeUriComponent()
+        end if
         entry.StreamUrls = [entry.url]
         entry.isTransmux = false
         entry.isProxied = true

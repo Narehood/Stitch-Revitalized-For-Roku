@@ -51,6 +51,15 @@ sub main()
     if not playbackExpect(filteredTs.url.InStr("&demuxVariants=%5B%5D") > 0, "filtered native TS explicitly bypasses demux") then return
     groupedAudio = playbackAutomaticEntry([quality], "https://cdn.example/master.m3u8", proxy, [variant["URL"]], true, false, true)
     if not playbackExpect(groupedAudio.url.InStr("&variants=") > 0 and groupedAudio.url.InStr("&demuxVariants=") < 0, "external audio leaves video track inspection to service") then return
+    descriptor = playbackSelectionDescriptor(variant, parsed.media)
+    selectedManual = buildProxySelectedM3u8Url(proxy, "https://cdn.example/master.m3u8?token=fixture", [descriptor])
+    selectedAuto = playbackAutomaticEntry([quality], "https://cdn.example/master.m3u8?token=fixture", proxy, [variant["URL"]], true, true, false, [variant["URL"]], [descriptor])
+    if not playbackExpect(selectedManual = selectedAuto.url, "new Automatic and manual grouped selection use the same protocol") then return
+    if not playbackExpect(selectedAuto.url.InStr("/m3u8/selected?u=") > 0 and selectedAuto.url.InStr("&selections=") > 0, "new filtered selection uses explicit service endpoint") then return
+    if not playbackExpect(selectedAuto.url.InStr("&variants=") < 0 and selectedAuto.url.InStr("&demuxVariants=") < 0, "new filtered selection excludes old URL and transport hints") then return
+    if not playbackExpect(selectedAuto.isProxied and not selectedAuto.isTransmux and not selectedAuto.ForwardQueryStringParams, "new Automatic preserves proxy transport flags") then return
+    if not playbackExpect(selectedAuto.StreamUrls[0] = selectedAuto.url and selectedAuto.Streams[0].url = selectedAuto.url, "new Automatic preserves every stream URL contract") then return
+    if not playbackExpect(playbackAutomaticEntry([quality], "https://cdn.example/master.m3u8", proxy, [variant["URL"]], true, true, false, invalid, []) = invalid, "failed new selection does not fall back to legacy URLs") then return
     if not playbackExpect(playbackAutomaticEntry([], "", "", [], false, false, false) = invalid, "empty automatic ladder fails") then return
     ? "STITCH_TEST_PASS: playback-hls"
 end sub

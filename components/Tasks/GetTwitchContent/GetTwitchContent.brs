@@ -116,7 +116,7 @@ sub loadHlsContent(request as object)
     metadata = []
     nativeMetadata = []
     allowedUrls = []
-    demuxUrls = []
+    selections = []
     hasMuxedVariants = false
     hasSeparateAudio = false
     allVariantsSupported = true
@@ -146,15 +146,20 @@ sub loadHlsContent(request as object)
             end if
         end if
         hasMuxedVariants = hasMuxedVariants or transmux
+        selection = playbackSelectionDescriptor(variant, manifest.media)
         if allowedUrls.Count() < 32
             allowedUrls.Push(variant["URL"])
-            if transmux then demuxUrls.Push(variant["URL"])
+            selections.Push(selection)
         end if
         url = variant["URL"]
         proxied = false
         if proxyUrl <> "" and (transmux or separateAudio)
             if separateAudio
-                url = buildProxyM3u8Url(proxyUrl, usherUrl, invalid) + "&variant=" + variant["URL"].EncodeUriComponent()
+                url = buildProxySelectedM3u8Url(proxyUrl, usherUrl, [selection])
+                if url = invalid
+                    respondPlaybackError("Playlist selection unavailable", "The stream's quality metadata could not be safely selected. Reopen the video to refresh it.")
+                    return
+                end if
             else
                 url = buildProxyM3u8Url(proxyUrl, url, variant)
             end if
@@ -199,11 +204,11 @@ sub loadHlsContent(request as object)
     end if
     sortPlaybackMetadata(metadata)
     if metadata[0].QualityID <> "Automatic"
-        automaticDemuxUrls = demuxUrls
-        ' An external audio group does not prove that the video init contains
-        ' only video. Let the service inspect those track maps before splitting.
-        if hasSeparateAudio then automaticDemuxUrls = invalid
-        automatic = playbackAutomaticEntry(metadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, automaticDemuxUrls)
+        automatic = playbackAutomaticEntry(metadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
+        if automatic = invalid
+            respondPlaybackError("Playlist selection unavailable", "The stream's quality metadata could not be safely selected. Reopen the video to refresh it.")
+            return
+        end if
         ' SceneGraph ignores legacy StreamUrls for HLS ABR. A real master URL
         ' enables adaptation, provided every offered variant is safe/native.
         metadata.Unshift(automatic)

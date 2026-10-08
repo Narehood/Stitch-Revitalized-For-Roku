@@ -971,5 +971,15 @@
             <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
             <translation>O Stitch é um cliente gratuito da Twitch feito pela comunidade. Se ele for útil para você, escaneie o QR code para apoiar o desenvolvimento no Buy Me a Coffee. Obrigado!</translation>
         </message>
+        <message>
+            <source>Playlist selection unavailable</source>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
+            <translation>N?o foi poss?vel selecionar a lista de reprodu??o</translation>
+        </message>
+        <message>
+            <source>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</source>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
+            <translation>N?o foi poss?vel selecionar com seguran?a os dados de qualidade da transmiss?o. Abra o v?deo novamente para atualiz?-los.</translation>
+        </message>
     </context>
 </TS>

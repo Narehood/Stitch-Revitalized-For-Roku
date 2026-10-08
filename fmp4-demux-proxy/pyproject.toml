@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fmp4-demux-proxy"
-version = "0.2.0"
+version = "0.3.0"
 description = "HLS/fMP4 proxy that demuxes Twitch Enhanced Broadcasting muxed streams into separate audio/video tracks for Roku playback."
 readme = "README.md"
 license = "Unlicense"

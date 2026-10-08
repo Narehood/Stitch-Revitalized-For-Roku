@@ -57,6 +57,114 @@ class VariantHints:
     resolution: str | None = None
 
 
+type AttributeIdentity = tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, order=True)
+class GroupSelection:
+    attributes: AttributeIdentity
+    has_uri: bool
+
+
+@dataclass(frozen=True)
+class VariantSelection:
+    attributes: AttributeIdentity
+    groups: tuple[GroupSelection, ...]
+
+
+def _selection_attributes(value: object) -> AttributeIdentity:
+    if not isinstance(value, dict) or len(value) > 64:
+        raise ManifestError("Invalid selection attribute map")
+    for key, member in value.items():
+        if (
+            not isinstance(key, str)
+            or not re.fullmatch(r"[A-Z0-9-]{1,128}", key)
+            or key in {"URL", "URI", "SEPARATE-AUDIO"}
+            or not isinstance(member, str)
+            or len(member) > 4096
+        ):
+            raise ManifestError("Invalid selection attribute name or value")
+    return tuple(sorted(value.items()))
+
+
+def parse_selections(value: object) -> tuple[VariantSelection, ...]:
+    """Validate the URL-free caller contract before fetching any upstream resource."""
+    if not isinstance(value, list) or not 1 <= len(value) <= 32:
+        raise ManifestError("Expected 1-32 rendition selections")
+    selections = []
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {"attributes", "groups"}:
+            raise ManifestError("Invalid rendition selection fields")
+        groups = item["groups"]
+        if not isinstance(groups, list) or len(groups) > 64:
+            raise ManifestError("Invalid rendition group list")
+        members = []
+        for group in groups:
+            if (
+                not isinstance(group, dict)
+                or set(group) != {"attributes", "hasUri"}
+                or type(group["hasUri"]) is not bool
+            ):
+                raise ManifestError("Invalid rendition group fields")
+            members.append(
+                GroupSelection(_selection_attributes(group["attributes"]), group["hasUri"])
+            )
+        selections.append(
+            VariantSelection(_selection_attributes(item["attributes"]), tuple(sorted(members)))
+        )
+    if len(set(selections)) != len(selections):
+        raise ManifestError("Duplicate rendition selections")
+    return tuple(selections)
+
+
+def selected_master_urls(
+    body: str, base_url: str, selections: tuple[VariantSelection, ...]
+) -> tuple[str, ...]:
+    """Resolve strict identities only to unique entries in this freshly fetched master."""
+    media: dict[tuple[str, str], list[GroupSelection]] = {}
+    for line in body.splitlines():
+        if not line.startswith("#EXT-X-MEDIA:"):
+            continue
+        member = attributes(line)
+        kind, group_id = member.get("TYPE"), member.get("GROUP-ID")
+        if kind is not None and group_id is not None:
+            media.setdefault((kind, group_id), []).append(
+                GroupSelection(
+                    tuple(sorted((key, value) for key, value in member.items() if key != "URI")),
+                    "URI" in member,
+                )
+            )
+    identities: dict[VariantSelection, list[str]] = {}
+    url_counts: dict[str, int] = {}
+    for _, uri, attrs in master_entries(body, base_url).values():
+        url_counts[uri] = url_counts.get(uri, 0) + 1
+        groups = []
+        for kind in ("AUDIO", "VIDEO", "SUBTITLES", "CLOSED-CAPTIONS"):
+            group_id = attrs.get(kind)
+            if group_id is not None and group_id != "NONE":
+                members = media.get((kind, group_id), [])
+                if len(groups) + len(members) > 64:
+                    # Cannot match the bounded caller contract; avoid expanding a huge group.
+                    break
+                groups.extend(members)
+        else:
+            identity = VariantSelection(tuple(sorted(attrs.items())), tuple(sorted(groups)))
+            identities.setdefault(identity, []).append(uri)
+    selected = []
+    for selection in selections:
+        matches = identities.get(selection, [])
+        if len(matches) != 1:
+            raise ManifestError(
+                "Selected rendition metadata is missing or ambiguous; refresh playback"
+            )
+        if url_counts[matches[0]] != 1:
+            raise ManifestError("Selected rendition URL identifies multiple master entries")
+        selected.append(matches[0])
+    if len(set(selected)) != len(selected):
+        raise ManifestError("Selected rendition URLs are not distinct")
+    return tuple(selected)
+
+
 def attributes(line: str) -> dict[str, str]:
     return {
         match[1]: match[2].strip().strip('"') for match in _ATTR_RE.finditer(line.split(":", 1)[-1])

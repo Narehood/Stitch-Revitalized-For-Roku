@@ -27,6 +27,8 @@ In **Stitch → Settings → Proxy URL**, enter an address reachable from the Ro
 
 Verify setup with `http://192.168.1.50:8080/health`; the response contains `"status":"ok"`. Leave Proxy URL empty when you do not need the service.
 
+Use service version 0.3.0 or later with this channel update. Filtered Automatic and manual external-audio selection use the new `/m3u8/selected` endpoint, matching complete approved rendition and group descriptions against fresh Twitch URLs. Older services lack this endpoint and fail closed instead of offering an unfiltered quality ladder. Direct bundled-child splitting and older callers retain `/m3u8`.
+
 ## Run with Docker
 
 ```bash

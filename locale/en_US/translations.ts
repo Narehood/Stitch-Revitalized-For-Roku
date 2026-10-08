@@ -965,5 +965,13 @@
             <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
             <translation>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</translation>
         </message>
+        <message>
+            <source>Playlist selection unavailable</source>
+            <translation>Playlist selection unavailable</translation>
+        </message>
+        <message>
+            <source>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</source>
+            <translation>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</translation>
+        </message>
     </context>
 </TS>

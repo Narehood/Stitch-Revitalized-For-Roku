@@ -12,7 +12,12 @@ from fmp4_demux_proxy import fmp4
 from fmp4_demux_proxy import manifest as mf
 from fmp4_demux_proxy.config import validate_proxy_base
 from fmp4_demux_proxy.routes.segment_route import _track_map
-from fmp4_demux_proxy.upstream import CONFIG_KEY, INSPECTION_SLOTS_KEY, fetch_upstream
+from fmp4_demux_proxy.upstream import (
+    CONFIG_KEY,
+    INSPECTION_SLOTS_KEY,
+    fetch_upstream,
+    validate_upstream_url,
+)
 
 
 def _proxy_base_from_request(request: web.Request) -> str:
@@ -110,7 +115,10 @@ def _parse_demux_variants(request: web.Request) -> tuple[str, ...] | None:
 
 
 async def _inspect_master_variants(
-    request: web.Request, entries: dict[int, tuple[int, str, dict[str, str]]]
+    request: web.Request,
+    entries: dict[int, tuple[int, str, dict[str, str]]],
+    *,
+    strict: bool = False,
 ) -> tuple[str, ...]:
     cfg = request.app[CONFIG_KEY]
     if len(entries) > 32:
@@ -128,6 +136,15 @@ async def _inspect_master_variants(
         if init is None:
             return None
         tracks = await _track_map(request.app, *init)
+        # Fresh video declarations cannot authorize an unknown or audio-only current init.
+        if strict and (
+            sum(value == "video" for value in tracks.values()) != 1
+            or sum(value == "audio" for value in tracks.values()) > 1
+            or any(value not in {"video", "audio"} for value in tracks.values())
+        ):
+            raise mf.ManifestError(
+                "Selected rendition init requires one video and at most one audio"
+            )
         return (
             uri
             if (
@@ -212,6 +229,72 @@ async def m3u8_handler(request: web.Request) -> web.Response:
             mode=mode,
             variants=variants,
             demux_variants=demux_variants or (),
+        )
+    except (mf.ManifestError, fmp4.Fmp4Error) as exc:
+        raise web.HTTPBadGateway(text=f"Unsupported HLS input: {exc}") from exc
+    return web.Response(
+        body=rewritten.encode("utf-8"),
+        content_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON field")
+        result[key] = value
+    return result
+
+
+def _parse_selections(request: web.Request) -> tuple[mf.VariantSelection, ...]:
+    allowed = {"u", "selections", "_HLS_msn", "_HLS_part", "_HLS_skip"}
+    if any(key not in allowed or len(request.query.getall(key)) != 1 for key in request.query):
+        raise web.HTTPBadRequest(text="Invalid selected-master query fields")
+    raw = request.query.get("selections")
+    if raw is None or len(raw.encode("utf-8")) > 32 * 1024:
+        raise web.HTTPBadRequest(text="Missing or oversized rendition selections")
+    try:
+        value = json.loads(raw, object_pairs_hook=_unique_json_object)
+        return mf.parse_selections(value)
+    except (ValueError, RecursionError) as exc:
+        raise web.HTTPBadRequest(text="Invalid rendition selections") from exc
+
+
+async def selected_m3u8_handler(request: web.Request) -> web.Response:
+    """Fresh master selection: old services lack this endpoint and fail closed with 404."""
+    selections = _parse_selections(request)
+    cfg = request.app[CONFIG_KEY]
+    upstream = request.query.get("u")
+    if not upstream:
+        raise web.HTTPBadRequest(text="Missing upstream playlist URL")
+    result = await fetch_upstream(
+        request.app, _reload_url(upstream, request), limit=cfg.max_manifest_bytes
+    )
+    try:
+        body = result.body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise web.HTTPBadGateway(text="Upstream playlist is not UTF-8") from exc
+    if not body.startswith("#EXTM3U") or mf.classify(body) != mf.ManifestKind.MASTER:
+        raise web.HTTPBadGateway(text="Selected renditions require an upstream master playlist")
+    try:
+        variants = mf.selected_master_urls(body, result.final_url, selections)
+        for uri in variants:
+            validate_upstream_url(
+                uri, cfg.upstream_host_allowlist, allow_unsafe=cfg.allow_unsafe_upstream
+            )
+        entries = mf.master_entries(body, result.final_url, variants)
+        demux_variants = await _inspect_master_variants(request, entries, strict=True)
+        rewritten = mf.rewrite(
+            body,
+            result.final_url,
+            mf.RewriteConfig(
+                cfg.proxy_public_url or _proxy_base_from_request(request),
+                max_output_bytes=cfg.max_manifest_bytes * 4,
+            ),
+            variants=variants,
+            demux_variants=demux_variants,
         )
     except (mf.ManifestError, fmp4.Fmp4Error) as exc:
         raise web.HTTPBadGateway(text=f"Unsupported HLS input: {exc}") from exc
