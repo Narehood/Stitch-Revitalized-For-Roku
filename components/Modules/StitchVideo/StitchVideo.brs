@@ -593,6 +593,7 @@ sub clearAllButtonFocus()
 end sub
 
 sub executeButtonAction()
+    if m.disposed then return
     if m.currentFocusedButton = 0 ' Back
         parent = m.top.getParent()
         if parent <> invalid then ignored = parent.callFunc("requestBack")
@@ -727,6 +728,7 @@ sub hideLoadingOverlay()
 end sub
 
 function onKeyEvent(key, press) as boolean
+    if m.disposed then return false
     ' ? "[StitchVideo] KeyEvent: "; key; " "; press
 
     if press

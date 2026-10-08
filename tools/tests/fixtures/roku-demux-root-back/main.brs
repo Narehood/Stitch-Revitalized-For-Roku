@@ -43,6 +43,36 @@ sub main()
         finishMain(screen)
         return
     end if
+    overlay = video.CallFunc("fixtureOverlay")
+    check(overlay.disposed and video.control = "stop" and overlay.fadeControl = "stop" and video.IsInFocusChain(), "actual Exit disposes focused wrapper and stops fade timer while cleanup waits")
+    press("play")
+    settle(350)
+    check(video.control = "stop" and video.CallFunc("fixtureOverlay").fadeControl = "stop", "remote Play after disposed Exit cannot replace stop or restart fade timer")
+    if "__DISPOSED_KEY_CONTROL__" = "yes"
+        finishMain(screen)
+        return
+    end if
+    press("left")
+    settle(350)
+    press("ok")
+    settle(350)
+    after = video.CallFunc("fixtureOverlay")
+    check(after.focusedButton = overlay.focusedButton and after.fadeControl = "stop" and not after.qualityVisible and m.scene.dialog = invalid and video.control = "stop", "remote Left OK after disposal cannot mutate overlay focus quality dialog or control")
+    video.state = "paused"
+    press("play")
+    settle(350)
+    check(video.state = "paused" and video.control = "stop" and video.CallFunc("fixtureOverlay").fadeControl = "stop", "disposed paused wrapper cannot resume from later remote Play")
+    video.state = "playing"
+    video.CallFunc("fixtureDisposedAction", 2)
+    check(video.control = "stop" and video.CallFunc("fixtureOverlay").fadeControl = "stop", "direct disposed Play action cannot replace stop")
+    if "__DISPOSED_ACTION_CONTROL__" = "yes"
+        finishMain(screen)
+        return
+    end if
+    video.qualityOptions = ["720p60", "480p30"]
+    video.CallFunc("fixtureDisposedAction", 3)
+    check(not video.CallFunc("fixtureOverlay").qualityVisible and m.scene.dialog = invalid and video.control = "stop", "direct disposed Quality action cannot open its valid quality dialog")
+    check(hero().active.IsSameNode(player) and player.CallFunc("fixturePlayer").exitPending and manager.busy and manager.CallFunc("fixtureManager").currentId = id and worker.state = "run", "later disposed inputs preserve the same pending cleanup owner and navigation")
     video.CallFunc("fixtureExitAgain")
     check(hero().active.IsSameNode(player) and manager.CallFunc("fixtureManager").currentId = id and worker.stopRequested and worker.control = "run", "duplicate live Exit consumes the pending action without pop or forced Task stop")
     worker.result = cleanupFor(id)

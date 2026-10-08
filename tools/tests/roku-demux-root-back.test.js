@@ -66,7 +66,7 @@ function positive(result, marker) {
     const lines = result.output.split(/\r?\n/).filter(line => line.startsWith(`${marker}:`));
     assert.equal(lines.length, 1, `expected one fresh root Back summary\n${detail}`);
     const count = lines[0].match(/:\s*(\d+) assertions\s*$/);
-    assert.ok(count && Number(count[1]) >= 110, detail);
+    assert.ok(count && Number(count[1]) >= 119, detail);
     return Number(count[1]);
 }
 
@@ -147,6 +147,10 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         const actualHero = await fs.readFile(path.join(root, heroPath), 'utf8');
         const wrapperPath = 'components/Modules/StitchVideo/StitchVideo.brs';
         const actualWrapper = await fs.readFile(path.join(root, wrapperPath), 'utf8');
+        const disposedKey = /(function onKeyEvent\(key, press\) as boolean\r?\n)    if m\.disposed then return false\r?\n/;
+        const disposedAction = /(sub executeButtonAction\(\)\r?\n)    if m\.disposed then return\r?\n/;
+        assert.equal(actualWrapper.match(disposedKey)?.length, 2);
+        assert.equal(actualWrapper.match(disposedAction)?.length, 2);
         const onScreenBack = /        parent = m\.top\.getParent\(\)\r?\n        if parent <> invalid then ignored = parent\.callFunc\("requestBack"\)/;
         assert.equal(actualWrapper.match(onScreenBack)?.length, 1);
         const helperPath = 'components/Scenes/VideoPlayer/RokuPlayback.brs';
@@ -157,18 +161,24 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         assert.equal(actualHero.match(signInAnchor)?.length, 2);
         const guard = /        if m\.activeNode <> invalid\r?\n            if m\.activeNode\.isSubtype\("VideoPlayer"\)\r?\n                ignored = m\.activeNode\.callFunc\("requestBack"\)\r?\n                return true\r?\n            end if\r?\n        end if/;
         assert.equal(actualHero.match(guard)?.length, 1);
-        for (const mode of ['positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration', 'onscreen-immediate-pop']) {
+        for (const mode of ['positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration', 'onscreen-immediate-pop', 'disposed-key-removal', 'disposed-action-removal']) {
             let heroSource = mode === 'guard-removal' ? actualHero.replace(guard, '') : actualHero;
             if (mode === 'signin-restoration') heroSource = heroSource.replace(signInAnchor, '$1    if m.top.localPlaybackSession <> invalid then m.top.localPlaybackSession.callFunc("onDestroy")\n');
             await add(heroPath, heroSource);
             await add(helperPath, mode === 'deferred-guard-removal' ? actualHelper.replace(deferredGuard, '') : actualHelper);
-            await add(wrapperPath, mode === 'onscreen-immediate-pop' ? actualWrapper.replace(onScreenBack,
-                '        parent = m.top.getParent()\n        if parent <> invalid then parent.backPressed = true\n        hideOverlay()\n        m.top.control = "stop"') : actualWrapper);
+            let wrapperSource = actualWrapper;
+            if (mode === 'onscreen-immediate-pop') wrapperSource = wrapperSource.replace(onScreenBack,
+                '        parent = m.top.getParent()\n        if parent <> invalid then parent.backPressed = true\n        hideOverlay()\n        m.top.control = "stop"');
+            if (mode === 'disposed-key-removal') wrapperSource = wrapperSource.replace(disposedKey, '$1');
+            if (mode === 'disposed-action-removal') wrapperSource = wrapperSource.replace(disposedAction, '$1');
+            await add(wrapperPath, wrapperSource);
             await add('source/main.brs', main.replace('__PASS_MARKER__', marker)
                 .replace('__NEGATIVE_CONTROL__', mode === 'assertion' ? 'yes' : 'no')
                 .replace('__SIGNIN_CONTROL__', mode === 'signin-restoration' ? 'yes' : 'no')
                 .replace('__ROOT_GUARD_CONTROL__', mode === 'guard-removal' ? 'yes' : 'no')
-                .replace('__ONSCREEN_CONTROL__', mode === 'onscreen-immediate-pop' ? 'yes' : 'no'));
+                .replace('__ONSCREEN_CONTROL__', mode === 'onscreen-immediate-pop' ? 'yes' : 'no')
+                .replace('__DISPOSED_KEY_CONTROL__', mode === 'disposed-key-removal' ? 'yes' : 'no')
+                .replace('__DISPOSED_ACTION_CONTROL__', mode === 'disposed-action-removal' ? 'yes' : 'no'));
             const zip = path.join(dir, `${mode}.zip`);
             await zipFolder(packageDir, zip);
             const result = await run(zip, dir);
@@ -183,6 +193,8 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
                 if (mode === 'assertion') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: deliberate reversed assertion']);
                 else if (mode === 'signin-restoration') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: ordinary sign-in preserves the same usable permanent manager']);
                 else if (mode === 'onscreen-immediate-pop') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: actual on-screen Exit retains busy Player until strict cleanup acknowledgment']);
+                else if (mode === 'disposed-key-removal') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: remote Play after disposed Exit cannot replace stop or restart fade timer']);
+                else if (mode === 'disposed-action-removal') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: direct disposed Play action cannot replace stop']);
                 else {
                     const expected = mode === 'deferred-guard-removal' ? 'busy observer independently cancels unsafe deferred direct playback'
                         : 'root Back never signals main exit while worker owns playback';
@@ -193,7 +205,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             }
         }
         assert.deepEqual(await snapshots(), before, 'production sources must remain frozen throughout runs');
-        t.diagnostic('actual wrapper immediate-pop regression, root/deferred guard removals, sign-in disposal restoration, reversed assertion, stale-marker, timeout and output-limit controls rejected');
+        t.diagnostic('actual disposed key/action guard removals, wrapper immediate-pop regression, root/deferred guard removals, sign-in disposal restoration, reversed assertion, stale-marker, timeout and output-limit controls rejected');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
