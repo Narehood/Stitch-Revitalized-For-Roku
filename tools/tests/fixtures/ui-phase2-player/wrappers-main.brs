@@ -186,31 +186,33 @@ end sub
 sub testHoldDelay()
     video = recordedVideo(2000)
     video.duration = 4000
-    time = video.findNode("timeProgress")
-    time.observeField("text", m.port)
+    ' Capture the timer's effective duration at the actual progress changes,
+    ' in the component callback. Main-port dequeue timestamps can bunch up
+    ' when a busy worker drains queued events and do not measure this delay.
+    video.callFunc("fixtureObserveHold")
     hold("fastforward", 1300)
     waitRead(video, "held", "right", "the hold to start")
     waitRead(video, "held", invalid, "the hold to end")
-    time.unobserveField("text")
-    texts = seen("text")
+    texts = video.callFunc("fixtureFinishHold")
     steps = []
-    gaps = []
     for i = 1 to texts.count() - 1
         steps.push(toSeconds(texts[i].data) - toSeconds(texts[i - 1].data))
-        gaps.push(texts[i].ms - texts[i - 1].ms)
     end for
     check(texts.count() > 0 and toSeconds(texts[0].data) = 2010, "the press itself steps 10 s at once")
     growing = steps.count() >= 4
     if growing then growing = steps[0] = 10 and steps[1] = 15 and steps[2] = 20 and steps[3] = 25
     check(growing, "a held key repeats 10, 15, 20, 25 s ... after the delay")
-    check(gaps.count() > 1 and gaps[0] >= 350, "the first repeat waits for the initial hold delay")
-    later = 0
-    for i = 1 to gaps.count() - 1
-        later += gaps[i]
+    initialDelay = texts.count() >= 2
+    if initialDelay then initialDelay = texts[0].duration = 0.4 and texts[1].duration = 0.4
+    check(initialDelay, "the initial step and first repeat use the actual 0.4 s hold timer")
+    fastRepeats = texts.count() >= 3
+    for i = 2 to texts.count() - 1
+        if texts[i].duration <> 0.1 then fastRepeats = false
     end for
-    if gaps.count() > 1 then later = later / (gaps.count() - 1)
-    check(gaps.count() > 1 and later < gaps[0], "repeats after the delay come faster than the delay")
+    check(fastRepeats, "later accelerated repeats use the actual 0.1 s hold timer")
     preview = video.callFunc("fixtureRead").preview
+    settle(300)
+    check(video.callFunc("fixtureRead").preview = preview, "release stops the accelerated preview steps")
     press("play")
     waitSeen("seek", 1, "the held jump")
     waitSeen("control", 2, "resume after the held jump")

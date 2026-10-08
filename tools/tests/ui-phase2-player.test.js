@@ -83,6 +83,20 @@ end function
     CustomVideo: `function fixtureRead() as object
     return { overlay: m.isOverlayVisible, seekMode: m.isSeekMode = true, held: m.buttonHeld, preview: m.currentPositionSeconds, focused: m.currentFocusedButton, hint: m.seekHint.text, hintVisible: m.seekHint.visible, infoVisible: m.infoRow.visible, caption: m.captionLabel.text, captionVisible: m.caption.visible, knob: m.progressDot.color, position: m.timeProgress.text, controlsX: m.controls.translation[0], timeTravelOpen: m.isTimeTravelDialogOpen, lengthText: m.timeTravelLength.text }
 end function
+
+sub fixtureObserveHold()
+    m.fixtureHoldProgress = []
+    m.timeProgress.observeField("text", "fixtureOnHoldProgress")
+end sub
+sub fixtureOnHoldProgress()
+    events = m.fixtureHoldProgress
+    events.push({ data: m.timeProgress.text, duration: m.buttonHoldTimer.duration })
+    m.fixtureHoldProgress = events
+end sub
+function fixtureFinishHold() as object
+    m.timeProgress.unobserveField("text")
+    return m.fixtureHoldProgress
+end function
 `,
 };
 
