@@ -110,7 +110,37 @@ function isTwitchVariantSupported(variant as object, device = invalid as dynamic
     if device = invalid then device = CreateObject("roDeviceInfo")
     try
         result = device.CanDecodeVideo(format)
-        return result <> invalid and result.result = true
+        if GetInterface(result, "ifAssociativeArray") = invalid then return false
+        resultType = Type(result.result)
+        if resultType <> "Boolean" and resultType <> "roBoolean" then return false
+        if result.result then return true
+        if result.updated <> "level" or GetInterface(result.level, "ifArray") = invalid then return false
+        levels = result.level
+        if levels.Count() = 0 or levels.Count() > 8 then return false
+
+        ' Roku's API may enumerate AVC 4.1/4.2 rather than every lower level.
+        ' Recheck the same codec/profile against an advertised capacity at least
+        ' as high as the stream requires; never lower a signaled requirement.
+        validLevels = ",1.0,1.1,1.2,1.3,2.0,2.1,2.2,3.0,3.1,3.2,4.0,4.1,4.2,5.0,5.1,5.2,6.0,6.1,6.2,"
+        if format.codec = "hevc"
+            validLevels = ",1.0,2.0,2.1,3.0,3.1,4.0,4.1,5.0,5.1,5.2,6.0,6.1,6.2,"
+        else if format.codec <> "mpeg4 avc"
+            return false
+        end if
+        for each level in levels
+            if GetInterface(level, "ifString") = invalid then return false
+            if validLevels.InStr("," + level + ",") < 0 then return false
+        end for
+        for each level in levels
+            if Val(level) < Val(format.level) then continue for
+            candidate = { codec: format.codec, profile: format.profile, level: level }
+            supported = device.CanDecodeVideo(candidate)
+            if GetInterface(supported, "ifAssociativeArray") = invalid then return false
+            supportedType = Type(supported.result)
+            if supportedType <> "Boolean" and supportedType <> "roBoolean" then return false
+            if supported.result then return true
+        end for
+        return false
     catch e
         return false
     end try

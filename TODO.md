@@ -25,6 +25,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
 | P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |
 | P3 | Profile emote-ID parser regex reuse on busy chats | The task thread compiles this pattern per tagged message; measure older-device CPU before adding a per-task cache |
+| P3 | Extend the outgoing GraphQL guard for future nested writes and string defaults | Current requests pass; detect deeper dotted object writes and parse quoted `#` in future operation defaults before introducing those constructions |
 | P3 | Assess a future FHD-native interface | Keep current HD layout until broad hardware/focus validation |
 | P3 | Track the simulator's ButtonGroup role-font boundary | Font role nodes become focusable children in brs-engine; tests/probes remove those nodes explicitly. Keep production fonts and verify native rendering |
 | P3 | Recheck menu callback timing on native hardware | One recovery probe printed a menu callback before its single Following build, with no visible failure; the probe does not establish a production defect |
