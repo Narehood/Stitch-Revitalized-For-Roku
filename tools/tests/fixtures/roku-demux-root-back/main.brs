@@ -28,6 +28,60 @@ sub main()
         return
     end if
 
+    ' Actual live overlay Exit reaches the same typed cooperative Player action.
+    player = openPlayer(true)
+    manager = m.scene.localPlaybackSession
+    owned = manager.CallFunc("fixtureManager")
+    worker = owned.worker
+    id = owned.currentId
+    worker.ready = readyFor(id)
+    video = player.CallFunc("fixturePlayer").video
+    video.state = "playing"
+    selectLiveExit(video)
+    check(hero().active.IsSameNode(player) and not player.backPressed and player.CallFunc("fixturePlayer").exitPending and manager.busy, "actual on-screen Exit retains busy Player until strict cleanup acknowledgment")
+    if "__ONSCREEN_CONTROL__" = "yes"
+        finishMain(screen)
+        return
+    end if
+    video.CallFunc("fixtureExitAgain")
+    check(hero().active.IsSameNode(player) and manager.CallFunc("fixtureManager").currentId = id and worker.stopRequested and worker.control = "run", "duplicate live Exit consumes the pending action without pop or forced Task stop")
+    worker.result = cleanupFor(id)
+    check(manager.busy and hero().active.IsSameNode(player), "on-screen Exit final flags alone cannot acknowledge running Task")
+    worker.state = "stop"
+    check(manager.busy and hero().active.IsSameNode(player), "on-screen Exit actual Task STOP still requires attached Video STOP")
+    video.state = "stopped"
+    settle(60)
+    check(not manager.busy and hero().active.id = "Following" and player.GetParent() = invalid, "on-screen Exit restores Following only after actual Task Video and flags ACK")
+
+    manager = m.scene.CallFunc("fixtureNewManager")
+    player = openPlayer(true)
+    owned = manager.CallFunc("fixtureManager")
+    worker = owned.worker
+    id = owned.currentId
+    worker.ready = readyFor(id)
+    video = player.CallFunc("fixturePlayer").video
+    video.state = "playing"
+    selectLiveExit(video)
+    manager.CallFunc("fixtureTimeout")
+    check(manager.busy and manager.cleanupBlocked and video.state = "playing" and hero().active.IsSameNode(player), "blocked on-screen Exit keeps playing Video attached despite requested stop")
+    video.CallFunc("fixtureExitAgain")
+    check(hero().active.IsSameNode(player) and not player.backPressed and not m.exitRequested, "duplicate blocked on-screen Exit cannot bypass actual Video STOP guard")
+    video.state = "stopped"
+    settle(60)
+    check(hero().active.id = "Following" and player.GetParent() = invalid, "actual Video STOP permits blocked on-screen UI exit")
+    owned = manager.CallFunc("fixtureManager")
+    check(manager.busy and manager.cleanupBlocked and owned.worker.IsSameNode(worker) and owned.video.IsSameNode(video) and worker.state = "run", "blocked on-screen departure retains hung Task and stopped Video without cleanup claim")
+    check(manager.CallFunc("startSession", descriptor()) = "", "on-screen blocked departure cannot start another writer")
+    worker.result = cleanupFor(id)
+    worker.state = "stop"
+    check(not manager.busy and manager.cleanupBlocked and manager.CallFunc("fixtureManager").worker = invalid, "late safe ACK after on-screen departure releases only the original owner")
+
+    manager = m.scene.CallFunc("fixtureNewManager")
+    player = openPlayer(false)
+    video = player.CallFunc("fixturePlayer").video
+    selectLiveExit(video)
+    check(hero().active.id = "Following" and player.GetParent() = invalid and not manager.busy and not m.exitRequested, "ordinary direct live on-screen Exit returns normally without local ownership")
+
     for cycle = 1 to 2
         player = openPlayer(true)
         manager = m.scene.localPlaybackSession
@@ -315,6 +369,19 @@ end function
 function hero() as object
     return m.scene.CallFunc("fixtureHero")
 end function
+
+sub selectLiveExit(video as object)
+    video.SetFocus(true)
+    press("up")
+    settle(350)
+    press("left")
+    settle(350)
+    press("left")
+    settle(350)
+    check(video.FindNode("controlOverlay").visible and video.FindNode("backFocus").visible and video.IsInFocusChain(), "real live overlay keys focus the on-screen Exit control")
+    press("ok")
+    settle(350)
+end sub
 
 sub press(key as string)
     print "FIXTURE_KEY:" + key

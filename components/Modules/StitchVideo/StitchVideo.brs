@@ -594,13 +594,8 @@ end sub
 
 sub executeButtonAction()
     if m.currentFocusedButton = 0 ' Back
-        ' ? "[StitchVideo] Back button pressed - attempting to exit"
-        m.top.backPressed = true
-        if m.top.getParent() <> invalid
-            m.top.getParent().backPressed = true
-        end if
-        hideOverlay()
-        m.top.control = "stop"
+        parent = m.top.getParent()
+        if parent <> invalid then ignored = parent.callFunc("requestBack")
     else if m.currentFocusedButton = 1 ' Chat
         m.top.toggleChat = true
         m.top.streamLayoutMode = (m.top.streamLayoutMode + 1) mod 3

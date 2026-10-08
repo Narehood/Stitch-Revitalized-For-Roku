@@ -17,7 +17,8 @@ const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const prefix = 'stitch-roku-demux-root-back-';
 const tracked = ['components/heroScene.brs', 'components/Scenes/VideoPlayer/VideoPlayer.brs',
     'components/Scenes/VideoPlayer/VideoPlayer.xml', 'components/Scenes/VideoPlayer/RokuPlayback.brs',
-    'components/Modules/RokuDemuxSession/RokuDemuxSession.brs'];
+    'components/Modules/RokuDemuxSession/RokuDemuxSession.brs',
+    'components/Modules/StitchVideo/StitchVideo.brs', 'components/Modules/StitchVideo/StitchVideo.xml'];
 
 async function snapshots() {
     return Promise.all(tracked.map(async file => [file, createHash('sha256').update(await fs.readFile(path.join(root, file))).digest('hex')]));
@@ -65,7 +66,7 @@ function positive(result, marker) {
     const lines = result.output.split(/\r?\n/).filter(line => line.startsWith(`${marker}:`));
     assert.equal(lines.length, 1, `expected one fresh root Back summary\n${detail}`);
     const count = lines[0].match(/:\s*(\d+) assertions\s*$/);
-    assert.ok(count && Number(count[1]) >= 70, detail);
+    assert.ok(count && Number(count[1]) >= 110, detail);
     return Number(count[1]);
 }
 
@@ -110,6 +111,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         for (const file of ['Chat.xml', 'Chat.brs']) await copy(`components/Modules/Chat/${file}`);
         await component('components', 'heroScene', 'HeroProbe');
         await component('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');
+        await component('components/Modules/StitchVideo', 'StitchVideo', 'StitchVideoProbe');
         await copy('components/Scenes/VideoPlayer/RokuPlayback.brs');
         await component('components/Modules/RokuDemuxSession', 'RokuDemuxSession', 'ManagerProbe');
         const worker = 'CreateObject("roSGNode", "RokuDemuxServer")';
@@ -143,6 +145,10 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         const main = await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8');
         const heroPath = 'components/heroScene.brs';
         const actualHero = await fs.readFile(path.join(root, heroPath), 'utf8');
+        const wrapperPath = 'components/Modules/StitchVideo/StitchVideo.brs';
+        const actualWrapper = await fs.readFile(path.join(root, wrapperPath), 'utf8');
+        const onScreenBack = /        parent = m\.top\.getParent\(\)\r?\n        if parent <> invalid then ignored = parent\.callFunc\("requestBack"\)/;
+        assert.equal(actualWrapper.match(onScreenBack)?.length, 1);
         const helperPath = 'components/Scenes/VideoPlayer/RokuPlayback.brs';
         const actualHelper = await fs.readFile(path.join(root, helperPath), 'utf8');
         const deferredGuard = /    if m\.rokuSession\.cleanupBlocked\r?\n        m\.rokuPendingContent = invalid\r?\n        m\.rokuPreparedContent = invalid\r?\n        m\.rokuDeferredPlay = false\r?\n    end if/;
@@ -151,15 +157,18 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         assert.equal(actualHero.match(signInAnchor)?.length, 2);
         const guard = /        if m\.activeNode <> invalid\r?\n            if m\.activeNode\.isSubtype\("VideoPlayer"\)\r?\n                ignored = m\.activeNode\.callFunc\("requestBack"\)\r?\n                return true\r?\n            end if\r?\n        end if/;
         assert.equal(actualHero.match(guard)?.length, 1);
-        for (const mode of ['positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration']) {
+        for (const mode of ['positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration', 'onscreen-immediate-pop']) {
             let heroSource = mode === 'guard-removal' ? actualHero.replace(guard, '') : actualHero;
             if (mode === 'signin-restoration') heroSource = heroSource.replace(signInAnchor, '$1    if m.top.localPlaybackSession <> invalid then m.top.localPlaybackSession.callFunc("onDestroy")\n');
             await add(heroPath, heroSource);
             await add(helperPath, mode === 'deferred-guard-removal' ? actualHelper.replace(deferredGuard, '') : actualHelper);
+            await add(wrapperPath, mode === 'onscreen-immediate-pop' ? actualWrapper.replace(onScreenBack,
+                '        parent = m.top.getParent()\n        if parent <> invalid then parent.backPressed = true\n        hideOverlay()\n        m.top.control = "stop"') : actualWrapper);
             await add('source/main.brs', main.replace('__PASS_MARKER__', marker)
                 .replace('__NEGATIVE_CONTROL__', mode === 'assertion' ? 'yes' : 'no')
                 .replace('__SIGNIN_CONTROL__', mode === 'signin-restoration' ? 'yes' : 'no')
-                .replace('__ROOT_GUARD_CONTROL__', mode === 'guard-removal' ? 'yes' : 'no'));
+                .replace('__ROOT_GUARD_CONTROL__', mode === 'guard-removal' ? 'yes' : 'no')
+                .replace('__ONSCREEN_CONTROL__', mode === 'onscreen-immediate-pop' ? 'yes' : 'no'));
             const zip = path.join(dir, `${mode}.zip`);
             await zipFolder(packageDir, zip);
             const result = await run(zip, dir);
@@ -173,6 +182,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
                 const failures = result.output.split(/\r?\n/).filter(line => line.startsWith('ROOT_BACK_ASSERT_FAIL:'));
                 if (mode === 'assertion') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: deliberate reversed assertion']);
                 else if (mode === 'signin-restoration') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: ordinary sign-in preserves the same usable permanent manager']);
+                else if (mode === 'onscreen-immediate-pop') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: actual on-screen Exit retains busy Player until strict cleanup acknowledgment']);
                 else {
                     const expected = mode === 'deferred-guard-removal' ? 'busy observer independently cancels unsafe deferred direct playback'
                         : 'root Back never signals main exit while worker owns playback';
@@ -183,7 +193,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             }
         }
         assert.deepEqual(await snapshots(), before, 'production sources must remain frozen throughout runs');
-        t.diagnostic('actual root/deferred guard removals, sign-in disposal restoration, reversed assertion, stale-marker, timeout and output-limit controls rejected');
+        t.diagnostic('actual wrapper immediate-pop regression, root/deferred guard removals, sign-in disposal restoration, reversed assertion, stale-marker, timeout and output-limit controls rejected');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
