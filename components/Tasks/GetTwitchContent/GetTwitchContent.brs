@@ -54,7 +54,7 @@ sub loadClipContent(request as object)
         return
     end if
     content = playbackRequestContent(request)
-    content.SetFields({ url: url, streamFormat: "mp4", StreamUrls: [url], StreamQualities: [true], StreamContentIds: ["Original"], QualityID: "Original", ignoreStreamErrors: false })
+    content.SetFields({ url: url, streamFormat: "mp4", StreamUrls: [url], StreamQualities: [true], StreamContentIds: ["Original"], QualityID: "Original", ignoreStreamErrors: false, playbackTransport: "direct", localPlaybackDescriptor: invalid })
     m.top.metadata = []
     m.top.response = content
 end sub
@@ -113,6 +113,8 @@ sub loadHlsContent(request as object)
     while proxyUrl.Right(1) = "/"
         proxyUrl = proxyUrl.Left(proxyUrl.Len() - 1)
     end while
+    m.rokuDemuxEnabled = false
+    if m.top.HasField("enableRokuDemux") then m.rokuDemuxEnabled = m.top.enableRokuDemux and request.contentType = "LIVE" and proxyUrl = ""
     metadata = []
     nativeMetadata = []
     allowedUrls = []
@@ -122,6 +124,7 @@ sub loadHlsContent(request as object)
     allVariantsSupported = true
     m.playbackProbeCount = 0
     m.playbackProbeCache = {}
+    m.playbackProbeOrigins = {}
     m.playbackProbeFailed = false
     m.playbackProbeClock = CreateObject("roTimeSpan")
     m.playbackProbeClock.Mark()
@@ -171,6 +174,11 @@ sub loadHlsContent(request as object)
             continue for
         end if
         entry = playbackQualityEntry(variant, url, transmux and not proxied, proxied)
+        descriptor = invalid
+        if m.rokuDemuxEnabled and transmux and not separateAudio
+            descriptor = rokuDemuxPlaybackDescriptor(variant, entry.QualityID, m.playbackProbeOrigins[variant["URL"]])
+        end if
+        entry = rokuDemuxPlaybackEntry(entry, descriptor)
         metadata.Push(entry)
         if not transmux then nativeMetadata.Push(entry)
     end for
@@ -188,6 +196,7 @@ sub loadHlsContent(request as object)
             entry = playbackQualityEntry(variant, usherUrl, false, false)
             entry.QualityID = "Automatic"
             entry.playbackNotice = "Automatic preserves this stream's separate audio. Configure the audio service to choose a manual quality."
+            entry = rokuDemuxPlaybackEntry(entry)
             metadata.Push(entry)
         else
             if m.playbackProbeFailed
@@ -204,7 +213,12 @@ sub loadHlsContent(request as object)
     end if
     sortPlaybackMetadata(metadata)
     if metadata[0].QualityID <> "Automatic"
-        automatic = playbackAutomaticEntry(metadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
+        automatic = invalid
+        if m.rokuDemuxEnabled then automatic = rokuDemuxAutomaticEntry(metadata)
+        if automatic = invalid
+            automatic = playbackAutomaticEntry(metadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
+            if automatic <> invalid then automatic = rokuDemuxPlaybackEntry(automatic)
+        end if
         if automatic = invalid
             respondPlaybackError("Playlist selection unavailable", "The stream's quality metadata could not be safely selected. Reopen the video to refresh it.")
             return
@@ -238,7 +252,16 @@ function isMuxedCmafVariant(variant as object, headers as object) as dynamic
     response = HttpRequest({ url: url, method: "GET", headers: headers, timeout: timeout, retries: 1 }).Send()
     isMuxed = invalid
     if response <> invalid and response.GetResponseCode() = 200
-        isMuxed = isMuxedPlaybackCmaf(variant, response.GetString())
+        playlist = response.GetString()
+        isMuxed = isMuxedPlaybackCmaf(variant, playlist)
+        if m.rokuDemuxEnabled and isMuxed = true
+            origins = rokuDemuxMediaOrigins(playlist, url)
+            if origins <> invalid
+                cache = m.playbackProbeOrigins
+                cache[url] = origins
+                m.playbackProbeOrigins = cache
+            end if
+        end if
     end if
     if isMuxed = invalid then m.playbackProbeFailed = true
     m.playbackProbeCache[url] = isMuxed

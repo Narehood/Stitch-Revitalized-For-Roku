@@ -51,6 +51,7 @@ test('actual playback task admits only approved descriptors and preserves manual
         // Production task and HLS helpers are copied verbatim. Only network,
         // registry and native decoder approval are controlled fixture boundaries.
         const files = ['components/Tasks/GetTwitchContent/GetTwitchContent.brs', 'source/utils/playbackHls.brs',
+            'source/utils/rokuDemuxDescriptor.brs',
             'components/Modules/TwitchContentNode/TwitchContentNode.xml',
             'components/Modules/TwitchContentNode/TwitchContentNode.brs', 'source/utils/misc.brs'];
         for (const file of files) {
@@ -73,6 +74,7 @@ test('actual playback task admits only approved descriptors and preserves manual
           </interface>
           <script uri="pkg:/components/Tasks/GetTwitchContent/GetTwitchContent.brs" />
           <script uri="pkg:/source/utils/playbackHls.brs" />
+          <script uri="pkg:/source/utils/rokuDemuxDescriptor.brs" />
           <script uri="boundary.brs" />
         </component>`);
         const zip = path.join(dir, 'fixture.zip');
