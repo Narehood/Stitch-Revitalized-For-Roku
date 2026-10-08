@@ -45,6 +45,8 @@ Both integration reviews completed. Valid findings were repaired: ordinary sign-
 
 Primary references: [Roku media support](https://developer.roku.com/dev/docs/specs/media), [device capabilities](https://developer.roku.com/dev/docs/ifdeviceinfo), [Video node](https://developer.roku.com/dev/docs/video), [Roku releases](https://developer.roku.com/dev/docs/release-notes), [Twitch IRC](https://dev.twitch.tv/docs/chat/irc/), [Twitch device authentication](https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/), [Streamlink Twitch source](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/twitch.py), and [Twitch 2K announcement](https://blog.twitch.tv/en/2026/06/17/introducing-dual-format-and-2k-streaming-on-twitch/).
 
+Latest container-free checkpoint: the real app completed a bounded 241.994-second selected-1080p60 observation on freshly queried Tminnzy, with an early buffering period, strict on-screen Exit cleanup and one accepted byte-identical initialization URL rotation. The disposal guard prevents later overlay inputs from replacing stop. Full-app watched picture/audio confirmation remains pending; broader source, decoder, memory, transport and device gates remain open. See [device verification](DEVICE_VERIFICATION.md) for exact bounds.
+
 ## Decisions
 
 ### Compatibility and 1440p
