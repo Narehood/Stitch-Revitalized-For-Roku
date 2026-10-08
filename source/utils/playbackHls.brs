@@ -32,6 +32,8 @@ function resolvePlaybackHlsUrl(base as string, reference as string) as string
     schemeEnd = base.InStr("://")
     if schemeEnd < 0 then return ""
     if reference.Left(2) = "//" then return base.Left(schemeEnd) + ":" + reference
+    ' Same-document fragments inherit the complete path and query.
+    if reference.Left(1) = "#" then return base.Split("#")[0] + reference
     if reference.InStr(":") >= 0 and reference.Split("/")[0].InStr(":") >= 0 then return ""
     withoutQuery = base.Split("?")[0].Split("#")[0]
     authorityEnd = withoutQuery.Mid(schemeEnd + 3).InStr("/")

@@ -5,7 +5,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
 | P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
-| P1 | Finish Kimi/Grok reviews of the complete modernization diff | Native implementation and root checks are complete; final independent findings and hardware release gates remain open |
+| P1 | Finish independent review acceptance | Kimi's full review found no blockers; verify the fragment-reference follow-up. Grok's final review remains open after provider startup failures; hardware gates remain open |
 | P1 | Remove temporary build dependency exception when patched | Exact policy expires November 6, 2026; new advisory/version/patch fails CI until reviewed |
 | P2 | Handle declared external launch/deep-link input | Manifest advertises input launch; main does not dispatch launch content |
 | P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |
@@ -24,6 +24,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P3 | Keep row geometry arrays aligned for future content types | Push labels, sizes and heights together only for supported rows; current produced types are covered |
 | P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
 | P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |
+| P3 | Profile emote-ID parser regex reuse on busy chats | The task thread compiles this pattern per tagged message; measure older-device CPU before adding a per-task cache |
 | P3 | Assess a future FHD-native interface | Keep current HD layout until broad hardware/focus validation |
 | P3 | Track the simulator's ButtonGroup role-font boundary | Font role nodes become focusable children in brs-engine; tests/probes remove those nodes explicitly. Keep production fonts and verify native rendering |
 | P3 | Recheck menu callback timing on native hardware | One recovery probe printed a menu callback before its single Following build, with no visible failure; the probe does not establish a production defect |

@@ -4,7 +4,7 @@ Baseline: `3747337`, audited October 6–7, 2026. Work branch: `modernize/stitch
 
 ## Status and scope
 
-The playback, chat, proxy, build, dependency and native interface audits are complete. Their findings have been checked and disputed conclusions corrected. Opus 5.5 completed the interface specification on October 7 and both native implementation phases by October 8; root verified the files, features, tests and bounded simulator evidence. Core implementation and core reviews are green. Final whole-diff reviews and physical Roku acceptance remain open. The project is not yet declared usable or ready for release.
+The playback, chat, proxy, build, dependency and native interface audits are complete. Their findings have been checked and disputed conclusions corrected. Opus 5.5 completed the interface specification on October 7 and both native implementation phases by October 8; root verified the files, features, tests and bounded simulator evidence. Core implementation and core reviews are green. Kimi's full modernization review found no blockers; its small fragment-reference correction requires follow-up review. Grok's final review and physical Roku acceptance remain open. The project is not yet declared usable or ready for release.
 
 The target is a maintained native Roku SceneGraph application with working live and VOD video and audio, reliable live text chat, and an explanation when VOD or clip chat is unavailable. Offer 1440p when the Roku decoder and stream transport support it. Preserve existing features and currently supported devices. Explore lower live latency as an opt-in experiment and measure it on hardware before making claims.
 

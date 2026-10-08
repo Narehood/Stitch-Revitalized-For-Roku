@@ -19,6 +19,10 @@ sub main()
     if not playbackExpect(parsed.variants[1]["SEPARATE-AUDIO"] = false, "embedded audio relationship") then return
     if not playbackExpect(parsed.variants[1]["URL"] = "https://cdn.example/video/1080.m3u8", "protocol-relative URL") then return
     if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8?old=1", "?new=2") = "https://cdn.example/a/b.m3u8?new=2", "query-only resolution") then return
+    if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8", "#part") = "https://cdn.example/a/b.m3u8#part", "fragment-only reference keeps the document path") then return
+    if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8?token=fixture#old", "#new") = "https://cdn.example/a/b.m3u8?token=fixture#new", "fragment replaces only the old fragment and preserves the query") then return
+    if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8?token=fixture", "#t=12:30") = "https://cdn.example/a/b.m3u8?token=fixture#t=12:30", "a colon in a fragment is not a URI scheme") then return
+    if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8?token=fixture#old", "#") = "https://cdn.example/a/b.m3u8?token=fixture#", "an empty fragment preserves path and query") then return
     if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8", "/v/master.m3u8") = "https://cdn.example/v/master.m3u8", "root resolution") then return
     if not playbackExpect(resolvePlaybackHlsUrl("https://cdn.example/a/b.m3u8", "javascript:unsafe") = "", "reject non-HTTP URL") then return
     if not playbackExpect(playbackQualityLabel(parsed.variants[0]) = "1440p60 (Source) HEVC", "source quality label") then return
