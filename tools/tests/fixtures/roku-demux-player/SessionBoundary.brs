@@ -3,6 +3,11 @@ sub init()
     m.top.calls = []
 end sub
 
+' This inert boundary models a pre-ACK owner without an actual Video STOP.
+function canLeaveBlockedSession(id as string) as boolean
+    return false
+end function
+
 sub recordCall(item as object)
     calls = m.top.calls
     calls.push(item)

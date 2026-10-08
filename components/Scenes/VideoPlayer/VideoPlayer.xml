@@ -2,6 +2,7 @@
 <component name="VideoPlayer" extends="SceneManagerGroup" initialFocus="videoWindow">
     <interface>
         <function name="onDestroy" />
+        <function name="requestBack" />
         <field id="contentRequested" type="Node" onChange="handleContent" />
         <field id="contentStore" type="assocarray" />
         <field id="metadata" type="array" />

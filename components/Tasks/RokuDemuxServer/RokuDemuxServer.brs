@@ -79,6 +79,7 @@ sub runServer()
             m.currentGeneration = 0&
             m.result.helperClosed = nativeLiveClose(m.liveState)
             m.lastDiagnostics = loopbackSafeDiagnostics(nativeLiveDiagnostics(m.liveState), m.cacheBudgetBytes, m.steadyMode)
+            if not recordLiveInitAliases() then m.result.cleanupOk = false
             if not m.result.helperClosed or m.lastDiagnostics = invalid
                 m.result.cleanupOk = false
             else if not m.lastDiagnostics.closed or m.lastDiagnostics.transferActive or m.lastDiagnostics.inputRetained or m.lastDiagnostics.inputFilePresent or m.lastDiagnostics.cacheBytes <> 0 or m.lastDiagnostics.assetCount <> 0
@@ -382,10 +383,15 @@ function pumpLiveServer(delayMs as integer) as boolean
     m.result.convertedSegmentPairs = diagnostics.segmentPairCount
     m.result.upstreamFetchCount = diagnostics.fetchCount
     m.result.upstreamPlaylistCount = diagnostics.playlistCount
+    initAliasesValid = recordLiveInitAliases()
     if diagnostics.failed
         m.result.reason = "live_helper_failed"
         m.result["failureCategory"] = diagnostics.failureCategory
         recordSafeLiveFailure()
+        return false
+    end if
+    if not initAliasesValid
+        m.result.reason = "invalid_init_alias_count"
         return false
     end if
     publication = nativeLivePublication(m.liveState)
@@ -879,6 +885,17 @@ sub recordSafeLiveFailure()
     if not CreateObject("roRegex", "^native-(live|demux): [A-Za-z0-9 /_.-]{1,150}$", "").IsMatch(reason) then return
     m.result["helperFailureReason"] = reason
 end sub
+
+' Optional on legacy fixture states; never fabricate an observed successful alias.
+function recordLiveInitAliases() as boolean
+    if m.liveState = invalid then return true
+    if not m.liveState.DoesExist("initAliasCount") then return not m.result.DoesExist("initAliasCount")
+    count = m.liveState.initAliasCount
+    if not loopbackInteger(count) then return false
+    if count < 0 or count > 4294967295& then return false
+    m.result["initAliasCount"] = count + 0&
+    return true
+end function
 
 ' Validate primitive Task inputs before socket/network work; never log the descriptor.
 function prepareRokuDemuxInput() as boolean

@@ -5,6 +5,7 @@ sub runTests(control as string)
     ' Invalid descriptors cannot start a Task or opt an otherwise idle manager in.
     manager = newManager()
     check(manager.callFunc("startSession", { fixture: true }) = "", "arbitrary AA rejected before worker creation")
+    check(not manager.callFunc("canLeaveBlockedSession", ""), "idle manager cannot authorize blocked UI exit")
     check(not manager.busy and manager.callFunc("fixtureRead").worker = invalid, "invalid descriptor retains idle ownership")
     manager.callFunc("onDestroy")
     check(manager.callFunc("startSession", sessionDescriptor()) = "", "destroyed idle manager cannot create worker")
@@ -180,43 +181,87 @@ sub runTests(control as string)
     check(not manager.busy and manager.cleanupBlocked, "late safe stop releases references but keeps failed session blocked")
     manager.callFunc("onDestroy")
 
-    ' Each missing/false cleanup flag remains fatal and does not free ownership.
-    for each name in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
-        manager = newManager()
-        id = manager.callFunc("startSession", sessionDescriptor())
-        worker = manager.callFunc("fixtureRead").worker
-        manager.callFunc("stopSession", id)
-        result = cleanupFor(id)
-        result[name] = false
-        worker.result = result
-        worker.state = "stop"
-        check(manager.busy and manager.cleanupBlocked, "false cleanup flag blocks: " + name)
-        if m.control = "cleanup" and name = "cleanupOk"
-            check(not manager.busy, "deliberate false-cleanup control")
-            finishTests()
-            return
-        end if
-        check(manager.callFunc("fixtureRead").worker.isSameNode(worker), "false cleanup flag keeps reference: " + name)
-        ' True updated cleanup permits safe release without unblocking Retry.
-        worker.result = cleanupFor(id)
-        check(not manager.busy and manager.cleanupBlocked, "repaired acknowledgment safely releases: " + name)
-        manager.callFunc("onDestroy")
-    end for
+    ' A deadline may permit UI departure after actual Video STOP while the Task
+    ' remains owned and busy. Stop control alone can never authorize departure.
+    manager = newManager()
+    id = manager.callFunc("startSession", sessionDescriptor())
+    worker = manager.callFunc("fixtureRead").worker
+    video = CreateObject("roSGNode", "SessionVideoBoundary")
+    video.state = "playing"
+    check(manager.callFunc("attachVideo", id, video), "deadline owner attaches actual Video node")
+    queued = manager.callFunc("startSession", sessionDescriptor("deadline-queued"))
+    superseded = queued
+    queued = manager.callFunc("startSession", sessionDescriptor("deadline-latest"))
+    manager.callFunc("fixtureTimeout")
+    check(manager.busy and worker.state = "run" and video.control = "stop", "deadline is not an actual stop acknowledgment")
+    check(not manager.callFunc("canLeaveBlockedSession", id), "playing Video refuses blocked UI exit despite stop control")
+    video.state = "stopped"
+    check(manager.callFunc("canLeaveBlockedSession", id), "actual Video STOP permits UI exit while Task remains running")
+    check(manager.callFunc("canLeaveBlockedSession", queued), "known pending ID cancelled by blockage may leave the same stopped Video owner")
+    check(not manager.callFunc("canLeaveBlockedSession", superseded) and not manager.callFunc("canLeaveBlockedSession", "00000000000000000000000000000000"), "superseded and arbitrary IDs cannot authorize blocked exit")
+    state = manager.callFunc("fixtureRead")
+    check(manager.busy and manager.cleanupBlocked and state.worker.isSameNode(worker) and state.video.isSameNode(video) and state.pending = invalid, "blocked exit permission changes no owner or busy acknowledgment")
+    check(manager.event.status = "failed" and manager.event.reason = "cleanup_blocked", "late Video STOP notifies blocked UI once")
+    check(manager.callFunc("startSession", sessionDescriptor()) = "", "blocked UI departure cannot start a replacement")
+    worker.result = cleanupFor(id)
+    check(manager.busy, "safe result still requires actual Task STOP after UI permission")
+    worker.state = "stop"
+    check(not manager.busy and manager.cleanupBlocked and manager.callFunc("fixtureRead").worker = invalid, "late truthful Task ACK safely releases without restarting cancelled owner")
+    check(not manager.callFunc("canLeaveBlockedSession", id), "released owner no longer grants blocked exit permission")
+    manager.callFunc("onDestroy")
 
-    ' Missing and non-Boolean cleanup acknowledgments cannot free a namespace.
-    for each badValue in [invalid, "true", 1]
-        manager = newManager()
-        id = manager.callFunc("startSession", sessionDescriptor())
-        worker = manager.callFunc("fixtureRead").worker
-        manager.callFunc("stopSession", id)
-        result = cleanupFor(id)
-        result.cleanupOk = badValue
-        worker.result = result
-        worker.state = "stop"
-        check(manager.busy and manager.cleanupBlocked, "missing or coerced cleanup flag refused")
-        worker.result = cleanupFor(id)
-        check(not manager.busy and manager.cleanupBlocked, "typed repair releases only the stopped owner")
-        manager.callFunc("onDestroy")
+    manager = newManager()
+    id = manager.callFunc("startSession", sessionDescriptor())
+    worker = manager.callFunc("fixtureRead").worker
+    manager.callFunc("stopSession", id)
+    manager.callFunc("fixtureTimeout")
+    check(manager.busy and manager.callFunc("canLeaveBlockedSession", id), "never-attached Video permits blocked pending-start departure without Task ACK")
+    check(manager.callFunc("fixtureRead").worker.isSameNode(worker) and worker.state = "run", "pending-start UI permission retains unacknowledged Task")
+    worker.result = cleanupFor(id)
+    worker.state = "stop"
+    manager.callFunc("onDestroy")
+
+    ' One final result may end UI waiting only after actual Task and Video stop.
+    ' Unsafe flags never free ownership, reset blockage, or start a queued owner.
+    for each name in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
+        for each badValue in [false, invalid, "true", 1]
+            manager = newManager()
+            id = manager.callFunc("startSession", sessionDescriptor())
+            worker = manager.callFunc("fixtureRead").worker
+            video = CreateObject("roSGNode", "SessionVideoBoundary")
+            video.state = "playing"
+            check(manager.callFunc("attachVideo", id, video), "terminal unsafe owner has actual Video reference")
+            queued = manager.callFunc("startSession", sessionDescriptor("unsafe-queued"))
+            result = cleanupFor(id)
+            if badValue = invalid
+                result.Delete(name)
+            else
+                result[name] = badValue
+            end if
+            worker.result = result
+            check(manager.busy, "unsafe final result alone still waits for Task stop: " + name)
+            worker.state = "stop"
+            check(manager.busy and not manager.cleanupBlocked, "unsafe flags cannot stand in for actual Video stop: " + name)
+            video.state = "stopped"
+            state = manager.callFunc("fixtureRead")
+            check(not manager.busy and manager.cleanupBlocked, "one-shot unsafe stop ends UI wait: " + name)
+            check(manager.callFunc("canLeaveBlockedSession", id) and manager.callFunc("canLeaveBlockedSession", queued) and not manager.callFunc("canLeaveBlockedSession", "00000000000000000000000000000000"), "blocked UI exit requires exact retained owner or its known cancelled pending ID: " + name)
+            check(state.worker.isSameNode(worker) and state.video.isSameNode(video) and state.currentId = id, "unsafe actual owners and namespace remain retained: " + name)
+            check(state.pending = invalid and manager.event.status = "failed" and manager.event.id = id, "unsafe cleanup cancels replacement before completion: " + name)
+            check(worker.control = "run" and state.stopping and state.cleanupClock = invalid, "no factory destruction or continuing terminal clock: " + name)
+            check(manager.findNode("cleanupTimer").control = "stop", "terminal acknowledgment stops polling timer: " + name)
+            if m.control = "cleanup" and name = "cleanupOk" and badValue = false
+                check(state.worker = invalid, "deliberate false-cleanup control")
+                finishTests()
+                return
+            end if
+            check(manager.callFunc("startSession", sessionDescriptor()) = "", "Retry refused after terminal unsafe acknowledgment: " + name)
+            manager.callFunc("stopSession", queued)
+            check(state.worker.isSameNode(manager.callFunc("fixtureRead").worker), "old cancelled request cannot release retained owner: " + name)
+            manager.callFunc("onDestroy")
+            state = manager.callFunc("fixtureRead")
+            check(state.disposed and state.worker.isSameNode(worker) and state.video.isSameNode(video) and not manager.busy, "permanent disposal cooperates without unsafe release: " + name)
+        end for
     end for
 
     ' Invalid ready on a fresh worker causes cooperative stop, never playback.

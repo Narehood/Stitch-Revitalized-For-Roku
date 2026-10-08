@@ -9,6 +9,8 @@ sub init()
     m.transitioning = false
     m.readyReceived = false
     m.cleanupFailed = false
+    m.blockedExitNotified = false
+    m.blockedPendingId = ""
     m.cleanupClock = invalid
     m.cleanupTimer = m.top.findNode("cleanupTimer")
     if m.cleanupTimer <> invalid then m.cleanupTimer.observeField("fire", "onCleanupTick")
@@ -46,6 +48,8 @@ sub beginSession(sessionId as string, descriptor as object)
     m.stopping = false
     m.readyReceived = false
     m.cleanupFailed = false
+    m.blockedExitNotified = false
+    m.blockedPendingId = ""
     m.cleanupClock = invalid
     m.worker = CreateObject("roSGNode", "RokuDemuxServer")
     if m.worker = invalid
@@ -86,8 +90,9 @@ end function
 sub stopSession(sessionId as string)
     if m.pending <> invalid
         if sessionId = "" or sessionId = m.pending.id
-            sessionEvent(m.pending.id, "cancelled", "cancelled_before_start")
+            cancelled = m.pending
             m.pending = invalid
+            sessionEvent(cancelled.id, "cancelled", "cancelled_before_start")
         end if
     end if
     if m.worker <> invalid
@@ -163,8 +168,31 @@ sub onSessionWorkerState()
 end sub
 
 sub onSessionVideoState()
+    owner = m.worker
+    ownerId = m.currentId
     checkSessionCleanup()
+    if owner = invalid or m.worker = invalid or not m.top.cleanupBlocked then return
+    if m.currentId <> ownerId or not m.worker.isSameNode(owner) then return
+    if m.blockedExitNotified or not canLeaveBlockedSession(ownerId) then return
+    m.blockedExitNotified = true
+    cancelledId = m.blockedPendingId
+    sessionEvent(ownerId, "failed", "cleanup_blocked")
+    if cancelledId <> "" and m.worker <> invalid
+        if m.currentId = ownerId and m.worker.isSameNode(owner) then sessionEvent(cancelledId, "failed", "cleanup_blocked")
+    end if
 end sub
+
+' UI navigation does not release the stopped Video or the retained Task owner.
+function canLeaveBlockedSession(sessionId as string) as boolean
+    if not m.top.cleanupBlocked or not m.stopping or m.worker = invalid then return false
+    if sessionId <> m.currentId
+        if m.blockedPendingId = "" or sessionId <> m.blockedPendingId then return false
+    end if
+    if m.video <> invalid
+        if m.video.state <> "stopped" then return false
+    end if
+    return true
+end function
 
 function sessionCleanupAcknowledged() as boolean
     if not m.stopping or m.worker = invalid or m.workerResult = invalid then return false
@@ -188,6 +216,11 @@ sub checkSessionCleanup()
     if not sessionCleanupAcknowledged() then return
     if not sessionCleanupSafe()
         blockSessionCleanup("cleanup_failed")
+        ' Actual Task/Video stop is acknowledged, so the UI may leave. Unsafe
+        ' resource references remain owned and replacement sessions stay blocked.
+        if m.cleanupTimer <> invalid then m.cleanupTimer.control = "stop"
+        m.cleanupClock = invalid
+        m.top.busy = false
         return
     end if
     previousId = m.currentId
@@ -234,8 +267,11 @@ sub blockSessionCleanup(reason as string)
     if m.cleanupFailed then return
     m.cleanupFailed = true
     m.top.cleanupBlocked = true
-    if m.pending <> invalid then sessionEvent(m.pending.id, "cancelled", "cleanup_blocked")
+    cancelled = m.pending
     m.pending = invalid
+    if cancelled <> invalid then m.blockedPendingId = cancelled.id
+    if cancelled <> invalid then sessionEvent(cancelled.id, "cancelled", "cleanup_blocked")
+    m.blockedExitNotified = canLeaveBlockedSession(m.currentId)
     sessionEvent(m.currentId, "failed", reason)
     ' Retain actual worker/video references and observers until their safe stop, even after timeout.
 end sub

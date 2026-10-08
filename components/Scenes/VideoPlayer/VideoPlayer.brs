@@ -414,12 +414,17 @@ end sub
 function onKeyEvent(key, press) as boolean
     if press
         if key = "back"
-            m.allowBreak = true ' Ensure exitPlayer signals upwards
-            exitPlayer()
-            return true
+            return requestBack()
         end if
     end if
     return false ' Let child video component (StitchVideo/CustomVideo) handle other keys
+end function
+
+function requestBack() as boolean
+    if m.disposed or m.rokuExitPending then return true
+    m.allowBreak = true
+    exitPlayer()
+    return true
 end function
 
 sub init()
@@ -1159,8 +1164,7 @@ end sub
 
 sub onVideoBack()
     ' Called when CustomVideo's back field is true
-    m.allowBreak = true
-    exitPlayer()
+    ignored = requestBack()
 end sub
 
 sub showTemporaryMessage(message as string)

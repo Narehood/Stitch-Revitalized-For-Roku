@@ -11,6 +11,7 @@
         <function name="startSession" />
         <function name="attachVideo" />
         <function name="stopSession" />
+        <function name="canLeaveBlockedSession" />
     </interface>
     <script uri="pkg:/components/SessionBoundary.brs" />
 </component>

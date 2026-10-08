@@ -92,6 +92,9 @@ sub onRokuSessionEvent()
         m.rokuPreparedContent = invalid
         m.rokuDeferredPlay = false
         showErrorDialog(tr("Roku playback stopped"), tr("The previous playback session could not finish cleaning up. Restart Stitch before trying on Roku again."), false)
+        if m.rokuExitPending
+            if m.rokuSession.callFunc("canLeaveBlockedSession", m.rokuSessionId) then exitPlayer()
+        end if
         return
     end if
     if m.rokuExitPending or m.rokuDeferredPlay then return
@@ -136,6 +139,13 @@ end sub
 sub onRokuSessionBusy()
     if m.disposed or m.rokuSession = invalid then return
     if m.rokuSession.busy then return
+    ' A stopped unsafe owner can end the UI wait without authorizing playback.
+    ' Do not depend on delivery order of the failed event and busy observation.
+    if m.rokuSession.cleanupBlocked
+        m.rokuPendingContent = invalid
+        m.rokuPreparedContent = invalid
+        m.rokuDeferredPlay = false
+    end if
     if m.rokuSessionId = "" then return
     if not m.rokuExitPending and not m.rokuDeferredPlay then return
     m.rokuSessionId = ""
@@ -159,8 +169,12 @@ function stopRokuPlayback(waitForExit = false as boolean) as boolean
     m.rokuPreparedContent = invalid
     m.rokuDeferredPlay = false
     if waitForExit then m.rokuExitPending = true
-    m.rokuSession.callFunc("stopSession", m.rokuSessionId)
-    if not m.rokuSession.busy
+    session = m.rokuSession
+    sessionId = m.rokuSessionId
+    session.callFunc("stopSession", sessionId)
+    mayLeave = not session.busy
+    if waitForExit and not mayLeave then mayLeave = session.callFunc("canLeaveBlockedSession", sessionId)
+    if mayLeave
         m.rokuSessionId = ""
         m.rokuExitPending = false
         return false

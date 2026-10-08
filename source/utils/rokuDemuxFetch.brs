@@ -238,6 +238,10 @@ function nativeLiveClose(state as object) as boolean
     state.input = invalid
     state.temporaryVideo = invalid
     state.pendingSegment = invalid
+    state.pendingWindow = invalid
+    state.pendingPlaylistSequence = -1&
+    state.initDigest = ""
+    state.initByteCount = 0
     state.tracks = invalid
     state.window = invalid
     state.assets = []
@@ -259,6 +263,8 @@ end function
 function rokuDemuxFeedInput(state as object, kind as string, payload as dynamic, nowMs as dynamic) as boolean
     if m.top.stopRequested then return false
     if kind = "init"
+        ' Reject changed bytes before the gate can replace the approved metadata.
+        if state.phase = "init-rotation" then unused = nlInitDigest(state, payload)
         validateLiveInitOutput(payload)
         if m.top.stopRequested then return false
     end if

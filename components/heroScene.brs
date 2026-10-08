@@ -338,7 +338,6 @@ sub onLoginFinished()
         startDeviceCode()
     end if
     teardownAllScenes()
-    if m.top.localPlaybackSession <> invalid then m.top.localPlaybackSession.callFunc("onDestroy")
     m.activeNode = buildNode("Following")
     if m.activeNode <> invalid
         m.menu.activeItem = "Following"
@@ -503,6 +502,13 @@ function onKeyEvent(key, press) as boolean
             m.activeNode.setFocus(true)
             return true
         end if
+        ' Focus can leave the Player while its Task still owns local playback.
+        if m.activeNode <> invalid
+            if m.activeNode.isSubtype("VideoPlayer")
+                ignored = m.activeNode.callFunc("requestBack")
+                return true
+            end if
+        end if
         ' Children consume navigation Back. The remaining root Back requests
         ' cleanup on the main thread before it closes the render thread.
         m.top.exitApp = true
@@ -584,6 +590,7 @@ sub onDestroy()
         disposeNodeTree(m.startupStatus)
     end if
     teardownAllScenes()
+    if m.top.localPlaybackSession <> invalid then ignored = m.top.localPlaybackSession.callFunc("onDestroy")
     disposeNodeTree(m.recentBar)
     disposeNodeTree(m.menu)
     m.validateOauthToken = destroyTask(m.validateOauthToken, "response")

@@ -4,6 +4,7 @@
     <function name="startSession" />
     <function name="stopSession" />
     <function name="attachVideo" />
+    <function name="canLeaveBlockedSession" />
     <function name="onDestroy" />
     <field id="event" type="assocarray" alwaysNotify="true" />
     <field id="busy" type="boolean" />

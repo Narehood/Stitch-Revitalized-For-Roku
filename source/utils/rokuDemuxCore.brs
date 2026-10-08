@@ -369,7 +369,7 @@ function nativeLiveCreate(mediaUrl as string, nowMs as dynamic, sourceDelaySecon
     if steadyMode then clockCap = 4294967235000&
     nlInteger(nowMs, 0&, clockCap)
     nlInteger(sourceDelaySeconds, 0&, 60&)
-    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
+    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], initDigest: "", initByteCount: 0, initAliasCount: 0&, pendingWindow: invalid, pendingPlaylistSequence: -1&, assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
 end function
 
 sub nlTime(state as object, nowMs as dynamic)
@@ -477,6 +477,7 @@ function nlIntent(state as object, nowMs as dynamic) as object
     if state.phase = "ready" and nowMs >= state.nextPoll then state.phase = "playlist"
     if state.phase = "playlist" then return { kind: "playlist", url: state.sourceUrl, limit: 262144 }
     if state.phase = "init" then return { kind: "init", url: state.mapUrl, limit: 2097152 }
+    if state.phase = "init-rotation" then return { kind: "init", url: state.pendingWindow.mapUrl, limit: 2097152 }
     if state.phase = "segment"
         segment = nlMissing(state)
         if segment <> invalid then return { kind: "segment", url: segment.url, limit: 4194304 }
@@ -494,7 +495,6 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
         window = nlWindow(parsed, state.delayUs)
         if state.publishedLast >= 0& then window = nlContinuityWindow(parsed, window, state.publishedLast)
-        nlCheck(state.mapUrl = "" or state.mapUrl = window.mapUrl, "selected map change unsupported")
         nlCheck(state.epoch < 0& or state.epoch = window.epoch, "selected discontinuity change unsupported")
         if state.publishedLast >= 0& then nlCheck(window.segments[0].sequence <= state.publishedLast + 1&, "source sequence gap")
         for each segment in window.segments
@@ -504,29 +504,54 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
                 nlCheck(old.url = segment.url and old.duration = segment.duration, "cached segment identity changed")
             end if
         end for
-        state.lastPlaylistSequence = parsed.mediaSequence
-        state.mapUrl = window.mapUrl
-        state.epoch = window.epoch
-        state.window = window
-        nlIncrement(state, "playlistCount")
-        state.phase = "init"
-        if state.initIds.Count() = 2 then state.phase = "segment"
+        if state.mapUrl <> "" and state.mapUrl <> window.mapUrl
+            nlCheck(state.initIds.Count() = 2 and state.initDigest <> "", "map rotation before initialization")
+            state.pendingWindow = window
+            state.pendingPlaylistSequence = parsed.mediaSequence
+            state.phase = "init-rotation"
+        else
+            state.lastPlaylistSequence = parsed.mediaSequence
+            state.mapUrl = window.mapUrl
+            state.epoch = window.epoch
+            state.window = window
+            nlIncrement(state, "playlistCount")
+            state.phase = "init"
+            if state.initIds.Count() = 2 then state.phase = "segment"
+        end if
     else
         nlCheck(Type(payload) = "roByteArray", "binary payload must be bytearray")
         nlCheck(payload.Count() > 0 and payload.Count() <= intent.limit, "binary payload bound")
-        state.input = payload
         if kind = "init"
-            tracks = nativeDemuxBulkInspectInit(payload)
-            video = 0
-            audio = 0
-            for each track in tracks
-                if track[1] = "video" then video += 1
-                if track[1] = "audio" then audio += 1
-            end for
-            nlCheck(tracks.Count() = 2 and video = 1 and audio = 1, "one video and one audio track required")
-            state.tracks = tracks
-            state.phase = "init-video"
+            digest = nlInitDigest(state, payload)
+            if state.phase = "init-rotation"
+                nlCheck(state.pendingWindow <> invalid and state.pendingWindow.epoch = state.epoch, "pending map initialization invalid")
+                nlInteger(state.initAliasCount, 0&, 4294967294&)
+                nlInteger(state.playlistCount, 0&, 4294967294&)
+                state.mapUrl = state.pendingWindow.mapUrl
+                state.window = state.pendingWindow
+                state.lastPlaylistSequence = state.pendingPlaylistSequence
+                state.pendingWindow = invalid
+                state.pendingPlaylistSequence = -1&
+                nlIncrement(state, "playlistCount")
+                nlIncrement(state, "initAliasCount")
+                state.phase = "segment"
+            else
+                tracks = nativeDemuxBulkInspectInit(payload)
+                video = 0
+                audio = 0
+                for each track in tracks
+                    if track[1] = "video" then video += 1
+                    if track[1] = "audio" then audio += 1
+                end for
+                nlCheck(tracks.Count() = 2 and video = 1 and audio = 1, "one video and one audio track required")
+                state.initDigest = digest
+                state.initByteCount = payload.Count()
+                state.input = payload
+                state.tracks = tracks
+                state.phase = "init-video"
+            end if
         else
+            state.input = payload
             state.pendingSegment = nlMissing(state)
             nlCheck(state.pendingSegment <> invalid, "segment identity missing")
             state.phase = "segment-video"
@@ -534,6 +559,16 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
     end if
     if state.steadyMode then state.lastUpstreamProgress = nowMs
 end sub
+
+' Native SHA256 plus exact length retains identity without retaining the original input.
+function nlInitDigest(state as object, payload as object) as string
+    nlCheck(Type(payload) = "roByteArray" and payload.Count() > 0 and payload.Count() <= 2097152, "initialization byte bound")
+    digest = nlBodyDigest(payload)
+    if state.phase = "init-rotation"
+        nlCheck(payload.Count() = state.initByteCount and digest = state.initDigest, "selected map initialization changed")
+    end if
+    return digest
+end function
 
 function nlProtected(state as object, id as string) as boolean
     for each initId in state.initIds
@@ -752,6 +787,8 @@ sub nlAbort(state as object, reason as string)
     state.input = invalid
     state.temporaryVideo = invalid
     state.pendingSegment = invalid
+    state.pendingWindow = invalid
+    state.pendingPlaylistSequence = -1&
     ' Advertised/leased cached bodies remain until root closes serving clients.
 end sub
 

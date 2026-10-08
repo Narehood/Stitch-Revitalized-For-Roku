@@ -74,7 +74,7 @@ function loopbackSafeDiagnostics(value as dynamic, cacheBudgetBytes = 16777216& 
     fields = ["phase", "failed", "failureCategory", "generation", "cacheBytes", "peakCacheBytes", "assetCount", "fetchCount", "playlistCount", "initPairCount", "segmentPairCount", "transferActive", "inputRetained", "inputFilePresent", "closed"]
     if not loopbackKeys(value, fields) then return invalid
     if not loopbackString(value.phase) or value.phase.Len() < 1 or value.phase.Len() > 32 then return invalid
-    phases = ",playlist,init,segment,init-video,init-audio,segment-video,segment-audio,ready,ended,failed,stopped,"
+    phases = ",playlist,init,init-rotation,segment,init-video,init-audio,segment-video,segment-audio,ready,ended,failed,stopped,"
     if value.phase.InStr(",") >= 0 or phases.InStr("," + value.phase + ",") < 0 then return invalid
     for each name in ["failed", "transferActive", "inputRetained", "inputFilePresent", "closed"]
         if not loopbackBoolean(value[name]) then return invalid
