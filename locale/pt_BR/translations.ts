@@ -974,12 +974,12 @@
         <message>
             <source>Playlist selection unavailable</source>
             <extracomment>Translation awaits native-speaker review.</extracomment>
-            <translation>N?o foi poss?vel selecionar a lista de reprodu??o</translation>
+            <translation>Não foi possível selecionar a lista de reprodução</translation>
         </message>
         <message>
             <source>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</source>
             <extracomment>Translation awaits native-speaker review.</extracomment>
-            <translation>N?o foi poss?vel selecionar com seguran?a os dados de qualidade da transmiss?o. Abra o v?deo novamente para atualiz?-los.</translation>
+            <translation>Não foi possível selecionar com segurança os dados de qualidade da transmissão. Abra o vídeo novamente para atualizá-los.</translation>
         </message>
     </context>
 </TS>

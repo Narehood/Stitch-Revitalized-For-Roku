@@ -975,12 +975,12 @@
         <message>
             <source>Playlist selection unavailable</source>
             <extracomment>Translation awaits native-speaker review.</extracomment>
-            <translation>No se pudo seleccionar la lista de reproducci?n</translation>
+            <translation>No se pudo seleccionar la lista de reproducción</translation>
         </message>
         <message>
             <source>The stream's quality metadata could not be safely selected. Reopen the video to refresh it.</source>
             <extracomment>Translation awaits native-speaker review.</extracomment>
-            <translation>No se pudieron seleccionar de forma segura los datos de calidad de la transmisi?n. Vuelve a abrir el v?deo para actualizarlos.</translation>
+            <translation>No se pudieron seleccionar de forma segura los datos de calidad de la transmisión. Vuelve a abrir el vídeo para actualizarlos.</translation>
         </message>
     </context>
 </TS>
