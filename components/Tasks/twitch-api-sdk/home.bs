@@ -199,7 +199,7 @@ end namespace
 
 function getRecommendedSections() as object
     rsp = TwitchGraphQLRequest({
-        operationName: "Shelves",
+        "operationName": "Shelves",
         variables: {
             "imageWidth": 50,
             "itemsPerRow": 3,
@@ -216,9 +216,9 @@ function getRecommendedSections() as object
             "verbose": false
         },
         extensions: {
-            persistedQuery: {
+            "persistedQuery": {
                 version: 1,
-                sha256Hash: "b6f0c72c747457b73107f6aa00bd6a5bb294539d2de5398646e949c863662543"
+                "sha256Hash": "b6f0c72c747457b73107f6aa00bd6a5bb294539d2de5398646e949c863662543"
             }
         }
     })

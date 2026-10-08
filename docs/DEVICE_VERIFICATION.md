@@ -1,6 +1,6 @@
 # Roku verification record
 
-Status: device access available; acceptance testing in progress. On October 8, a fresh test package was installed on a G204X 58-inch Roku TV running OS 15.3.4 build 2303. Its unique run marker identified the new package and all 120 Rooibos tests passed. The production package was also installed and remained active during a twenty-second console observation with no runtime error or debugger stop. These are native installation/utility-test/startup results; playback, audible audio, chat, native UI and latency checks below remain pending. Offline fixtures, compiler checks and synthetic MP4 tests verify only their stated contracts.
+Status: device access available; acceptance testing in progress. On October 8, a fresh test package was installed on a G204X 58-inch Roku TV running OS 15.3.4 build 2303. Its unique run marker identified the new package and all 120 Rooibos tests passed. The production package installed and loaded anonymous live listings. Native playback testing exposed the request-key casing defect described below. A separately marked diagnostic package with the playback variable keys quoted reached live AVC/AAC playback; the user confirmed normal moving video and clear audible sound. This passes one stream on this device. Other streams reportedly show audio or quality errors and require reproduction. Chat, 1440p, VOD, complete native UI, sustained playback and latency acceptance remain open. Offline fixtures, compiler checks and synthetic MP4 tests verify only their stated contracts.
 
 ## Device record
 
@@ -8,13 +8,15 @@ For each device, record model name/number, Roku OS, display resolution, network 
 
 | Capability group | Actual device / OS | Status |
 |---|---|---|
-| Existing OS 15.1-compatible device, AVC fallback | G204X, 6Series-58 TV, OS 15.3.4 build 2303 | Installation and 120-test run passed; AVC playback/audio pending |
-| HEVC-capable device, genuine 1440p broadcast | G204X available; decoder query and broadcast pending | Pending |
-| Device exposing native secure WebSocket IRC | G204X available; native capability test pending | Pending |
+| Existing OS 15.1-compatible device, AVC fallback | G204X, 6Series-58 TV, OS 15.3.4 build 2303 | Installation and 120-test run passed; diagnostic live AVC/AAC picture and sound confirmed for one stream |
+| HEVC-capable device, genuine 1440p broadcast | G204X reports HEVC main and main 10 at level 5.0 supported | Actual 1440p broadcast playback pending |
+| Device exposing native secure WebSocket IRC | G204X creates a native WebSocket object | TLS handshake and live message delivery pending |
 
 One device can cover several groups. Unrepresented groups stay pending. Preserve the OS minimum unless verified evidence justifies a documented change.
 
 Initial production artifact: application source `c928797`, SHA256 `03a1b1a7491e7602ac214d799a60d45330d9724ea2e6f88ce910dc18e87f5d4d`. The packaged playback task matches the reviewed source. The TV reports a 1080p UI plane, which does not establish video decoder capability. Fresh native test run ID: `33fbec29-807b-4a53-96dc-451aa47f6b66`. Connection credentials, account data and raw console artifacts remain private.
+
+The initial live request returned HTTP 200 with a GraphQL error that required `skipPlayToken` was missing. Roku lowercases unquoted associative-array literal keys; the desktop interpreter and desktop request controls preserved their case. The corrected native experiment changed only the playback variable key quoting and private diagnostic prints. Twitch then returned the token, the player advanced through buffering to playing, and ECP reported live HLS with AVC video and AAC audio without a debugger stop. The user confirmed moving picture and clear sound. This establishes the authorization correction and this one-stream result, not sustained playback, actual video resolution, 1440p or end-to-end latency. Quoted keys are also applied to the matching VOD variables and existing persisted-query envelopes; authenticated follow/unfollow operations have not been exercised.
 
 ## Playback and audio
 

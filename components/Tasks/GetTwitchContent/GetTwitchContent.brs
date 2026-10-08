@@ -64,7 +64,7 @@ sub loadHlsContent(request as object)
     if request.contentType = "VOD"
         rsp = TwitchGraphQLRequest({
             query: "query VodPlayerWrapper_Query($videoId: ID!, $platform: String!, $playerType: String!, $skipPlayToken: Boolean!) { video(id: $videoId) @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } id } }",
-            variables: { videoId: request.contentId, platform: "web_tv", playerType: "pulsar", skipPlayToken: false }
+            variables: { "videoId": request.contentId, platform: "web_tv", "playerType": "pulsar", "skipPlayToken": false }
         })
         if rsp <> invalid and rsp.data <> invalid and rsp.data.video <> invalid then token = rsp.data.video.playbackAccessToken
         endpoint = "/vod/v2/" + request.contentId + ".m3u8?nauth="
@@ -72,7 +72,7 @@ sub loadHlsContent(request as object)
     else if request.contentType = "LIVE"
         rsp = TwitchGraphQLRequest({
             query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { user(login: $login) { stream @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } } } }",
-            variables: { login: request.streamerLogin, platform: "web_tv", playerType: "roku", skipPlayToken: false }
+            variables: { login: request.streamerLogin, platform: "web_tv", "playerType": "roku", "skipPlayToken": false }
         })
         if rsp <> invalid and rsp.data <> invalid and rsp.data.user <> invalid and rsp.data.user.stream <> invalid then token = rsp.data.user.stream.playbackAccessToken
         endpoint = "/api/v2/channel/hls/" + request.streamerLogin + ".m3u8?token="

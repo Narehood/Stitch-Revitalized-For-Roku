@@ -28,14 +28,14 @@ end function
 function getChannelShell()
     if m.top.request.params.id = invalid then return invalid
     rsp = TwitchGraphQLRequest({
-        operationName: "ChannelShell",
+        "operationName": "ChannelShell",
         variables: {
             login: m.top.request.params.id
         },
         extensions: {
-            persistedQuery: {
+            "persistedQuery": {
                 version: 1,
-                sha256Hash: "580ab410bcd0c1ad194224957ae2241e5d252b2c5173d8e0cce9d32d5bb14efe"
+                "sha256Hash": "580ab410bcd0c1ad194224957ae2241e5d252b2c5173d8e0cce9d32d5bb14efe"
             }
         }
     })
