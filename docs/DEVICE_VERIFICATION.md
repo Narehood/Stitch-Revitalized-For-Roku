@@ -31,7 +31,7 @@ Record packaging, codec, resolution, frame rate and whether the service was used
 | Check | Expected behavior | Result / evidence |
 |---|---|---|
 | Ordinary AVC live, no proxy | Picture and audible audio; startup and sustained playback | Jynxzi/Savix sampled picture and audio confirmed; sustained acceptance pending |
-| Bundled CMAF live through service | Separated video/audio; audible sound, A/V sync, no error 970 | TheBurntPeanut explicit1080p/Automatic picture and audio confirmed through direct Python0.3; sustained A/V acceptance pending |
+| Bundled CMAF live through service | Separated video/audio; audible sound, A/V sync, no error 970 | TheBurntPeanut picture and audio confirmed: explicit 1080p through direct Python 0.2, Automatic through direct Python 0.3; sustained A/V acceptance pending |
 | Genuine HEVC 1440p live | Offered only on capable device; picture and sound | Pending |
 | Device unable to decode source quality | Compatible AVC options retained; clear failure if none exist | Pending |
 | Auto / highest / lowest / manual quality | Correct options, audible audio, compatible adaptive ladder | Automatic/explicit1080p sampled; switching/adaptation and remaining choices pending |
