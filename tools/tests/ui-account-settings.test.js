@@ -175,8 +175,13 @@ async function expectedParseDiagnostic() {
 }
 
 function withoutExpectedDiagnostic(output, parseDiagnostic) {
-    const expected = new RegExp(`^EXPECTED_PARSEJSON_BEGIN\\r?\\n${escapeRegex(parseDiagnostic)}\\r?\\nEXPECTED_PARSEJSON_END$`, 'gm');
-    return output.replace(expected, 'EXPECTED_CAUGHT_JSON_DIAGNOSTIC');
+    const lines = output.split(/\r?\n/);
+    const markers = lines.filter(line => line.includes('EXPECTED_PARSEJSON_'));
+    const diagnosticCount = lines.filter(line => line === parseDiagnostic).length;
+    if (markers.length === 0 && diagnosticCount === 0) return output;
+    assert.deepEqual(markers, ['EXPECTED_PARSEJSON_BEGIN', 'EXPECTED_PARSEJSON_END'], 'one ordered expected ParseJSON marker pair required');
+    assert.equal(diagnosticCount, 1, 'one exact expected ParseJSON diagnostic required');
+    return lines.map(line => line === parseDiagnostic ? 'EXPECTED_CAUGHT_JSON_DIAGNOSTIC' : line).join('\n');
 }
 
 function validate(result, marker, parseDiagnostic) {
@@ -185,9 +190,9 @@ function validate(result, marker, parseDiagnostic) {
     assert.equal(result.exceeded, false, `fixture exceeded output limit\n${failure}`);
     assert.equal(result.code, 0, `fixture exited ${result.code} (${result.signal})\n${failure}`);
     // The actual caught malformed-JSON case emits an engine diagnostic. Permit
-    // only its exact current production source line and message, immediately
-    // between the explicit case markers. Arbitrary ERRORs inside or outside
-    // those markers still fail; rejection controls exercise both paths.
+    // only one exact current production source line/message with one ordered
+    // case marker pair. Independently collected stdout/stderr can reorder that
+    // diagnostic relative to the markers; all other ERRORs still fail.
     const output = withoutExpectedDiagnostic(result.output, parseDiagnostic);
     assert.doesNotMatch(output, /STITCH_UI_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|\bERROR\b/i, failure);
     assert.match(output, /EXIT_USER_NAV/, `fixture did not close normally\n${failure}`);
@@ -263,8 +268,19 @@ test('output guards reject stale/zero markers, failures, errors, crashes and abn
     assert.equal(validate(valid, marker, parseDiagnostic), 1);
     assert.equal(validate({ ...valid, output: valid.output.replace(/\n/g, '\r\n') }, marker, parseDiagnostic), 1);
     const expected = `EXPECTED_PARSEJSON_BEGIN\n${parseDiagnostic}\nEXPECTED_PARSEJSON_END\n`;
-    assert.equal(validate({ ...valid, output: expected + valid.output }, marker, parseDiagnostic), 1);
-    assert.equal(validate({ ...valid, output: (expected + valid.output).replace(/\n/g, '\r\n') }, marker, parseDiagnostic), 1);
+    const markerPair = 'EXPECTED_PARSEJSON_BEGIN\nEXPECTED_PARSEJSON_END\n';
+    for (const output of [expected, `${parseDiagnostic}\n${markerPair}`, `${markerPair}${parseDiagnostic}\n`]) {
+        for (const newline of ['\n', '\r\n']) {
+            assert.equal(validate({ ...valid, output: (output + valid.output).replace(/\n/g, newline) }, marker, parseDiagnostic), 1);
+        }
+    }
+    // Actual Ubuntu ordering: stdout markers and assertions preceded the stderr
+    // diagnostic; app lines used CRLF while the diagnostic used LF.
+    const ciOrdered = 'EXPECTED_PARSEJSON_BEGIN\r\nEXPECTED_PARSEJSON_END\r\n'
+        + 'PASS  128: actual ProxyHealthCheck parses inert HTTP bad_body result\r\n'
+        + 'PASS  129: actual health worker retains URL/finite HTTP contract\r\n'
+        + `${parseDiagnostic}\n${valid.output}`;
+    assert.equal(validate({ ...valid, output: ciOrdered }, marker, parseDiagnostic), 1);
     const controls = [
         { ...valid, output: 'EXIT_USER_NAV' },
         { ...valid, output: `EXIT_USER_NAV\n${marker}: 0 assertions` },
@@ -274,7 +290,23 @@ test('output guards reject stale/zero markers, failures, errors, crashes and abn
         { ...valid, timedOut: true }, { ...valid, exceeded: true }, { ...valid, code: 1 },
         { ...valid, output: `${marker}: 1 assertions` },
         { ...valid, output: valid.output + 'BRIGHTSCRIPT: ERROR: unexpected' },
+        { ...valid, output: `${parseDiagnostic}\n${valid.output}` },
+        { ...valid, output: markerPair + valid.output },
+        { ...valid, output: `EXPECTED_PARSEJSON_BEGIN\n${parseDiagnostic}\n${valid.output}` },
+        { ...valid, output: `${parseDiagnostic}\nEXPECTED_PARSEJSON_END\n${valid.output}` },
+        { ...valid, output: `EXPECTED_PARSEJSON_END\n${parseDiagnostic}\nEXPECTED_PARSEJSON_BEGIN\n${valid.output}` },
+        { ...valid, output: expected + expected + valid.output },
+        { ...valid, output: expected + 'EXPECTED_PARSEJSON_BEGIN\n' + valid.output },
+        { ...valid, output: expected + 'EXPECTED_PARSEJSON_END\n' + valid.output },
+        { ...valid, output: expected + `${parseDiagnostic}\n${valid.output}` },
+        { ...valid, output: expected.replace('EXPECTED_PARSEJSON_BEGIN', 'EXPECTED_PARSEJSON_BEGIN-extra') + valid.output },
+        { ...valid, output: expected.replace('EXPECTED_PARSEJSON_END', 'EXPECTED_PARSEJSON_END-extra') + valid.output },
+        { ...valid, output: expected.replace(parseDiagnostic, parseDiagnostic.replace('not JSON', 'wrong body')) + valid.output },
+        { ...valid, output: expected.replace(parseDiagnostic, parseDiagnostic.replace(proxySource, 'components/Other.brs')) + valid.output },
+        { ...valid, output: expected.replace(parseDiagnostic, parseDiagnostic.replace(/\(\d+\)$/, '(9999)')) + valid.output },
+        { ...valid, output: expected + 'EXPECTED_PARSEJSON_BEGIN-extra\n' + valid.output },
         { ...valid, output: valid.output + 'EXPECTED_PARSEJSON_BEGIN\nBRIGHTSCRIPT: ERROR: runtime failure\nEXPECTED_PARSEJSON_END' },
+        { ...valid, output: 'BRIGHTSCRIPT: ERROR: unexpected before caught diagnostic\n' + expected + valid.output },
         { ...valid, output: expected + valid.output + 'BRIGHTSCRIPT: ERROR: unexpected after caught diagnostic' },
         { ...valid, output: `EXPECTED_PARSEJSON_BEGIN\n${parseDiagnostic}\nBRIGHTSCRIPT: ERROR: unexpected\nEXPECTED_PARSEJSON_END\n${valid.output}` },
         { ...valid, output: valid.output + 'BrightScript Debugger' },
