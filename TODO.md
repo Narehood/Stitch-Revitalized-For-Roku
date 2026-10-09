@@ -22,7 +22,6 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P2 | Verify delayed sign-in failure focus on Roku | Minimal focus guard and tracked late-failure/menu/return/Retry/disposal regressions pass; confirm native focus |
 | P2 | Verify recorded seek tap/hold timing on physical and mobile remotes | One tap advances ten seconds; a 0.4-second initial delay precedes accelerated repeats. Actual engine regressions pass; hardware timing remains pending |
 | P2 | Verify native child quality-dialog keys | Simulator diverges on child StandardMessageDialog Up/Down/OK/Back; option/index semantics pass, native keys remain a release gate |
-| P2 | Refresh the first-launch release notes | Native What's New still describes analytics as opt-out and claims reduced latency; align the historical copy with explicit consent and unmeasured experimental latency |
 | P3 | Supply storyboard thumbnails after capturing a supported source | Thumbnail consumer is preserved; no producer exists at baseline or current source. Do not widen playback queries without verified evidence |
 | P3 | Keep row geometry arrays aligned for future content types | Push labels, sizes and heights together only for supported rows; current produced types are covered |
 | P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
