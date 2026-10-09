@@ -27,6 +27,11 @@ sub main()
         finishMain(screen)
         return
     end if
+    if "__DIALOG_WAIT_CONTROL__" = "yes"
+        player = openPlayer(true)
+        finishMain(screen)
+        return
+    end if
 
     ' Actual live overlay Exit reaches the same typed cooperative Player action.
     player = openPlayer(true)
@@ -378,7 +383,12 @@ function openPlayer(local as boolean, choose = true as boolean) as object
     if local and choose
         check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try on Roku", "actual eligible dialog offers explicit choice")
         press("ok")
-        settle(120)
+        ' The key driver may defer a repeated OK by at least 250 ms. Wait for
+        ' actual dispatch, without changing the production cleanup deadlines.
+        dispatch = CreateObject("roTimespan")
+        while player.CallFunc("fixturePlayer").sessionId = "" and dispatch.TotalMilliseconds() < 2000
+            settle(10)
+        end while
         check(player.CallFunc("fixturePlayer").sessionId <> "" and m.scene.localPlaybackSession.busy, "real dialog dispatch starts one actual manager")
     end if
     return player
