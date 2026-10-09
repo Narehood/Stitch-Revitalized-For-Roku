@@ -1,6 +1,18 @@
 # Roku verification record
 
-Status: device access available; acceptance testing in progress. On October 8, a fresh test package was installed on a G204X 58-inch Roku TV running OS 15.3.4 build 2303. Its unique run marker identified the new package and all 120 Rooibos tests passed. The production package installed and loaded anonymous live listings. Native playback testing exposed the request-key casing defect described below. A separately marked diagnostic package with the playback variable keys quoted reached live AVC/AAC playback; the user confirmed normal moving video and clear audible sound. Follow-up testing reproduced and corrected the Savix decoder rejection and TheBurntPeanut bundled-audio/Automatic selection failures; the user confirmed picture and sound on the sampled direct and direct-Python paths described below. Chat, 1440p, VOD, complete native UI, sustained playback and latency acceptance remain open. Offline fixtures, compiler checks and synthetic MP4 tests verify only their stated contracts.
+Status: device access available; acceptance testing in progress. On October 8, a fresh test package was installed on a G204X 58-inch Roku TV running OS 15.3.4 build 2303. Its unique run marker identified the new package and all 120 Rooibos tests passed. Native testing reproduced and corrected the request-key casing, Savix decoder rejection and TheBurntPeanut bundled-audio/Automatic failures described below. The latest Alpha 1 full-app checks have user-confirmed live picture, synchronized audio and readable chat, plus sampled VOD picture and clear audio. VOD synchronization/startup timing, seek/bookmark/recorded-chat notice, secure chat, 1440p, complete native UI, sustained playback and latency acceptance remain open. Offline fixtures, compiler checks and synthetic MP4 tests verify only their stated contracts.
+
+## Latest Alpha 1 full-app observations
+
+October 8, source `47e97a7`: fresh marked packages were derived from the sealed 3.0.0 Alpha 1 artifact, SHA256 `5bce5fa1583406606d2156855beb4c32708ab28a1580af549bfdcff89676d5ee`. Instrumentation adds private read-only component exports and a bounded Main loop; all other production BrightScript bodies are byte-identical to that artifact. Navigation uses actual ECP remote keys and current app content, with no synthetic playback requests, authentication or preference overrides. No external audio service or container was used. The real What's New / Got it action persisted version 3.0.0 through the app's normal handler; history and recent-search bookkeeping also occur normally.
+
+YourRAGE live playback used the actual Following card and native StitchVideo, with direct Automatic transport. Native chat connected and rendered up to 25 messages in the sampled playing observations. The user confirmed moving picture, clear synchronized audio and visible, readable live-chat messages. The stream changed during the later close/reopen check; the user confirmed using the remote to change it. Full-player hide/show/replacement/Exit acceptance therefore remains incomplete. The earlier separate chat-module hide/show/disposal proof remains valid, but does not close that full-player gate.
+
+A current YourRAGE VOD was selected through the real Search result and ChannelPage archive card. Native CustomVideo used direct Automatic transport, with 74 playing samples and position advancing from 0.033 to 73.049 seconds. No live ChatJob or EmoteJob was started for that recorded item. The user confirmed moving picture and clear audio, then qualified synchronization as likely and noted a possible intro/startup delay while beginning manual checks of other VODs. Audio/video startup timing and synchronization were not independently measured. Navigation interrupted the scripted seek/recorded-chat notice/Exit checks before they ran; those gates remain open. A subsequent manual VOD looked good to the user; another requested the audio service, consistent with the experimental Roku splitter being LIVE-only. Recorded splitting remains a known Alpha 1 limitation. Clip playback is not established by these observations.
+
+The user also reports a second loading screen and brief freeze early in experimental live playback, followed by several minutes (possibly more than ten) before a dropout. Passive console capture is being used during manual reproduction without sideloading, changing settings or sending remote input. No cause or confirmed fix is established yet; longer-session stability remains open.
+
+All scripted playback/navigation helpers have ended and the exact sealed regular Alpha 1 package was reinstalled successfully; the passive console capture is separate and sends no remote input. Earlier diagnostic casing, initial-focus and keyboard-edge navigation failures are retained separately and do not count as application playback failures or completed acceptance runs. The two watched cases establish their bounded picture/audio/chat observations on this TV; they do not establish sustained stability, decoded resolution, emote coverage, secure/signed-in transport or broad-device acceptance.
 
 ## Device record
 
@@ -55,7 +67,8 @@ A fresh replay of Tminnzy in the full app, using the same reviewed playback sour
 | Genuine HEVC 1440p live | Offered only on capable device; picture and sound | Pending |
 | Device unable to decode source quality | Compatible AVC options retained; clear failure if none exist | Pending |
 | Auto / highest / lowest / manual quality | Correct options, audible audio, compatible adaptive ladder | Automatic/explicit1080p sampled; switching/adaptation and remaining choices pending |
-| VOD start, seek and bookmark resume | Correct position, audible sound and A/V sync | Pending |
+| VOD start and audio | Moving picture, audible sound and A/V sync | YourRAGE public VOD on Alpha 1: native position advanced about 73 seconds; user confirmed picture/audio and reported likely sync. Initial audio/video timing, broader VOD formats and sustained acceptance pending |
+| VOD seek and bookmark resume | Correct position and prior playing/paused state | Pending; scripted seek was interrupted by manual navigation |
 | Clips | Correct clip and audible sound; clear failure if unavailable | Pending |
 | Proxy unavailable / restored | Bounded failure and recovery; direct compatible streams still work | Pending |
 | Repeated quality changes and player open/close | No abandoned timers, tasks or connections | Pending |
@@ -75,9 +88,9 @@ The regression executes 23 assertions against current transport/receive function
 
 | Check | Expected behavior | Result / evidence |
 |---|---|---|
-| Anonymous live chat | Messages/emotes; readable status and bounded reconnect | Native message rendering and hide/show verified; full player, emotes, readability and sustained reconnect pending |
+| Anonymous live chat | Messages/emotes; readable status and bounded reconnect | Alpha 1 full player: native messages rendered and user confirmed readable chat with working live picture/audio. Module hide/show/disposal verified separately; full-player replacement/Exit, emotes and sustained reconnect pending |
 | Signed-in secure chat | Credentials used only by secure transport; correct account state | Pending |
-| Older anonymous IRC fallback | No account token sent; usable chat | Production anonymous module received/rendered four messages on OS 15.3.4; full player/readability pending |
+| Older anonymous IRC fallback | No account token sent; usable chat | Anonymous production module and Alpha 1 full player render messages on OS 15.3.4; full-player readability user-confirmed. Secure/signed-in acceptance remains separate |
 | Hide/show, channel changes and network interruption | Correct channel, one active connection, no stale messages | Pending |
 | VOD/clip chat button | Unavailable-chat notice; no recorded playback joined to live chat | Pending |
 | Login pending / denied / expired / network error | Useful retry/browse options; no endless poll | Pending |

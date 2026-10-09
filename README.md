@@ -2,9 +2,24 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-The planned modernization release is **3.0.0 Alpha 1**. The Twitch-inspired native interface is implemented, and bounded Roku-only picture/audio and anonymous chat tests pass on the test TV. The [plan](docs/MODERNIZATION_PLAN.md) and [device verification record](docs/DEVICE_VERIFICATION.md) distinguish those results from remaining 1440p, VOD, broader-device, native UI and latency acceptance. Further Kimi/Grok review rounds are deferred at the maintainer's request.
+**[3.0.0 Alpha 1](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.0-alpha.1)** is the first preview of the modernization. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku. Alpha 1 is a prerelease: compatibility and longer playback sessions still need testing.
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
+
+## What's new in 3.0.0 Alpha 1
+
+- **Twitch-inspired native interface:** dark surfaces, purple focus indicators, redesigned navigation and content cards, clearer connection/loading/error states, current-value Settings, and updated player controls. Existing browsing, account, bookmarks, quality, chat and emote features are retained.
+- **Live playback without a container:** ordinary compatible streams play directly. Eligible Enhanced Broadcasting live streams can split audio/video on the Roku itself through **Try on Roku**, without Docker or a separate computer. This experimental option is selected explicitly for an eligible stream.
+- **1440p stream support:** corrected HEVC negotiation, level checks and quality filtering support 1440p, including 60 fps, when the device can decode the offered format. Compatible lower AVC qualities remain available. Genuine 1440p hardware playback verification is still pending; bundled HEVC media can require the optional service.
+- **Playback and audio repairs:** corrected native Twitch request formatting, decoder filtering and Automatic quality selection for the optional audio service. Live and compatible recorded playback have picture/audio confirmation on a physical Roku.
+- **Clearer chat:** live connection status, bounded reconnection, improved text contrast and preserved emote support. Opening chat for a VOD or clip shows an unavailable-chat notice. Anonymous full-player live chat has been confirmed readable on the TV; secure/signed-in and longer-session coverage remain open.
+- **Maintained tooling and defaults:** updated Node/Python dependencies and Windows/Linux CI, explicit observer/task cleanup, optional diagnostics off by default, and experimental lower latency off by default.
+
+## Known Alpha 1 limitations
+
+The on-device audio/video splitter currently supports eligible **live AVC/AAC** streams. Some VODs combine their tracks in CMAF and still show **Audio service needed**: those recordings need the optional Python service below. Docker is optional even for that service. Extending Roku-only splitting to recorded playback is follow-up work; Alpha 1 does not claim container-free playback of every VOD or stream format.
+
+Brief rebuffering and a later dropout during experimental live playback have been reported and are being investigated. Wider source/device compatibility, sustained stability, VOD seek/bookmark behavior, native recorded-chat notice navigation and measured low latency remain under verification. Keep the optional service available if a format is unsupported on-device, and see the [verification record](docs/DEVICE_VERIFICATION.md) and [follow-up work](TODO.md) for current coverage.
 
 ## Build
 
@@ -27,7 +42,7 @@ For development, `npm run build` compiles without a package and `npm run watch` 
 
 The existing manifest minimum remains Roku OS 15.1 with an HD SceneGraph layout. Video selection uses decoder capabilities rather than UI resolution. A device must support the stream's codec, profile, level and dimensions to receive that quality; 1440p is not enabled indiscriminately on every Roku. Unsupported qualities are filtered, with compatible AVC alternatives retained when Twitch supplies them.
 
-Some Enhanced Broadcasting streams combine audio and video in CMAF fragments. Eligible clear AVC/AAC live streams offer **Try on Roku**, an opt-in experimental splitter that runs on the Roku without another computer or container. This path has bounded full-app picture/audio confirmation on one TV; broader source/device and long-term acceptance remain open. The optional demux service below remains available as a fallback. Ordinary compatible streams play directly. Twitch controls which renditions are available, and its playback interfaces can change independently of Stitch.
+Some Enhanced Broadcasting streams combine audio and video in CMAF fragments. Eligible clear AVC/AAC live streams offer **Try on Roku**, an opt-in experimental splitter that runs on the Roku without another computer or container. Its Automatic mode selects one offered quality, preferring at most 720p; use manual quality selection for higher supported qualities. It has bounded full-app picture/audio confirmation on one TV; broader source/device and long-term acceptance remain open. The optional demux service below remains available for unsupported bundled media, including some VODs. Ordinary compatible streams and VODs play directly. Twitch controls which renditions are available, and its playback interfaces can change independently of Stitch.
 
 Live chat uses secure WebSocket IRC when that component is available on the device. Older devices retain anonymous IRC chat without sending account credentials over its plaintext connection. Chat has bounded reconnection and visible connection status. VODs and clips show an unavailable-chat notice when chat is opened.
 
