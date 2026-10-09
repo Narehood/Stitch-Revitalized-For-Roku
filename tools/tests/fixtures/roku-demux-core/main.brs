@@ -20,10 +20,10 @@ sub goldenCore(data as object, expected as object, label as string)
     m.goldens += 1
 end sub
 
-function newCore(steady = true as boolean, nowMs = 0& as dynamic) as object
+function newCore(steady = true as boolean, nowMs = 0& as dynamic, sourceDelaySeconds = 0 as integer) as object
     options = invalid
     if steady then options = { mode: "steady", sessionId: "0123456789abcdef0123456789abcdef" }
-    return nativeLiveCreate("https://cdn.example.invalid/live.m3u8", nowMs, 0, invalid, steady, 16777216&, options)
+    return nativeLiveCreate("https://cdn.example.invalid/live.m3u8", nowMs, sourceDelaySeconds, invalid, steady, 16777216&, options)
 end function
 
 function playlistCore(first as longinteger, count = 3 as integer, special = "" as string, duration = "2.000000" as string, target = 2 as integer) as string
@@ -190,6 +190,150 @@ sub publicationDurationCore()
     end for
     closeCore(state)
     caseCore("rounded-publication-duration-and-stable-manifests")
+end sub
+
+function startupPlaylistCore(first as longinteger, count as integer, boundary as longinteger, kind as string, ended = false as boolean) as string
+    text = "#EXTM3U" + Chr(10) + "#EXT-X-TARGETDURATION:6" + Chr(10) + "#EXT-X-MEDIA-SEQUENCE:" + first.ToStr() + Chr(10) + "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
+    for offset = 0 to count - 1
+        sequence = first + offset
+        if sequence = boundary
+            if kind = "map" or kind = "both" then text += "#EXT-X-MAP:URI=" + Chr(34) + "new-init.mp4" + Chr(34) + Chr(10)
+            if kind = "epoch" or kind = "both" then text += "#EXT-X-DISCONTINUITY" + Chr(10)
+        end if
+        text += "#EXTINF:2.002," + Chr(10) + "segment-" + sequence.ToStr() + ".m4s" + Chr(10)
+    end for
+    if ended then text += "#EXT-X-ENDLIST" + Chr(10)
+    return text
+end function
+
+function feedReasonCore(state as object, text as string, nowMs as dynamic) as string
+    reason = ""
+    try
+        nativeLiveFeed(state, "playlist", text, nowMs)
+    catch e
+        reason = e.message
+    end try
+    return reason
+end function
+
+sub startupEmptyCore(state as object)
+    checkCore(state.phase = "playlist" and state.window = invalid and nativeLivePublication(state) = invalid, "mixed startup waits without assigning a window or publication")
+    checkCore(state.mapUrl = "" and state.epoch = -1& and state.tracks = invalid and state.initIds.Count() = 0, "mixed startup retains uninitialized timeline")
+    checkCore(state.assets.Count() = 0 and state.segments.Count() = 0 and state.generations.Count() = 0 and state.cacheBytes = 0 and state.latest = 0, "mixed startup allocates no converted assets or generations")
+    checkCore(state.input = invalid and state.temporaryVideo = invalid and state.pendingWindow = invalid and state.pendingSegment = invalid and state.pendingPlaylistSequence = -1&, "mixed startup retains no input or pending initialization")
+    checkCore(not state.started and state.publishedLast = -1& and state.initPairCount = 0 and state.segmentPairCount = 0, "mixed startup never claims readiness or conversion")
+    checkCore(state.deadline = 45000&, "startup wait keeps absolute deadline")
+end sub
+
+sub startupWindowCore()
+    for each kind in ["map", "epoch", "both"]
+        for each delay in [0, 4]
+            state = newCore(true, 0&, delay)
+            count = 4
+            if delay > 0 then count += 2
+            m.config = { sourceDelaySeconds: delay }
+            for pass = 0 to 1
+                nowMs = pass * 3000&
+                reason = feedReasonCore(state, startupPlaylistCore(10& + pass, count, 13&, kind), nowMs)
+                checkCore(reason = "", "validated mixed startup waits for coherent tail")
+                startupEmptyCore(state)
+                checkCore(state.lastPlaylistSequence = 10& + pass and state.playlistCount = pass + 1 and state.nextPoll = nowMs + 3000&, "waiting source sequence and bounded poll accounting retained")
+                checkCore(nlIntent(state, nowMs + 2999&) = invalid, "startup wait suppresses early playlist intent")
+                intent = nlIntent(state, nowMs + 3000&)
+                checkCore(intent <> invalid and intent.kind = "playlist" and intent.limit = 262144, "startup wait permits exact due playlist intent")
+            end for
+            nativeLiveFeed(state, "playlist", startupPlaylistCore(12&, count, 13&, kind), 6000&)
+            checkCore(state.phase = "init" and state.window.segments.Count() = 3 and state.window.segments[0].sequence = 13& and state.window.segments[2].sequence = 15&, "only coherent delayed latest cohort enters init")
+            expectedMap = "https://cdn.example.invalid/init.mp4"
+            if kind = "map" or kind = "both" then expectedMap = "https://cdn.example.invalid/new-init.mp4"
+            initIntent = nlIntent(state, 6000&)
+            checkCore(initIntent.kind = "init" and initIntent.url = expectedMap and state.mapUrl = expectedMap, "fresh initialization uses selected cohort map")
+            expectedEpoch = 0&
+            if kind = "epoch" or kind = "both" then expectedEpoch = 1&
+            checkCore(state.epoch = expectedEpoch and state.initIds.Count() = 0 and state.segmentPairCount = 0, "new epoch owns no converted older media")
+            input = bytesCore(m.corpus.init.input.hex)
+            nativeLiveFeed(state, "init", input, 6000&)
+            nativeLiveAdvance(state, 6000&)
+            nativeLiveAdvance(state, 6000&)
+            for each pair in [[state.initIds[0], m.corpus.init.video], [state.initIds[1], m.corpus.init.audio]]
+                asset = nativeLiveAcquire(state, pair[0])
+                goldenCore(asset.data, pair[1], "waiting startup actual fresh init")
+                nativeLiveRelease(state, pair[0])
+            end for
+            for sequence = 13 to 15
+                pairCore(state, sequence, 6000&)
+            end for
+            pub = nativeLivePublication(state)
+            expectedOffset = 0&
+            if delay > 0 then expectedOffset = 4004000&
+            checkCore(loopbackPublicationValid(pub) and pub.mediaSequence = 13& and pub.durationUs = 6006000 and pub.sourceOffsetUs = expectedOffset and pub.segments.Count() = 3, "coherent startup publication preserves delayed source offset")
+            checkCore(state.started and state.publishedFirst = 13& and state.publishedLast = 15& and state.segmentPairCount = 3 and state.playlistCount = 3, "only selected fresh sequences publish once")
+            for each segment in state.segments
+                checkCore(segment.sequence >= 13& and segment.sequence <= 15&, "older coherent media never converted as fallback")
+            end for
+            manifestDurationCore(pub, "2.002")
+            closeCore(state)
+        end for
+    end for
+    m.config = { sourceDelaySeconds: 0 }
+    text = startupPlaylistCore(10&, 4, 13&, "both")
+    for each mode in ["finite", "ended", "ready", "started", "published", "initialized"]
+        state = newCore(mode <> "finite")
+        payload = text
+        if mode = "ended" then payload = startupPlaylistCore(10&, 4, 13&, "both", true)
+        if mode = "ready" then state = preparedCore()
+        if mode = "started" then state.started = true
+        if mode = "published" then state.publishedLast = 12&
+        if mode = "initialized" then state.initIds = ["live-1", "live-2"]
+        nowMs = 3000&
+        reason = feedReasonCore(state, payload, nowMs)
+        checkCore(reason = "native-live: selected window crosses map or discontinuity", "startup sentinel remains disabled for " + mode)
+        closeCore(state)
+    end for
+    parsed = nativeLiveParsePlaylist(text, "https://cdn.example.invalid/live.m3u8")
+    reason = ""
+    try
+        unused = nlWindow(parsed, 0&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: selected window crosses map or discontinuity", "default window selection retains hard boundary refusal")
+    for each item in [{ text: playlistCore(10&, 2), delay: 0, reason: "six-second source window unavailable" }, { text: startupPlaylistCore(10&, 4, 13&, "both"), delay: 60, reason: "requested source delay unavailable" }, { text: playlistCore(10&, 9, "", "0.5"), delay: 0, reason: "window segment bound" }, { text: text + "#EXT-X-UNKNOWN:1" + Chr(10), delay: 0, reason: "HLS tag unsupported" }]
+        state = newCore(true, 0&, item.delay)
+        reason = feedReasonCore(state, item.text, 0&)
+        checkCore(reason = "native-live: " + item.reason, "startup wait retains strict source guard " + item.reason)
+        closeCore(state)
+    end for
+    state = newCore()
+    for pass = 0 to 14
+        nowMs = pass * 3000&
+        checkCore(feedReasonCore(state, text, nowMs) = "", "repeated valid mixed startup can wait under original deadline")
+        startupEmptyCore(state)
+    end for
+    reason = ""
+    try
+        unused = nlIntent(state, 45000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: finite runtime complete", "repeated startup waits cannot extend45s deadline")
+    closeCore(state)
+    state = newCore()
+    nativeLiveFeed(state, "playlist", text, 0&)
+    reason = feedReasonCore(state, startupPlaylistCore(9&, 5, 13&, "both"), 3000&)
+    checkCore(reason = "native-live: playlist sequence moved backwards" and state.lastPlaylistSequence = 10&, "waiting source cursor still refuses playlist rollback")
+    state.quotaTransfers = 255
+    nlUseWork(state, "transfer", 3000&)
+    reason = ""
+    try
+        nlUseWork(state, "transfer", 3000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: steady work interval bound" and state.quotaTransfers = 256, "waiting startup retains existing transfer quota")
+    closeCore(state)
+    checkCore(state.closed and nlIntent(state, 3000&) = invalid, "stopped waiting startup cannot initiate another fetch")
+    caseCore("bounded-fresh-startup-window-wait")
 end sub
 
 sub bulkCore()
@@ -512,6 +656,7 @@ sub main()
         m.corpus = ParseJSON(ReadAsciiFile("pkg:/corpus.json"))
         bulkCore()
         publicationDurationCore()
+        startupWindowCore()
         rollingCore()
         continuityCore()
         admissionCore()

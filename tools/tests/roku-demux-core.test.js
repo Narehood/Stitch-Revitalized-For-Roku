@@ -16,6 +16,7 @@ const sourceNames = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch',
     'rokuDemuxCommon', 'rokuDemuxProtocol'];
 const caseNames = ['binary-goldens-and-strict-malformed',
     'rounded-publication-duration-and-stable-manifests',
+    'bounded-fresh-startup-window-wait',
     'rolling-past-finite-limits-with-held-lease', 'poll-gaps-contiguous-and-fail-closed',
     'actual-cache-leases-and-atomic-admission', 'active-publication-generation-cap',
     'monotonic-long-clock-quotas-and-exhaustion',
@@ -173,7 +174,7 @@ test('actual duration guard mutations and a corrupt full-byte golden cannot pass
         assert.equal(protocol.split(sourceGuard).length, 2, 'one actual source rounded duration guard');
         // Reuse the actual Core/publication/manifest case without repeatedly
         // running its unrelated historical 260-pair rolling matrix.
-        const durationHarness = harness.replace(/^        (?:bulkCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
+        const durationHarness = harness.replace(/^        (?:bulkCore|startupWindowCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
         await fs.writeFile(path.join(dir, 'main.brs'), durationHarness);
         for (const control of [
             { before: localGuard, after: 'if segment.durationUs > 2000000 then return false', expected: 'actual fractional Core publication accepted 2.002' },
@@ -205,6 +206,35 @@ test('actual duration guard mutations and a corrupt full-byte golden cannot pass
         requireExecution(corrupt);
         assert.match(corrupt.output, /STITCH_ROKU_CORE_FAIL: core-fixture: standalone video init full Python byte golden/);
         assert.throws(() => requirePositive(corrupt, marker));
+    });
+});
+
+test('actual startup wait guards and finite polling mutations cannot pass', { timeout: 90000 }, async () => {
+    await withFixture(async ({ dir, sources, marker, harness, execute }) => {
+        const corePath = path.join(dir, 'rokuDemuxCore.brs');
+        const core = sources.get('source/utils/rokuDemuxCore.brs').toString();
+        const startupHarness = harness.replace(/^        (?:bulkCore|publicationDurationCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
+        await fs.writeFile(path.join(dir, 'main.brs'), startupHarness);
+        const windowCall = 'window = nlWindow(parsed, state.delayUs, waitForStartup)';
+        const pollGate = '        if nowMs < state.nextPoll then return invalid';
+        const waitPoll = '            state.nextPoll = nowMs + parsed.targetDuration * 500&';
+        const windowEquality = /        if waitForStartup and not playlist\.ended\r?\n            if segment\.mapUrl <> selectedMap or segment\.epoch <> selectedEpoch then return invalid\r?\n        end if\r?\n        nlCheck\(segment\.mapUrl = selectedMap and segment\.epoch = selectedEpoch, "selected window crosses map or discontinuity"\)/;
+        assert.equal(core.split(windowCall).length, 2);
+        assert.equal(core.split(pollGate).length, 2);
+        assert.equal(core.split(waitPoll).length, 2);
+        assert.ok(core.match(windowEquality));
+        for (const control of [
+            { source: core.replace(windowCall, 'window = nlWindow(parsed, state.delayUs, false)'), expected: 'validated mixed startup waits for coherent tail' },
+            { source: core.replace(windowEquality, "        ' Deliberately accept incompatible startup media"), expected: 'mixed startup waits without assigning a window or publication' },
+            { source: core.replace(pollGate, ''), expected: 'startup wait suppresses early playlist intent' },
+            { source: core.replace(waitPoll, waitPoll + '\n            state.deadline = nowMs + 45000&'), expected: 'startup wait keeps absolute deadline' }
+        ]) {
+            await fs.writeFile(corePath, control.source);
+            const result = await execute();
+            requireExecution(result);
+            assert.ok(result.output.includes(`STITCH_ROKU_CORE_FAIL: core-fixture: ${control.expected}`), result.output.slice(-14000));
+            assert.throws(() => requirePositive(result, marker));
+        }
     });
 });
 
