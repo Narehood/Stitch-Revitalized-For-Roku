@@ -1,6 +1,20 @@
 sub init()
+    m.disposed = false
     m.chatPanel = m.top.findNode("chatPanel")
+    m.chatBackground = m.top.findNode("chatBackground")
+    m.chatStatus = m.top.findNode("chatStatus")
     m.maskgroup = m.top.findNode("maskGroup")
+    m.chat = invalid
+    m.EmoteJob = invalid
+    m.emoteChannel = ""
+    ' Rendering helpers built once per chat instance, not per message or word.
+    m.hexColorRegex = CreateObject("roRegex", "^[A-Fa-f0-9]{6}$", "")
+    m.urlRegex = CreateObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
+    m.nameColorCache = {}
+    m.linkColor = "0xBF94FFFF"
+    if m.global?.constants?.ui?.color?.link <> invalid then m.linkColor = m.global.constants.ui.color.link
+    m.top.observeField("visible", "onInvisible")
+    onBackgroundColorChange()
     setChatPanelSize()
     setSizingParameters()
     ' determines how far down the screen the first message will appear
@@ -33,6 +47,11 @@ sub setSizingParameters()
 end sub
 
 sub setChatPanelSize()
+    m.chatPanel.width = m.top.width
+    m.chatPanel.height = m.top.height
+    m.chatBackground.width = m.top.width
+    m.chatBackground.height = m.top.height
+    m.chatStatus.width = m.top.width - 24
     m.font_size = m.top.fontSize
     m.translation = m.chatPanel.height - m.font_size
     m.lower_bound = m.chatPanel.height - m.font_size
@@ -41,43 +60,113 @@ sub setChatPanelSize()
 end sub
 
 sub onInvisible()
-    if m.top.visible = false
-        m.chat.control = "stop"
+    if m.disposed then return
+    if m.top.visible
+        startChatJob()
     else
-        m.chat.control = "run"
+        stopChatJob()
     end if
+end sub
+
+sub onBackgroundColorChange()
+    if m.chatPanel <> invalid then m.chatPanel.color = m.top.backgroundColor
+    if m.chatBackground <> invalid then m.chatBackground.color = m.top.backgroundColor
+    ' Readable name colors depend on the background.
+    m.nameColorCache = {}
 end sub
 
 ' Stops the ChatJob (IRC) and EmoteJob tasks and releases their observers.
 ' Called from VideoPlayer.exitPlayer() so the IRC socket loop and emote
-' fetcher are torn down at user-initiated exit, not just when SceneGraph
-' eventually fires onDestroy.
+' fetcher are torn down at user-initiated exit and explicit component disposal.
 '
 ' Uses destroyTask() per AGENTS.md: unobserve first so any in-flight
 ' nextCommentObj callback is suppressed before the task thread halts.
 sub stopJobs()
-    m.chat = destroyTask(m.chat, "nextCommentObj")
+    stopChatJob()
     if m.EmoteJob <> invalid
-        m.EmoteJob.control = "stop"
-        m.EmoteJob = invalid
+        emoteJob = m.EmoteJob
+        m.EmoteJob = destroyTask(m.EmoteJob, "state")
+        m.top.removeChild(emoteJob)
     end if
 end sub
 
 sub onVideoChange()
-    if not m.top.control
-        m.chat.control = "stop"
-        m.top.control = true
-    end if
+    if m.disposed then return
+    stopChatJob()
+    if m.top.control and m.top.visible then startChatJob()
 end sub
 
 sub onEnterChannel()
-    m.chat = m.top.findnode("ChatJob")
+    if m.disposed then return
+    stopJobs()
+    for each message in m.chatPanel.getChildren(-1, 0)
+        m.chatPanel.removeChild(message)
+    end for
+    m.translation = m.lower_bound - m.line_height
+    m.emoteChannel = ""
+    if m.top.channel = "" then return
+    m.global.setField("emoteCache", {})
+    if m.top.visible then startChatJob()
+    startEmoteJob()
+end sub
+
+sub startChatJob()
+    if m.disposed then return
+    if m.chat <> invalid or m.top.channel = "" then return
+    m.chat = createObject("roSGNode", "ChatJob")
+    m.top.appendChild(m.chat)
     m.chat.forceLive = m.top.forceLive
+    m.chat.delaySeconds = m.top.delaySeconds
     m.chat.observeField("nextCommentObj", "onNewCommentObj")
+    m.chat.observeField("connectionState", "onConnectionStateChange")
     m.chat.channel = m.top.channel
-    m.chat.control = "stop"
+    updateChatStatus("connecting")
     m.chat.control = "run"
-    m.EmoteJob = m.top.findnode("EmoteJob")
+end sub
+
+sub stopChatJob()
+    if m.chat <> invalid
+        m.chat.stopRequested = true
+        destroyTask(m.chat, "nextCommentObj")
+        m.top.removeChild(m.chat)
+        m.chat = destroyTask(m.chat, "connectionState")
+    end if
+    m.top.connectionState = "stopped"
+    updateChatStatus("stopped")
+end sub
+
+sub onConnectionStateChange()
+    if m.chat <> invalid
+        m.top.connectionState = m.chat.connectionState
+        updateChatStatus(m.chat.connectionState)
+    end if
+end sub
+
+sub updateChatStatus(state as string)
+    if m.chatStatus = invalid then return
+    m.chatStatus.visible = state <> "connected" and state <> "stopped"
+    if state = "connecting"
+        m.chatStatus.text = tr("Connecting to chat…")
+    else if state = "reconnecting"
+        m.chatStatus.text = tr("Chat disconnected. Reconnecting…")
+    else if state = "unavailable"
+        m.chatStatus.text = tr("Chat is unavailable. Close and reopen chat to retry.")
+    end if
+end sub
+
+sub onChatTimingChange()
+    if m.chat <> invalid
+        m.chat.forceLive = m.top.forceLive
+        m.chat.delaySeconds = m.top.delaySeconds
+    end if
+end sub
+
+sub startEmoteJob()
+    if m.disposed then return
+    if m.emoteChannel = m.top.channel then return
+    m.EmoteJob = createObject("roSGNode", "EmoteJob")
+    m.top.appendChild(m.EmoteJob)
+    m.emoteChannel = m.top.channel
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
     m.EmoteJob.control = "run"
@@ -144,14 +233,28 @@ end function
 function buildUsername(display_name, color)
     username = createObject("roSGNode", "SimpleLabel")
     username.text = display_name
-    if color = ""
-        color = "FFFFFF"
-    end if
-    username.color = "0x" + color + "FF"
+    username.color = "0x" + readableNameColor(color) + "FF"
     username.visible = true
     username.fontSize = m.font_size
     username.fontUri = "pkg:/fonts/Archivo-Bold.otf"
     return username
+end function
+
+' Twitch name colors are chosen by each user. Colors below 4.5:1 against the
+' chat background are lightened toward white just enough to reach it, keeping
+' their hue. Results are cached per chat instance; the cache holds at most
+' 128 colors and starts over when full. Unset or malformed colors stay white.
+function readableNameColor(color as dynamic) as string
+    if color = invalid or GetInterface(color, "ifString") = invalid then return "FFFFFF"
+    if not m.hexColorRegex.isMatch(color) then return "FFFFFF"
+    key = UCase(color)
+    cached = m.nameColorCache[key]
+    if cached <> invalid then return cached
+    readable = uiReadableColor(key, m.top.backgroundColor, 4.5)
+    if readable = "" then readable = "FFFFFF"
+    if m.nameColorCache.count() >= 128 then m.nameColorCache = {}
+    m.nameColorCache[key] = readable
+    return readable
 end function
 
 function buildColon()
@@ -174,7 +277,7 @@ function wordOrImage(word, isUrl = false)
         message_text.visible = true
         message_text.text = word + " "
         if isUrl
-            message_text.color = m.global.constants.colors.twitch.purple9
+            message_text.color = m.linkColor
         end if
         return message_text
     end if
@@ -191,8 +294,7 @@ function buildMessage(message, x_translation)
             ? "Found invalid character"
         end if
         ' Make room for emotes just in case
-        urlRegex = createObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
-        isUrl = urlRegex.IsMatch(word)
+        isUrl = m.urlRegex.IsMatch(word)
 
         block = wordOrImage(word, isUrl)
         block_width = block.localBoundingRect().width
@@ -209,7 +311,7 @@ function buildMessage(message, x_translation)
                 charNode.visible = true
                 charNode.text = char
                 if isUrl
-                    charNode.color = m.global.constants.colors.twitch.purple9
+                    charNode.color = m.linkColor
                 end if
                 charWidth = charNode.localBoundingRect().width
                 if (charLineAvailableSpace - charWidth) < 0
@@ -238,11 +340,21 @@ function buildMessage(message, x_translation)
 end function
 
 sub onNewCommentObj()
+    if m.chat = invalid then return
     m.chat.readyForNextComment = false
+    try
+        renderComment()
+    catch e
+        ' A malformed message or unavailable font must not stall every subsequent message.
+    end try
+    if m.chat <> invalid then m.chat.readyForNextComment = true
+end sub
+
+sub renderComment()
     if m.chat.nextCommentObj <> invalid
         comment = m.chat.nextCommentObj
         display_name = comment.tags.display_name
-        message = comment.parameters.trim()
+        message = comment.parameters
         color = ""
         if comment?.tags?.color <> invalid
             color = comment.tags.color.replace("#", "")
@@ -259,19 +371,18 @@ sub onNewCommentObj()
             for each emote in comment.tags.emotes.Items()
                 value = { starts: [], length: 0 }
                 for each emote_instance in emote.value
-                    value.starts.push(Val(emote_instance.startposition))
-                    value.length = (Val(emote_instance.endposition) - Val(emote_instance.startposition)) + 1
+                    value.starts.push(emote_instance.startposition)
+                    value.length = (emote_instance.endposition - emote_instance.startposition) + 1
                 end for
                 emote_set[emote.key] = value
             end for
         end if
 
-        quoteRegex = createObject("roRegex", "[\x{2018}\x{2019}]", "")
-        message = quoteRegex.replace(message, "'")
+        ' Preserve original character offsets until Twitch emote ranges have been consumed.
         for each emoticon in emote_set.Items()
             e_start = emoticon.value.starts[0]
             emote_word = Mid(message, (e_start + 1), emoticon.value.length)
-            if not m.global.emoteCache.DoesExist(emote_word)
+            if not m.global.emoteCache.DoesExist(emote_word) and m.global.emoteCache.count() < 10000
                 emoteCache = m.global.emoteCache
                 if not emoteCache.DoesExist(emote_word)
                     emoteCache[emote_word] = "https://static-cdn.jtvnw.net/emoticons/v2/" + emoticon.key + "/static/light/1.0"
@@ -281,7 +392,6 @@ sub onNewCommentObj()
         end for
 
         if display_name = "" or message = ""
-            m.chat.readyForNextComment = true
             return
         end if
 
@@ -311,6 +421,9 @@ sub onNewCommentObj()
         group.appendChild(message_group)
         group.translation = [m.left_bound, m.translation]
         m.chatPanel.appendChild(group)
+        if m.chatPanel.getChildCount() > 160
+            m.chatPanel.removeChild(m.chatPanel.getChild(0))
+        end if
         y_translation = group.localBoundingRect().height + m.line_gap
         if m.translation + y_translation > m.chatPanel.height
             for each chatmessage in m.chatPanel.getChildren(-1, 0)
@@ -324,13 +437,12 @@ sub onNewCommentObj()
             m.translation += (y_translation)
         end if
     end if
-    m.chat.readyForNextComment = true
 end sub
 
 sub onDestroy()
-    m.chat = destroyTask(m.chat, "nextCommentObj")
-    if m.EmoteJob <> invalid
-        m.EmoteJob.control = "stop"
-        m.EmoteJob = invalid
-    end if
+    if m.disposed then return
+    m.disposed = true
+    m.top.unobserveField("visible")
+    stopJobs()
+    m.nameColorCache = {}
 end sub

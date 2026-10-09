@@ -7,12 +7,16 @@
 ' Items scroll vertically when history exceeds the visible window.
 
 sub init()
+    m.disposed = false
     m.icon = m.top.findNode("icon")
+    m.caption = m.top.findNode("caption")
+    m.captionPlate = m.top.findNode("captionPlate")
+    m.captionLabel = m.top.findNode("captionLabel")
 
     ' Layout constants
-    m.itemSpacing = 60 ' px between item origins
-    m.itemStartY = 30 ' px below the icon (icon height + space 6px)
-    m.itemX = 10 ' px from bar left edge
+    m.itemSpacing = 62 ' px between item origins
+    m.itemStartY = 56 ' px below the icon (icon top 16 + height 24 + space 16)
+    m.itemX = 12 ' centres the 54 px avatar in the 78 px rail
     m.visibleWindow = 8 ' number of items visible at once before scrolling
 
     m.items = []
@@ -33,8 +37,12 @@ end sub
 ' Build (or rebuild) item nodes from registry history.
 ' Called on init and by refresh timer.
 sub buildItems()
-    ' Remove previously created item children (children 2+ are items; 0=bg, 1=icon)
+    if m.disposed then return
+    ' Remove previously created item children (tracked in m.items)
     if m.items.Count() > 0
+        for each item in m.items
+            item.callFunc("onDestroy")
+        end for
         m.top.removeChildren(m.items)
         m.items = []
     end if
@@ -43,9 +51,13 @@ sub buildItems()
     m.currentIndex = 0
     m.min = 0
     m.max = m.visibleWindow - 1
+    updateCaption()
 
     history = RW_Load()
-    if history = invalid or history.Count() = 0 then return
+    if history = invalid or history.Count() = 0
+        m.top.hasItems = false
+        return
+    end if
 
     translationY = m.itemStartY
     index = 0
@@ -60,6 +72,7 @@ sub buildItems()
         translationY += m.itemSpacing
         index += 1
     end for
+    m.top.hasItems = m.items.Count() > 0
 
     fetchLiveStatus()
 end sub
@@ -85,6 +98,7 @@ end sub
 ' rsp is an AA: login (lowercase) -> boolean
 ' Always resets all dots first so a failed/empty response clears stale state.
 sub onLiveStatusResponse()
+    if m.disposed or m.liveStatusTask = invalid then return
     rsp = m.liveStatusTask.response
 
     ' Clear all dots unconditionally — empty AA means failure or all-offline.
@@ -92,7 +106,10 @@ sub onLiveStatusResponse()
         item.isLive = false
     end for
 
-    if rsp = invalid or rsp.Count() = 0 then return
+    if rsp = invalid or rsp.Count() = 0
+        updateCaption()
+        return
+    end if
 
     for each item in m.items
         data = item.itemData
@@ -103,6 +120,7 @@ sub onLiveStatusResponse()
             end if
         end if
     end for
+    updateCaption()
 end sub
 
 ' Refresh timer callback — only rebuilds when focus is not inside the bar,
@@ -127,6 +145,38 @@ sub onFocusToggle()
             m.items[m.currentIndex].focused = false
         end if
     end if
+    updateCaption()
+end sub
+
+' The focused avatar says its channel name, plus LIVE when it is live.
+sub updateCaption()
+    if m.caption = invalid or m.captionLabel = invalid then return
+    if not m.top.itemHasFocus or m.currentIndex >= m.items.Count()
+        m.caption.visible = false
+        return
+    end if
+    item = m.items[m.currentIndex]
+    data = item.itemData
+    name = ""
+    if data <> invalid
+        if data.displayName <> invalid and data.displayName <> ""
+            name = data.displayName
+        else if data.login <> invalid
+            name = data.login
+        end if
+    end if
+    if item.isLive then name = name + " · " + tr("LIVE")
+    m.captionLabel.text = name
+    width = 0
+    try
+        width = m.captionLabel.boundingRect().width
+    catch e
+    end try
+    if width <= 0 then width = len(name) * 11
+    m.captionPlate.width = width + 28
+    ' Centre the 40px tooltip on the 54px avatar.
+    m.caption.translation = [88, item.translation[1] + 7]
+    m.caption.visible = true
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -154,6 +204,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             updateItemVisibility()
         end if
         m.items[m.currentIndex].focused = true
+        updateCaption()
         return true
 
     else if key = "down"
@@ -173,6 +224,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             updateItemVisibility()
         end if
         m.items[m.currentIndex].focused = true
+        updateCaption()
         return true
 
     else if key = "OK"
@@ -209,7 +261,17 @@ sub updateItemVisibility()
 end sub
 
 sub onDestroy()
-    m.refreshTimer = destroyTask(m.refreshTimer, "fire")
+    if m.disposed then return
+    m.disposed = true
+    if m.refreshTimer <> invalid
+        m.refreshTimer.control = "stop"
+        m.refreshTimer.unobserveField("fire")
+        m.refreshTimer = invalid
+    end if
     m.liveStatusTask = destroyTask(m.liveStatusTask, "response")
     m.top.unobserveField("itemHasFocus")
+    for each item in m.items
+        item.callFunc("onDestroy")
+    end for
+    m.items = []
 end sub

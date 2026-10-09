@@ -1,4 +1,5 @@
 sub init()
+    m.disposed = false
     m.top.observeField("focusedChild", "onGetfocus")
     ? "init"; TimeStamp()
     ' m.top.observeField("itemFocused", "onGetFocus")
@@ -7,12 +8,52 @@ sub init()
     ' m.allChannels.observeField("itemSelected", "handleItemSelected")
     m.rowlist.ObserveField("itemSelected", "handleItemSelected")
     m.offlineList = m.top.findNode("offlineList")
+    m.signedIn = isSignedIn()
+    initPageStatus()
+    if not m.signedIn
+        ' Anonymous viewers see popular channels; say so above the rows.
+        hint = m.top.findNode("anonymousHint")
+        if hint <> invalid
+            hint.text = tr("Not signed in. Showing popular live channels — sign in to see who you follow.")
+            hint.visible = true
+            m.rowlist.translation = [m.rowlist.translation[0], 112]
+        end if
+    end if
+    loadFollowing()
+end sub
+
+function isSignedIn() as boolean
+    activeUser = get_setting("active_user")
+    return activeUser <> invalid and activeUser <> "$default$"
+end function
+
+' One finite request per page load or explicit Try again.
+sub loadFollowing()
+    m.GetContentTask = destroyTask(m.GetContentTask, "response")
+    if m.signedIn
+        setPageStatus("loading", tr("Loading channels you follow…"))
+    else
+        setPageStatus("loading", tr("Loading live channels…"))
+    end if
     m.GetContentTask = createApiTask("getFollowingPageQuery", "decideRoute")
 end sub
 
+sub showFollowingError()
+    setPageStatus("error", tr("Couldn't load Following"), tr("Check your internet connection and try again."), ["retry"])
+end sub
+
+sub onStatusAction(actionId as string)
+    if actionId = "retry"
+        loadFollowing()
+    else if actionId = "browse"
+        m.top.menuRequest = "Browse"
+    end if
+end sub
+
 sub decideRoute()
+    if m.disposed or m.GetContentTask = invalid then return
     ? "DecideRoute"; TimeStamp()
-    if get_setting("active_user") <> invalid and get_setting("active_user") <> "$default$"
+    if isSignedIn()
         ? "Route -> handleRecommendedSections"
         handleRecommendedSections()
     else
@@ -23,9 +64,14 @@ end sub
 
 sub handleDefaultSections()
     rsp = m.GetcontentTask.response
-    if rsp = invalid or rsp.shelves = invalid or rsp.shelves.count() = 0 then return
+    if rsp = invalid
+        showFollowingError()
+        return
+    end if
+    shelves = rsp.shelves
+    if shelves = invalid then shelves = []
     contentCollection = createObject("RoSGNode", "ContentNode")
-    for each shelf in rsp.shelves
+    for each shelf in shelves
         ' Skip any GAME-tile shelf (e.g., "Categories we think you'll like").
         ' GAME tiles render with the wrong row height in the shared RowList,
         ' which only handles LIVE stream tiles correctly. See TODO.md.
@@ -43,7 +89,12 @@ sub handleDefaultSections()
             end if
         end if
     end for
+    if contentCollection.getChildCount() = 0
+        setPageStatus("empty", tr("No live channels to show right now"), tr("Try again in a moment, or find something to watch in Browse."), ["retry", "browse"])
+        return
+    end if
     updateRowList(contentCollection)
+    hidePageStatus()
 end sub
 
 
@@ -52,7 +103,10 @@ sub handleRecommendedSections()
     ? "handleRecommendedSections: "; TimeStamp()
     contentCollection = createObject("RoSGNode", "ContentNode")
     rsp = m.GetcontentTask.response
-    if rsp = invalid then return
+    if rsp = invalid
+        showFollowingError()
+        return
+    end if
     try
         if rsp <> invalid and rsp.liveFollows <> invalid and rsp.liveFollows.count() > 0
             row = createObject("RoSGNode", "ContentNode")
@@ -82,6 +136,7 @@ sub handleRecommendedSections()
     catch e
         ? "[Following] handleRecommendedSections: live follows parse error: "; e
     end try
+    liveRowCount = contentCollection.getChildCount()
     try
         ? "LiveStreamSection Complete: "; TimeStamp()
         if rsp <> invalid and rsp.offlineFollows <> invalid and rsp.offlineFollows.count() > 0
@@ -125,9 +180,15 @@ sub handleRecommendedSections()
     catch e
         ? "[Following] handleRecommendedSections: offline follows parse error: "; e
     end try
-    if contentCollection.getChildCount() > 0
-        updateRowList(contentCollection)
+    if contentCollection.getChildCount() = 0
+        setPageStatus("empty", tr("You're not following anyone yet"), tr("Channels you follow on Twitch appear here. Find something to watch in Browse."), ["browse"])
+        return
     end if
+    if liveRowCount = 0
+        contentCollection.getChild(0).title = tr("No one you follow is live · Offline channels")
+    end if
+    updateRowList(contentCollection)
+    hidePageStatus()
 end sub
 
 sub updateRowList(contentCollection)
@@ -149,7 +210,7 @@ sub updateRowList(contentCollection)
     m.rowlist.rowItemSize = rowItemSize
     m.rowlist.content = contentCollection
     m.rowlist.numRows = m.rowlist.content.getChildCount()
-    m.rowlist.rowlabelcolor = m.global.constants.colors.twitch.purple10
+    m.rowlist.rowlabelcolor = m.global.constants.ui.color.text
     ? "updateRowList Done: "; TimeStamp()
 end sub
 
@@ -189,10 +250,14 @@ sub handleLiveItemSelected()
 end sub
 
 sub onGetFocus()
-    if m.rowlist.focusedChild = invalid
-        m.rowlist.setFocus(true)
-    else if m.rowlist.focusedChild.id = "homeRowList"
-        m.rowlist.focusedChild.setFocus(true)
+    if m.disposed then return
+    ' While the status panel offers actions, it holds page focus.
+    if not focusStatusIfActive()
+        if m.rowlist.focusedChild = invalid
+            m.rowlist.setFocus(true)
+        else if m.rowlist.focusedChild.id = "homeRowList"
+            m.rowlist.focusedChild.setFocus(true)
+        end if
     end if
     updateRowListFocusFeedback()
 end sub
@@ -221,9 +286,13 @@ function onKeyEvent(key as string, press as boolean) as boolean
 end function
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    m.top.lastFocus = invalid
     m.top.unobserveField("focusedChild")
     if m.rowlist <> invalid
         m.rowlist.unobserveField("itemSelected")
     end if
+    releasePageStatus()
     m.GetContentTask = destroyTask(m.GetContentTask, "response")
 end sub

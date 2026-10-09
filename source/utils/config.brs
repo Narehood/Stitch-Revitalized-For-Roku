@@ -75,6 +75,18 @@ sub unset_user_setting(key)
     registry_delete(key, get_setting("active_user"))
 end sub
 
+' Keep account preferences and anonymous device identity when signing out.
+sub signOutAccount()
+    deviceCode = get_user_setting("device_code")
+    if deviceCode <> invalid and registry_read("device_code", "$default$") = invalid
+        registry_write("device_code", deviceCode, "$default$")
+    end if
+    unset_user_setting("access_token")
+    unset_user_setting("refresh_token")
+    unset_user_setting("token_expires_at")
+    set_setting("active_user", "$default$")
+end sub
+
 
 ' Recursivly search the config tree for entry with settingname equal to key
 function findConfigTreeKey(key as string, tree)

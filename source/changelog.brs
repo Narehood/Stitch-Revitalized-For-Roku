@@ -3,6 +3,15 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.0": [
+            "3.0.0 Alpha 1: An early preview; some streams and devices still need testing",
+            "New: Twitch-inspired design, clearer focus, and named video controls",
+            "Improved: Stream quality selection, recovery, and live chat connections",
+            "Experimental: Try on Roku offers live playback without a separate computer",
+            "Chat: Recorded videos show a notice when chat is unavailable",
+            "Privacy: Diagnostics are off unless you opt in",
+            "Lower live latency is experimental and off by default; improvement is not yet measured"
+        ],
         "2.6.0": [
             "New: Recently Watched sidebar now shows a live indicator — a red dot appears on streamers who are currently live",
             "Improved: Top bar and left sidebar are now smaller, giving more screen space to content",
@@ -14,7 +23,7 @@ function getChangelog() as object
             "Improved: Smarter live-edge correction — skipped when the stream already starts near the live edge"
         ],
         "2.5.0": [
-            "New: Reduced stream latency — streams now start closer to real-time, though zero-delay streaming isn't possible on Roku",
+            "Experimental: Lower live latency is available in Settings; it is off by default and improvement remains unmeasured",
             "New: Donate via Buy Me a Coffee — find the QR code in Settings",
             "Fix: Focus highlight now visible on channel pages and all grid views",
             "Fix: Error tracking now includes more detail to help diagnose crashes faster"
@@ -26,7 +35,7 @@ function getChangelog() as object
             "New: Search tab in the top menu — dedicated destination for finding channels and games",
             "New: Streams now auto-reconnect after ad breaks instead of freezing",
             "New: Settings → Log Out",
-            "New: Optional anonymous analytics to help catch bugs (opt-out in Settings)",
+            "New: Optional diagnostics in Settings; now off by default until you opt in",
             "Fix: Chat connection now closes properly when leaving a stream",
             "Fix: Several crashes on scene transitions and network failures"
         ]

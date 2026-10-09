@@ -1,6 +1,10 @@
 ' Copyright Kasper Gammeltoft and other contributors. Licensed under MIT
 ' https://github.com/KasperGam/EmojiOnRoku/blob/main/LICENSE
 sub init()
+    m.disposed = false
+    ' The emoji pattern is compiled once per label, on first non-empty text.
+    m.emojiRegex = invalid
+    m.emojiRegexFailed = false
     m.components = m.top.findNode("layout")
     m.top.observeField("text", "setText")
     m.animation = m.top.findNode("testAnimation")
@@ -38,6 +42,7 @@ sub onTimerFireChange() as void
 end sub
 
 sub doScroll()
+    if m.disposed then return
     if m.animation = invalid or m.timer = invalid then return
     if m.top.repeatCount <> invalid
         if m.top.repeatCount <> 0
@@ -224,6 +229,20 @@ end sub
 '     return text
 ' end function
 
+' Returns this label's compiled emoji pattern, compiling it on first use. A
+' pattern the firmware cannot compile is not retried; text then stays plain.
+function emojiPattern() as dynamic
+    if m.emojiRegex = invalid and not m.emojiRegexFailed
+        try
+            m.emojiRegex = CreateObject("roRegex", regex(), "m")
+        catch e
+            m.emojiRegex = invalid
+        end try
+        if m.emojiRegex = invalid then m.emojiRegexFailed = true
+    end if
+    return m.emojiRegex
+end function
+
 ' Updates the entire label components with new text.
 sub setText()
     labelText = m.top.text
@@ -231,8 +250,15 @@ sub setText()
     resetComponents()
     if labelText <> ""
         ' Check for emojis in this text
-        emojiRegex = createObject("roRegex", regex(), "m")
-        matches = emojiRegex.matchAll(labelText)
+        matches = []
+        pattern = emojiPattern()
+        if pattern <> invalid
+            try
+                matches = pattern.matchAll(labelText)
+            catch e
+                matches = []
+            end try
+        end if
 
         for each match in matches
             matchText = match[0]
@@ -314,6 +340,8 @@ end sub
 
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
     if m.timer <> invalid
         m.timer.control = "stop"
         m.timer.unobserveField("fire")
@@ -330,6 +358,7 @@ sub onDestroy()
     m.top.unobserveField("repeatCount")
     m.top.unobserveField("emojiSize")
     m.top.unobserveField("maxWidth")
+    m.emojiRegex = invalid
 end sub
 
 ' function onSizeChange()

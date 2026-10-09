@@ -1,0 +1,39 @@
+# Follow-up work
+
+Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATION_PLAN.md). These follow-ups do not replace the playback, audio, chat, compatibility and UI release gates.
+
+| Priority | Work | Evidence / acceptance |
+|---|---|---|
+| P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
+| P1 | Complete native live chat coverage | Anonymous Alpha 1 full-player messages/readability and live picture/audio user-confirmed on OS 15.3.4; module hide/show/disposal verified separately. Full-player replacement/Exit, secure/signed-in, emotes and sustained reconnect remain open |
+| P1 | Complete recorded playback acceptance | Alpha 1 public YourRAGE VOD has user-confirmed picture and clear audio; likely sync/possible intro delay is under manual observation. Seek/bookmark/recorded-chat notice, clips and bundled-CMAF VOD coverage remain open |
+| P1 | Add Roku-only support for bundled CMAF VODs | Manual Alpha 1 recording still requests the audio service; local descriptor/splitter currently LIVE-only. Verify recorded manifests, seek/resume, bounded media retention and safe cancellation before enabling |
+| P1 | Diagnose longer experimental live dropout | Manual 1080p60 playback rebuffers, then stops around twelve minutes with Roku playback stopped; passive console confirms stopped position715.874 and user confirms Try again restarts it. Added fixed-code/counter worker diagnostics omit signed input/raw errors. The internal cause and sustained fix are not established |
+| P1 | Verify native secure WebSocket Send outcome | OS16 reference documents an Object result without success/failure fields; do not guess a discriminator. Actual invalid-return/login/retry regressions pass, but native object outcomes and authenticated hardware acceptance remain open |
+| P1 | Verify approved adaptive qualities across rotating Twitch master URLs | Client/service0.3.0 strict descriptors implemented; local309 proxy/9offline/30Node checks pass; fresh native Automatic picture/audio user-confirmed; adaptation/sustained checks and new review remain open |
+| P1 | Stabilize native Roku-only combined-CMAF app playback | Five-minute private AVC/AAC live conversion and cleanup pass on G204X; guarded full-app Try on Roku path and actual-handler regressions implemented. Follow-up Automatic/manual1080/Back/reopen and forced-menu-focus Back pass with acknowledged cleanup. Guarded identical-init URL rotation, sign-in and cleanup navigation fixes pass local regressions; final-source five-minute elapsed1080 run passes with one early buffering period and strict Back cleanup. Fresh Tminnzy full-app replay has user-confirmed moving picture and clear synchronized audio, a bounded 242-second observation and strict on-screen Exit cleanup; a preceding unwatched run accepted one byte-identical init URL alias. Post-disposal inputs are guarded and Grok's follow-up is complete; newer Kimi coverage remains incomplete after provider failures, and further Kimi/Grok rounds are deferred at the user's request. Broader source transitions, historical system-exit attribution, sustained memory, HLS retention and wider-device acceptance remain open; preserve optional Python fallback |
+| P1 | Remove temporary build dependency exception when patched | Exact policy expires November 6, 2026; new advisory/version/patch fails CI until reviewed |
+| P2 | Handle declared external launch/deep-link input | Manifest advertises input launch; main does not dispatch launch content |
+| P2 | Expand demux layouts and verified historical VOD CDN coverage | Captured streams and fail-closed fixtures before widening support |
+| P2 | Review OAuth refresh and account renewal | Stored refresh metadata is not a background renewal flow; preserve anonymous playback |
+| P2 | Check identity preservation during overlapping startup and login | A late launch rendezvous can replace the device code promoted by login; no resulting failure is established. Test the overlap before adding a guard |
+| P2 | Reduce remaining simulator dependency advisories | Inspect compatible fixes; avoid overrides breaking CommonJS consumers |
+| P2 | Make tagged channel releases validate their exact source | Release currently relies on main CI; gate tag artifacts on lint/audit/tests/package checks |
+| P2 | Expand production resolver and container reproducibility coverage | Add create_app resolver-wiring regression; consider digest-pinned Python base image |
+| P2 | Measure native UI rendering and per-instance regex caching | Twitch-inspired header/card/Search/Settings captures and real navigation pass on G204X; check first-column lift clipping, native keyboard hint/header overlap, TV typography/overscan, older-device scrolling and before/after card recycle timing. Captured frames do not establish couch-distance readability |
+| P2 | Review Spanish/Portuguese interface strings and native long-string fit | All new copy is covered; phase-two translations remain flagged for native-speaker review |
+| P2 | Verify own-channel navigation and live playback on Roku | Account emits LIVE content by login; actual handler/Back regressions pass, native playback remains pending |
+| P2 | Verify delayed sign-in failure focus on Roku | Minimal focus guard and tracked late-failure/menu/return/Retry/disposal regressions pass; confirm native focus |
+| P2 | Verify recorded seek tap/hold timing on physical and mobile remotes | One tap advances ten seconds; a 0.4-second initial delay precedes accelerated repeats. Actual engine regressions pass; hardware timing remains pending |
+| P2 | Verify native child quality-dialog keys | Simulator diverges on child StandardMessageDialog Up/Down/OK/Back; option/index semantics pass, native keys remain a release gate |
+| P3 | Supply storyboard thumbnails after capturing a supported source | Thumbnail consumer is preserved; no producer exists at baseline or current source. Do not widen playback queries without verified evidence |
+| P3 | Keep row geometry arrays aligned for future content types | Push labels, sizes and heights together only for supported rows; current produced types are covered |
+| P3 | Investigate maintained VOD chat replay | No stable verified implementation in scope; retain unavailable notice |
+| P3 | Profile animated emotes and optional audio-only playback | Measure older-device performance; verify actual audio rendition |
+| P3 | Profile emote-ID parser regex reuse on busy chats | The task thread compiles this pattern per tagged message; measure older-device CPU before adding a per-task cache |
+| P3 | Extend the outgoing GraphQL guard for future nested writes and string defaults | Current requests pass; detect deeper dotted object writes and parse quoted `#` in future operation defaults before introducing those constructions |
+| P3 | Consider deduplicating advertised decoder capacities | Optional Kimi review note; malformed lists are rejected and work stays capped at nine native queries; no correctness defect from duplicate sufficient capacities |
+| P3 | Assess a future FHD-native interface | Keep current HD layout until broad hardware/focus validation |
+| P3 | Track the simulator's ButtonGroup role-font boundary | Font role nodes become focusable children in brs-engine; tests/probes remove those nodes explicitly. Keep production fonts and verify native rendering |
+| P3 | Recheck menu callback timing on native hardware | One recovery probe printed a menu callback before its single Following build, with no visible failure; the probe does not establish a production defect |
+| P3 | Decide whether to remove the unused ChannelMenu module | Unreferenced legacy module still names missing heart.png/heart-0.png assets; verify callers before deprecation, without affecting the redesigned menu |

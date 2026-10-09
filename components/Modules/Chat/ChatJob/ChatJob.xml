@@ -11,10 +11,14 @@
         <field id="clientComment" type="string" />
         <field id="sendMessage" type="string" />
         <field id="forceLive" type="bool" value="false" />
+        <field id="delaySeconds" type="float" value="0" />
+        <field id="stopRequested" type="bool" value="false" />
+        <field id="connectionState" type="string" value="stopped" />
     </interface>
 
     <script type="text/brightscript" uri="ChatJob.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/ircParser.brs" />
 
 </component>

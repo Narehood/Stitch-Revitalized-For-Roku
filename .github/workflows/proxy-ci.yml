@@ -1,42 +1,43 @@
-name: Proxy CI
+﻿name: Proxy CI
 
 on:
   push:
     branches: [main]
     paths:
       - 'fmp4-demux-proxy/**'
+      - '.github/workflows/proxy-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'fmp4-demux-proxy/**'
+      - '.github/workflows/proxy-ci.yml'
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    name: Lint & test
+    name: Python ${{ matrix.python }} lint, test and audit
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
+    defaults:
+      run:
+        working-directory: fmp4-demux-proxy
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7
         with:
+          version: '0.12.23'
           working-directory: fmp4-demux-proxy
-
-      - name: Install dependencies
-        run: uv sync --locked --all-extras
-        working-directory: fmp4-demux-proxy
-
-      - name: Lint
-        run: uv run ruff check src/ tests/
-        working-directory: fmp4-demux-proxy
-
-      - name: Format check
-        run: uv run ruff format --check src/ tests/
-        working-directory: fmp4-demux-proxy
-
-      - name: Test
-        run: uv run pytest -q
-        working-directory: fmp4-demux-proxy
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --all-extras
+      - run: uv run ruff check src/ tests/
+      - run: uv run ruff format --check src/ tests/
+      - run: uv run pytest -q
+      - name: Audit runtime dependencies
+        run: |
+          uv export --locked --no-dev --no-emit-project --output-file runtime-requirements.txt
+          uvx pip-audit==2.10.1 --disable-pip --require-hashes --strict -r runtime-requirements.txt

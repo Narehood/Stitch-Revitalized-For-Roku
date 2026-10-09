@@ -1,0 +1,423 @@
+' Execute actual tracked Bulk/Core/Fetch bodies. No URL transfer is started.
+sub checkCore(ok as boolean, message as string)
+    if not ok then throw "core-fixture: " + message
+    m.assertions += 1
+end sub
+
+sub caseCore(name as string)
+    m.cases += 1
+    print "STITCH_ROKU_CORE_CASE: " + name
+end sub
+
+function bytesCore(hex as string) as object
+    result = CreateObject("roByteArray")
+    result.FromHexString(hex)
+    return result
+end function
+
+sub goldenCore(data as object, expected as object, label as string)
+    checkCore(data.Count() = expected.count and nlBodyDigest(data) = expected.sha256 and LCase(data.ToHexString()) = expected.hex, label + " full Python byte golden")
+    m.goldens += 1
+end sub
+
+function newCore(steady = true as boolean, nowMs = 0& as dynamic) as object
+    options = invalid
+    if steady then options = { mode: "steady", sessionId: "0123456789abcdef0123456789abcdef" }
+    return nativeLiveCreate("https://cdn.example.invalid/live.m3u8", nowMs, 0, invalid, steady, 16777216&, options)
+end function
+
+function playlistCore(first as longinteger, count = 3 as integer, special = "" as string) as string
+    text = "#EXTM3U" + Chr(10) + "#EXT-X-TARGETDURATION:2" + Chr(10) + "#EXT-X-MEDIA-SEQUENCE:" + first.ToStr() + Chr(10) + "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
+    ' An Integer index avoids brs-node's unrelated LongInteger for-loop gap.
+    for offset = 0 to count - 1
+        sequence = first + offset
+        if special = "map" and sequence = 13 then text += "#EXT-X-MAP:URI=" + Chr(34) + "other.mp4" + Chr(34) + Chr(10)
+        if special = "map" and sequence = 15 then text += "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
+        if special = "epoch" and (sequence = 13 or sequence = 15) then text += "#EXT-X-DISCONTINUITY" + Chr(10)
+        text += "#EXTINF:2.000000," + Chr(10) + "segment-" + sequence.ToStr() + ".m4s" + Chr(10)
+    end for
+    return text
+end function
+
+sub pairCore(state as object, sequence as integer, nowMs as dynamic)
+    item = m.corpus.media[sequence - 10]
+    input = bytesCore(item.input.hex)
+    nativeLiveFeed(state, "segment", input, nowMs)
+    nativeLiveAdvance(state, nowMs)
+    nativeLiveAdvance(state, nowMs)
+    saved = state.segments[nlSegmentIndex(state, sequence)]
+    for each pair in [[saved.videoId, item.video], [saved.audioId, item.audio]]
+        body = nativeLiveAcquire(state, pair[0])
+        checkCore(body <> invalid, "new converted body is registered")
+        goldenCore(body.data, pair[1], "converted " + body.kind)
+        nativeLiveRelease(state, pair[0])
+    end for
+    checkCore(nlBodyDigest(input) = item.input.sha256 and state.input = invalid and state.temporaryVideo = invalid, "combined input unchanged and scratch buffers released")
+    m.pairs += 1
+end sub
+
+function preparedCore(steady = true as boolean) as object
+    state = newCore(steady)
+    nativeLiveFeed(state, "playlist", playlistCore(10&), 0&)
+    input = bytesCore(m.corpus.init.input.hex)
+    nativeLiveFeed(state, "init", input, 0&)
+    nativeLiveAdvance(state, 0&)
+    nativeLiveAdvance(state, 0&)
+    for each pair in [[state.initIds[0], m.corpus.init.video], [state.initIds[1], m.corpus.init.audio]]
+        body = nativeLiveAcquire(state, pair[0])
+        goldenCore(body.data, pair[1], "converted init")
+        nativeLiveRelease(state, pair[0])
+    end for
+    checkCore(nlBodyDigest(input) = m.corpus.init.input.sha256, "init input immutable")
+    for sequence = 10 to 12
+        pairCore(state, sequence, 0&)
+    end for
+    return state
+end function
+
+sub retireCore(state as object)
+    advertised = []
+    for each generation in state.generations
+        if generation.advertised then advertised.Push(generation.id)
+    end for
+    for each id in advertised
+        nativeLiveRetire(state, id)
+    end for
+end sub
+
+sub closeCore(state as object)
+    retireCore(state)
+    checkCore(nativeLiveClose(state), "actual helper accepts retired/unleased close")
+    checkCore(state.closed and state.assets.Count() = 0 and state.cacheBytes = 0 and state.input = invalid and state.sourceUrl = "", "actual close clears cache/source/scratch")
+end sub
+
+sub bulkCore()
+    input = bytesCore(m.corpus.init.input.hex)
+    tracks = nativeDemuxBulkInspectInit(input)
+    checkCore(tracks.Count() = 2 and nbTrackKind(tracks, 7&) = "video" and nbTrackKind(tracks, 8&) = "audio", "actual AVC/AAC init track IDs")
+    goldenCore(nativeDemuxBulkInit(input, "video"), m.corpus.init.video, "standalone video init")
+    goldenCore(nativeDemuxBulkInit(input, "audio"), m.corpus.init.audio, "standalone audio init")
+    checkCore(nlBodyDigest(input) = m.corpus.init.input.sha256, "standalone init immutable")
+    for each item in m.corpus.negative
+        source = bytesCore(item.input.hex)
+        reason = ""
+        try
+            if item.operation = "init"
+                unused = nativeDemuxBulkInit(source, item.keep)
+            else
+                unused = nativeDemuxBulkFragment(source, tracks, item.keep)
+            end if
+        catch e
+            reason = e.message
+        end try
+        checkCore(reason = "native-demux: " + item.reason, "strict malformed " + item.name)
+        checkCore(nlBodyDigest(source) = item.input.sha256, "rejected binary remains immutable")
+    end for
+    caseCore("binary-goldens-and-strict-malformed")
+end sub
+
+sub rollingCore()
+    state = preparedCore()
+    previous = nativeLivePublication(state)
+    heldId = previous.segments[0].videoId
+    held = nativeLiveAcquire(state, heldId)
+    seen = {}
+    for each asset in state.assets
+        seen[asset.id] = true
+    end for
+    nativeLiveFeed(state, "playlist", playlistCore(10&), 1000&)
+    nativeLiveAdvance(state, 1000&)
+    repeated = nativeLivePublication(state)
+    checkCore(repeated.generation = previous.generation and state.segmentPairCount = 3 and state.lastPublicationProgress = 0&, "repeated playlist never converts or manufactures new publication")
+    for index = 3 to m.corpus.media.Count() - 1
+        sequence = m.corpus.media[index].sequence
+        nowMs = (sequence - 12) * 2000&
+        nativeLiveFeed(state, "playlist", playlistCore(sequence - 2&), nowMs)
+        pairCore(state, sequence, nowMs)
+        current = nativeLivePublication(state)
+        tail = current.segments[current.segments.Count() - 1]
+        checkCore(loopbackPublicationValid(current) and current.generation = previous.generation + 1& and current.mediaSequence = sequence - 2& and tail.sequence = sequence, "real rolling publication remains contiguous")
+        checkCore(not seen.DoesExist(tail.videoId) and not seen.DoesExist(tail.audioId), "new byte identities never reuse an old route")
+        seen[tail.videoId] = true
+        seen[tail.audioId] = true
+        nativeLiveRetire(state, previous.generation)
+        checkCore(state.assets.Count() <= 11 and state.generations.Count() = 1 and state.cacheBytes <= state.cacheBudgetBytes, "retirement bounds real registry/generations/cache")
+        previous = current
+    end for
+    checkCore(seen.Count() > 256 and previous.generation > 256 and nowMs > 45000& and state.segmentPairCount = m.corpus.media.Count(), "actual binary pipeline exceeds old ID/generation/time limits")
+    checkCore(nlBodyDigest(held.data) = m.corpus.media[0].video.sha256, "acquired old body stays exact through rolling retirement")
+    checkCore(nativeLiveAcquire(state, "live-1") = invalid, "legacy route cannot alias a steady session")
+    retireCore(state)
+    checkCore(not nativeLiveClose(state) and not state.closed and nlAssetIndex(state, heldId) >= 0, "retired active lease alone prevents close")
+    nativeLiveRelease(state, heldId)
+    checkCore(nativeLiveAcquire(state, heldId) = invalid, "released expired ID never resolves to newer bytes")
+    m.uniqueIds = seen.Count()
+    m.generations = previous.generation
+    m.elapsedMs = nowMs
+    closeCore(state)
+    caseCore("rolling-past-finite-limits-with-held-lease")
+end sub
+
+sub continuityCore()
+    for each count in [7, 8, 11]
+        state = preparedCore()
+        first = nativeLivePublication(state)
+        nativeLiveFeed(state, "playlist", playlistCore(10&, count), 2000&)
+        checkCore(state.window.segments[0].sequence = 13 and state.window.segments.Count() <= 8, "poll gap extends exactly to first unpublished sequence")
+        finalSequence = 10 + count - 1
+        for sequence = 13 to finalSequence
+            pairCore(state, sequence, 2000&)
+        end for
+        current = nativeLivePublication(state)
+        checkCore(current.mediaSequence = 13 and current.segments.Count() = count - 3 and state.segmentPairCount = count, "every intervening pair converted before contiguous publication")
+        nativeLiveRetire(state, first.generation)
+        closeCore(state)
+    end for
+    for each item in [{ first: 10&, count: 12, special: "", reason: "continuity window segment bound" }, { first: 14&, count: 5, special: "", reason: "continuity history unavailable" }, { first: 10&, count: 8, special: "map", reason: "continuity window crosses map or discontinuity" }, { first: 10&, count: 8, special: "epoch", reason: "continuity window crosses map or discontinuity" }]
+        state = preparedCore()
+        unused = nativeLivePublication(state)
+        reason = ""
+        try
+            nativeLiveFeed(state, "playlist", playlistCore(item.first, item.count, item.special), 2000&)
+        catch e
+            reason = e.message
+        end try
+        checkCore(reason = "native-live: " + item.reason and state.segmentPairCount = 3, "missing/oversize/cross-epoch history never skips source")
+        closeCore(state)
+    end for
+    caseCore("poll-gaps-contiguous-and-fail-closed")
+end sub
+
+sub admissionCore()
+    ' Exact arithmetic checks, not a claim that multi-MiB allocation occurred.
+    for each cap in [16777216&, 25165824&, 33554432&]
+        nlCheckPairCacheBudget(cap - 2&, 2&, cap)
+        reason = ""
+        try
+            nlCheckPairCacheBudget(cap - 1&, 2&, cap)
+        catch e
+            reason = e.message
+        end try
+        checkCore(reason = "native-live: cache byte budget exceeded", "pair admission rejects first byte above explicit cap")
+    end for
+    state = newCore()
+    acquired = []
+    for index = 1 to 32
+        ids = nlStorePair(state, bytesCore("10"), bytesCore("20"))
+        for each id in ids
+            unused = nativeLiveAcquire(state, id)
+            acquired.Push(id)
+        end for
+    end for
+    before = { serial: state.serial, bytes: state.cacheBytes, count: state.assets.Count() }
+    reason = ""
+    try
+        unused = nlStorePair(state, bytesCore("30"), bytesCore("40"))
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: cache asset count bound" and state.serial = before.serial and state.cacheBytes = before.bytes and state.assets.Count() = before.count, "actual registered64 pair admission is atomic")
+    checkCore(not nativeLiveClose(state), "real acquired registry prevents close")
+    for each id in acquired
+        nativeLiveRelease(state, id)
+    end for
+    closeCore(state)
+    state = preparedCore()
+    pub = nativeLivePublication(state)
+    id = pub.initVideoId
+    body = nativeLiveAcquire(state, id)
+    saved = body.data[0]
+    body.data[0] = (saved + 1) mod 256
+    reason = ""
+    try
+        unused = nativeLiveAcquire(state, id)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: cached asset mutated", "actual returned body mutation fails SHA guard before another lease")
+    body.data[0] = saved
+    nativeLiveRelease(state, id)
+    reason = ""
+    try
+        nativeLiveRelease(state, id)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: release without lease", "double release cannot fabricate cleanup")
+    for index = 1 to 8
+        unused = nativeLiveAcquire(state, id)
+    end for
+    reason = ""
+    try
+        unused = nativeLiveAcquire(state, id)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: asset lease bound", "ninth actual acquired lease is rejected")
+    for index = 1 to 8
+        nativeLiveRelease(state, id)
+    end for
+    closeCore(state)
+    caseCore("actual-cache-leases-and-atomic-admission")
+end sub
+
+sub generationPinsCore()
+    state = preparedCore()
+    first = nativeLivePublication(state)
+    for sequence = 13 to 23
+        nowMs = (sequence - 12) * 2000&
+        nativeLiveFeed(state, "playlist", playlistCore(sequence - 2&), nowMs)
+        pairCore(state, sequence, nowMs)
+        unused = nativeLivePublication(state)
+    end for
+    checkCore(state.generations.Count() = 12 and state.latest = 12 and nlAssetIndex(state, first.segments[0].videoId) >= 0, "twelve advertised generations retain their real old bodies")
+    nativeLiveFeed(state, "playlist", playlistCore(22&), 24000&)
+    reason = ""
+    try
+        pairCore(state, 24, 24000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: publication generation bound" and state.generations.Count() = 12 and state.latest = 12, "thirteenth live generation cannot overwrite advertised publication")
+    checkCore(not nativeLiveClose(state), "advertised generations prevent actual close")
+    closeCore(state)
+    caseCore("active-publication-generation-cap")
+end sub
+
+sub clockQuotaCore()
+    clock = nativeLiveClockCreate(2147483640&)
+    checkCore(nativeLiveClockAdvance(clock, -2147483640&) = 16&, "signed32 transition retains monotonic elapsed")
+    clock = nativeLiveClockCreate(4294967290&)
+    checkCore(nativeLiveClockAdvance(clock, 5) = 11&, "full32 wrap retains monotonic elapsed")
+    for each raw in [99, 60101, 101.0]
+        clock = nativeLiveClockCreate(100)
+        reason = ""
+        try
+            unused = nativeLiveClockAdvance(clock, raw)
+        catch e
+            reason = e.message
+        end try
+        checkCore(reason.Left(13) = "native-live: " and clock.elapsed = 0& and clock.raw = 100&, "rollback/gap/nonintegral clock rejected without advance")
+    end for
+    clock = nativeLiveClockCreate(0)
+    clock.elapsed = 4294967235000&
+    reason = ""
+    try
+        unused = nativeLiveClockAdvance(clock, 1)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: clock exhausted", "long clock explicitly exhausts")
+    state = newCore(true, 2147483640&)
+    nlTime(state, 2147483650&)
+    checkCore(state.lastNow = 2147483650& and state.deadline = 2147528640&, "steady timestamp does not truncate to Integer")
+    closeCore(state)
+    state = newCore()
+    for index = 1 to 12000
+        nlUseWork(state, "tick", 0&)
+    end for
+    reason = ""
+    try
+        nlUseWork(state, "tick", 0&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: steady work interval bound" and state.steps = 12000&, "steady work quota denies overuse without cumulative charge")
+    nlUseWork(state, "tick", 60000&)
+    checkCore(state.steps = 12001& and state.quotaSteps = 1, "bounded interval renewal exceeds old lifetime step limit")
+    for index = 1 to 256
+        nlUseWork(state, "transfer", 60000&, false)
+        nlUseWork(state, "transfer", 60000&)
+    end for
+    reason = ""
+    try
+        nlUseWork(state, "transfer", 60000&, false)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: steady work interval bound" and state.transfers = 256&, "precheck does not consume and transfer interval remains bounded")
+    nlUseWork(state, "transfer", 120000&)
+    checkCore(state.transfers = 257& and state.quotaTransfers = 1, "bounded renewal exceeds old lifetime transfer count")
+    state.transfers = 4294967295&
+    reason = ""
+    try
+        nlUseWork(state, "transfer", 120000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: integer bound" and state.transfers = 4294967295&, "counter exhaustion never wraps or hides evidence")
+    state.serial = 4294967293&
+    ids = nlStorePair(state, bytesCore("10"), bytesCore("20"))
+    checkCore(ids[1].Right(10) = "4294967295" and loopbackAssetId(ids[1]), "terminal long asset identity is valid")
+    reason = ""
+    try
+        unused = nlStorePair(state, bytesCore("10"), bytesCore("20"))
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: cache asset count bound" and state.serial = 4294967295&, "exhausted serial cannot reuse previous route")
+    closeCore(state)
+    caseCore("monotonic-long-clock-quotas-and-exhaustion")
+end sub
+
+sub finiteLivenessCore()
+    state = preparedCore(false)
+    pub = nativeLivePublication(state)
+    checkCore(not state.steadyMode and state.cacheBudgetBytes = 16777216 and pub.initVideoId = "live-1", "default finite mode and old namespace remain unchanged")
+    reason = ""
+    try
+        nlTime(state, 45000)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: finite runtime complete", "finite default45s guard remains")
+    closeCore(state)
+    state = preparedCore()
+    pub = nativeLivePublication(state)
+    for each stamp in [14000&, 28000&]
+        nativeLiveFeed(state, "playlist", playlistCore(10&), stamp)
+        nativeLiveAdvance(state, stamp)
+    end for
+    reason = ""
+    try
+        nlTime(state, 30000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: publication progress deadline" and state.lastUpstreamProgress = 28000& and state.lastPublicationProgress = 0&, "accepted unchanged playlists cannot hide publication stall")
+    closeCore(state)
+    state = preparedCore()
+    reason = ""
+    try
+        nlTime(state, 15000&)
+    catch e
+        reason = e.message
+    end try
+    checkCore(reason = "native-live: upstream progress deadline", "real upstream-progress deadline remains finite")
+    closeCore(state)
+    caseCore("finite-default-and-real-progress-deadlines")
+end sub
+
+sub main()
+    m.assertions = 0
+    m.cases = 0
+    m.goldens = 0
+    m.pairs = 0
+    m.uniqueIds = 0
+    m.generations = 0
+    m.elapsedMs = 0&
+    m.config = { sourceDelaySeconds: 0 }
+    try
+        m.corpus = ParseJSON(ReadAsciiFile("pkg:/corpus.json"))
+        bulkCore()
+        rollingCore()
+        continuityCore()
+        admissionCore()
+        generationPinsCore()
+        clockQuotaCore()
+        finiteLivenessCore()
+        print "STITCH_ROKU_CORE_PASS: __MARKER__ cases="; m.cases; " assertions="; m.assertions; " pairs="; m.pairs; " goldens="; m.goldens; " ids="; m.uniqueIds; " generations="; m.generations; " elapsedMs="; m.elapsedMs
+    catch e
+        print "STITCH_ROKU_CORE_FAIL: "; e.message
+    end try
+end sub
