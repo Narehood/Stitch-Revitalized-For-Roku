@@ -27,9 +27,53 @@ sub main()
         finishMain(screen)
         return
     end if
+    if "__DIALOG_WAIT_CONTROL__" = "yes"
+        player = openPlayer(true)
+        if player = invalid
+            finishMain(screen)
+            return
+        end if
+        finishMain(screen)
+        return
+    end if
+    if "__REPEAT_DIALOG_CONTROL__" = "yes"
+        player = openPlayer(true, false)
+        if player = invalid
+            finishMain(screen)
+            return
+        end if
+        dialogFocus = m.scene
+        for depth = 1 to 16
+            child = dialogFocus.focusedChild
+            if child = invalid then exit for
+            if child.IsSameNode(dialogFocus) then exit for
+            dialogFocus = child
+        end for
+        primer = CreateObject("roSGNode", "RootKeyBoundary")
+        m.scene.AppendChild(primer)
+        primer.SetFocus(true)
+        press("ok")
+        firstKey = CreateObject("roTimespan")
+        while primer.pressCount = 0 and firstKey.TotalMilliseconds() < 2000
+            settle(10)
+        end while
+        check(primer.pressCount = 1 and player.CallFunc("fixturePlayer").sessionId = "", "stock driver delivers the first OK to the inert focus boundary")
+        if primer.pressCount <> 1
+            finishMain(screen)
+            return
+        end if
+        dialogFocus.SetFocus(true)
+        ignored = chooseLocalPlayer(player)
+        finishMain(screen)
+        return
+    end if
 
     ' Actual live overlay Exit reaches the same typed cooperative Player action.
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     manager = m.scene.localPlaybackSession
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
@@ -85,6 +129,10 @@ sub main()
 
     manager = m.scene.CallFunc("fixtureNewManager")
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
     id = owned.currentId
@@ -108,12 +156,20 @@ sub main()
 
     manager = m.scene.CallFunc("fixtureNewManager")
     player = openPlayer(false)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     video = player.CallFunc("fixturePlayer").video
     selectLiveExit(video)
     check(hero().active.id = "Following" and player.GetParent() = invalid and not manager.busy and not m.exitRequested, "ordinary direct live on-screen Exit returns normally without local ownership")
 
     for cycle = 1 to 2
         player = openPlayer(true)
+        if player = invalid
+            finishMain(screen)
+            return
+        end if
         manager = m.scene.localPlaybackSession
         owned = manager.CallFunc("fixtureManager")
         worker = owned.worker
@@ -158,6 +214,10 @@ sub main()
 
     ' A start cancelled before ready also belongs to the manager until true ACK.
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     manager = m.scene.localPlaybackSession
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
@@ -176,6 +236,10 @@ sub main()
     ' An ordinary direct Player has no local owner to wait for; it still returns
     ' to Following and does not accidentally invoke root app exit.
     player = openPlayer(false)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     check(player.CallFunc("fixturePlayer").sessionId = "" and not manager.busy, "direct path never claims manager ownership")
     hero().menu.SetFocus(true)
     press("back")
@@ -184,6 +248,10 @@ sub main()
 
     ' The recent-rail special case remains first, even with an active Player.
     player = openPlayer(false)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     rail = hero().rail
     rail.itemHasFocus = true
     hero().menu.SetFocus(true)
@@ -199,6 +267,10 @@ sub main()
     for each missing in [false, true]
         manager = m.scene.CallFunc("fixtureNewManager")
         player = openPlayer(true)
+        if player = invalid
+            finishMain(screen)
+            return
+        end if
         owner = manager.CallFunc("fixtureManager")
         worker = owner.worker
         id = owner.currentId
@@ -230,6 +302,10 @@ sub main()
         check(m.scene.localPlaybackSession.IsSameNode(manager) and manager.cleanupBlocked and not manager.CallFunc("fixtureManager").disposed, "sign-in retains the same blocked manager without clearing safety latch")
         check(manager.CallFunc("startSession", descriptor()) = "", "sign-in cannot revive a blocked manager")
         player = openPlayer(true, false)
+        if player = invalid
+            finishMain(screen)
+            return
+        end if
         check(not m.lastDescriptorEnabled and m.scene.dialog.buttons[0] = "Back", "new Player refuses Try on Roku after unsafe owner stop")
         press("ok")
         settle(350)
@@ -240,6 +316,10 @@ sub main()
     ' pending Back is reevaluated only after the manager observes Video STOP.
     manager = m.scene.CallFunc("fixtureNewManager")
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
     id = owned.currentId
@@ -272,6 +352,10 @@ sub main()
     ' Task times out, only that pending ID is retained as its cancelled UI caller.
     manager = m.scene.CallFunc("fixtureNewManager")
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
     id = owned.currentId
@@ -308,6 +392,10 @@ sub main()
     ' independently reject a deferred direct-quality start after unsafe cleanup.
     manager = m.scene.CallFunc("fixtureNewManager")
     player = openPlayer(true)
+    if player = invalid
+        finishMain(screen)
+        return
+    end if
     owned = manager.CallFunc("fixtureManager")
     worker = owned.worker
     id = owned.currentId
@@ -376,12 +464,25 @@ function openPlayer(local as boolean, choose = true as boolean) as object
     task.response = node
     settle(60)
     if local and choose
-        check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try on Roku", "actual eligible dialog offers explicit choice")
-        press("ok")
-        settle(120)
-        check(player.CallFunc("fixturePlayer").sessionId <> "" and m.scene.localPlaybackSession.busy, "real dialog dispatch starts one actual manager")
+        if not chooseLocalPlayer(player) then return invalid
     end if
     return player
+end function
+
+function chooseLocalPlayer(player as object) as boolean
+    eligible = m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try on Roku"
+    check(eligible, "actual eligible dialog offers explicit choice")
+    if not eligible then return false
+    press("ok")
+    ' The key driver may defer a repeated OK by at least 250 ms. Wait for
+    ' actual dispatch, without changing the production cleanup deadlines.
+    dispatch = CreateObject("roTimespan")
+    while player.CallFunc("fixturePlayer").sessionId = "" and dispatch.TotalMilliseconds() < 2000
+        settle(10)
+    end while
+    started = player.CallFunc("fixturePlayer").sessionId <> "" and m.scene.localPlaybackSession.busy
+    check(started, "real dialog dispatch starts one actual manager")
+    return started
 end function
 
 function descriptor() as object
