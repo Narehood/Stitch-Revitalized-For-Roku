@@ -172,6 +172,8 @@ end sub
                 const count = requirePositive(result, marker);
                 assert.doesNotMatch(result.output, /DIAGNOSTIC_SECRET_TOKEN|private\.invalid|unexpected_sensitive_error/,
                     'actual result logging must exclude private input and unrecognized text');
+                assert.match(result.output, /"helperReason"\s*:\s*"continuity_window_crosses_map_or_discontinuity"/,
+                    'actual known continuity failure logs only its static code');
                 t.diagnostic(`${count} actual manager-handler assertions; worker/Video IO is inert`);
                 assert.throws(() => requirePositive(result, 'STALE_MARKER'), /expected one fresh session summary/);
             } else {
@@ -272,6 +274,18 @@ end sub
             assert.throws(() => requirePositive(guardFailure, marker));
             t.diagnostic(`actual ${name} transition guard removal is rejected`);
         }
+        const transitionReturn = 'then return "source_transition"';
+        assert.equal(fixtureSource.split(transitionReturn).length, 2, 'both known exact reasons share one transition result');
+        await add(managerPath, fixtureSource.replace(transitionReturn, 'then return "old_source_transition"'));
+        const oldTransitionZip = path.join(dir, 'old-source-transition-mutation.zip');
+        await zipFolder(packageDir, oldTransitionZip);
+        const oldTransitionFailure = await run(oldTransitionZip, 'positive', dir);
+        requireNormal(oldTransitionFailure);
+        for (const label of ['selected epoch', 'continuity window']) {
+            assert.ok(oldTransitionFailure.output.includes(`SESSION_ASSERT_FAIL: transition classification requires exact ready reason and safe cleanup: ${label}`));
+        }
+        assert.throws(() => requirePositive(oldTransitionFailure, marker));
+        t.diagnostic('shared transition-result mutation independently rejects both known native reasons');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
