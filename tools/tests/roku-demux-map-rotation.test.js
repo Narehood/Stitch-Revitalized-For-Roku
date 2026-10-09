@@ -154,8 +154,11 @@ test('actual same-init MAP rotation retains approved assets and refuses changed 
         t.diagnostic(`fresh actual-function execution ${marker}: ${counts.cases} cases / ${counts.assertions} assertions`);
         const core = sources.get(coreName).toString();
         const equality = 'payload.Count() = state.initByteCount and digest = state.initDigest';
-        assert.equal(core.split(equality).length, 2);
-        await add(coreName, core.replace(equality, 'true'));
+        // Mutate the original path; opted-in source transitions have their own
+        // identity checks and negative controls in the epoch integration suite.
+        const legacyIdentity = `        else\n            nlCheck(${equality}, "selected map initialization changed")\n        end if`;
+        assert.equal(core.split(legacyIdentity).length, 2);
+        await add(coreName, core.replace(legacyIdentity, legacyIdentity.replace(equality, 'true')));
         const wrongIdentity = await execute();
         requireExecution(wrongIdentity);
         assert.match(wrongIdentity.output, /STITCH_ROKU_MAP_FAIL: map-fixture: changed binary rejected same-length-valid/);
