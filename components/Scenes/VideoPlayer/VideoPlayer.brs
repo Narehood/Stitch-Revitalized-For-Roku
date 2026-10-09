@@ -13,6 +13,7 @@ sub handleContent()
     m.nativeFallbackTried = false
     m.manualRetryPending = false
     m.preferredQuality = invalid
+    m.manualLiveQuality = invalid
     m.errorHandler.callFunc("resetErrorState")
     m.top.chatStarted = false
     if m.chatWindow <> invalid
@@ -129,6 +130,12 @@ sub onQualityChangeRequested(event = invalid as dynamic)
         end for
     end if
     if index < 0 or index >= m.top.metadata.Count() then return
+    if m.top.contentRequested.contentType = "LIVE"
+        m.manualLiveQuality = invalid
+        quality = m.top.metadata[index].QualityID
+        ' Internal error/buffer downshifts have no user event.
+        if event <> invalid and GetInterface(quality, "ifString") <> invalid and quality <> "" and quality <> "Automatic" then m.manualLiveQuality = quality
+    end if
     if m.video.isSubtype("StitchVideo") then m.video.QualityChangeRequestFlag = false
     if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
     new_content = CreateObject("roSGNode", "TwitchContentNode")
@@ -472,6 +479,7 @@ sub init()
     m.stallSeconds = 0
     m.reconnectTimer = invalid
     m.retryTimer = invalid
+    m.manualLiveQuality = invalid
     m.playbackInitTime = invalid ' tracks when current playback attempt started
 
     m.watchdogTimer = CreateObject("roSGNode", "Timer")
@@ -1004,6 +1012,7 @@ sub onLiveReconnectResponse()
     if m.video <> invalid
         if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
         quality = m.video.GetField("selectedQuality")
+        if m.top.contentRequested.contentType = "LIVE" and m.manualLiveQuality <> invalid then quality = m.manualLiveQuality
         if quality <> invalid and refreshedMetadata <> invalid
             for each entry in refreshedMetadata
                 if entry.QualityID = quality then refreshedContent.SetFields(entry)
@@ -1176,6 +1185,7 @@ sub rememberRetryState()
     if m.video = invalid or m.top.contentRequested = invalid then return
     if m.top.contentRequested.contentType = "LIVE"
         quality = m.video.selectedQuality
+        if m.manualLiveQuality <> invalid then quality = m.manualLiveQuality
         if quality <> invalid and quality <> "" then m.retryQuality = quality
     else
         position = m.video.position

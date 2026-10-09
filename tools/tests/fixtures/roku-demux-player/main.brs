@@ -12,6 +12,7 @@
     testMixedAutomaticRecoveryChoice()
     testFailedRetryAndRecovery()
     testSourceTransitionRecovery()
+    testLiveManualQualityIntent()
     testLiveRecoveryHealth()
     testRefusalAndBlockedOwner()
     testDialogBackAndAttachRefusal()
@@ -19,6 +20,116 @@
     testBlockedCancelledReplacement()
     check(true, "failure-control anchor")
     fixtureEnd()
+end sub
+
+function manualIntentAutomatic(identity as string) as object
+    node = content("roku-demux", "Automatic")
+    node.localPlaybackDescriptor = { qualityId: "720p60", mediaUrl: "https://fixture.invalid/fresh-auto.m3u8", bandwidth: 4000000, isHD: true, fixtureIdentity: identity }
+    return node
+end function
+
+sub manualIntentPick(player as object, index as integer)
+    video = player.callFunc("fixtureRead").video
+    video.findNode("QualityDialog").buttonSelected = index
+    settle(60)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub manualIntentRefresh(player as object, automatic as object, metadata as object)
+    oldVideo = player.callFunc("fixtureRead").video
+    before = calls(sessionOf(player), "start").count()
+    player.callFunc("fixtureReconnect")
+    task = player.callFunc("fixtureRead").reconnectTask
+    check(task <> invalid, "manual intent uses actual fresh recovery request")
+    if task = invalid then return
+    task.metadata = metadata
+    task.response = automatic
+    settle(60)
+    expected = before
+    if automatic.playbackTransport = "roku-demux" then expected++
+    check(oldVideo.control = "stop" and calls(sessionOf(player), "start").count() = expected, "manual intent refresh stops old video and preserves the exact owner path")
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub testLiveManualQualityIntent()
+    player = openPlayer("LIVE")
+    automatic = manualIntentAutomatic("initial-auto")
+    selected = content("roku-demux", "1080p60")
+    lower = content("roku-demux", "720p60")
+    ladder = [automatic.getFields(), selected.getFields(), lower.getFields()]
+    deliver(player, automatic, ladder)
+    chooseRoku(player)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    manualIntentPick(player, 1)
+    check(player.callFunc("fixtureRead").manualLiveQuality = "1080p60", "actual explicit LIVE dialog choice records manual intent")
+
+    fallback = manualIntentAutomatic("fallback-auto")
+    missing = [fallback.getFields(), lower.getFields()]
+    manualIntentRefresh(player, fallback, missing)
+    state = player.callFunc("fixtureRead")
+    check(state.video.selectedQuality = "Automatic" and player.content.QualityID = "Automatic" and state.video.content.localPlaybackDescriptor.fixtureIdentity = "fallback-auto", "missing manual rung preserves the actual fresh safe fallback")
+    check(state.manualLiveQuality = "1080p60", "temporary fallback retains desired manual LIVE intent")
+
+    restored = content("roku-demux", "1080p60")
+    restored.url = "https://fixture.invalid/restored1080.m3u8"
+    restored.localPlaybackDescriptor = { qualityId: "1080p60", mediaUrl: "https://fixture.invalid/restored-combined.m3u8", bandwidth: 7000000, isHD: true, fixtureIdentity: "restored1080" }
+    automatic = manualIntentAutomatic("restored-auto")
+    available = [automatic.getFields(), restored.getFields(), lower.getFields()]
+    before = calls(sessionOf(player), "start").count()
+    player.metadata = available
+    settle(40)
+    check(player.callFunc("fixtureRead").video.isSameNode(state.video) and state.video.selectedQuality = "Automatic" and calls(sessionOf(player), "start").count() = before, "a newly available rung alone never upgrades playing video")
+    manualIntentRefresh(player, automatic, available)
+    state = player.callFunc("fixtureRead")
+    check(state.video.selectedQuality = "1080p60" and player.content.QualityID = "1080p60", "restored ladder returns to explicit manual quality")
+    check(state.video.content.localPlaybackDescriptor.fixtureIdentity = "restored1080" and state.video.content.localPlaybackDescriptor.bandwidth = 7000000, "restored manual intent uses fresh descriptor and metadata")
+    check(state.recovery = 0 and state.reconnect = 0 and state.video.suppressStartupSeek, "manual quality matching preserves recovery state and startup suppression")
+
+    ' An intentional recovery downshift must not later promote playback.
+    state.video.qualityChangeRequest = 2
+    player.callFunc("fixtureQualityEvent")
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "internal deliberate downshift clears manual upgrade intent")
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "720p60", "later recovery retains deliberate lower quality")
+
+    manualIntentPick(player, 1)
+    manualIntentRefresh(player, fallback, missing)
+    sessionOf(player).event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "server_failed" }
+    settle(40)
+    check(player.callFunc("fixtureRead").errorDialog <> invalid, "fallback failure reaches actual Try again dialog")
+    player.callFunc("fixtureRetry")
+    deliver(player, automatic, available)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "1080p60" and player.callFunc("fixtureRead").manualLiveQuality = "1080p60", "same-owner Try again reuses manual intent through existing preferred quality path")
+
+    manualIntentPick(player, 0)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "explicit Automatic clears previous manual intent")
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "Automatic", "recovery respects explicit Automatic after earlier manual selection")
+
+    manualIntentPick(player, 1)
+    owner = request("LIVE")
+    owner.streamerLogin = "anotherfixture"
+    owner.streamerId = "43"
+    owner.contentId = "fixture-v2"
+    player.contentRequested = owner
+    settle(40)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "new channel request clears previous manual intent")
+    ' The inert owner supplies its actual stop acknowledgement before direct play.
+    sessionOf(player).busy = false
+    automatic = content("direct", "Automatic")
+    available = [automatic.getFields(), content("direct", "1080p60").getFields(), content("direct", "720p60").getFields()]
+    deliver(player, automatic, available)
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "Automatic", "new LIVE owner does not inherit prior manual quality")
+    manualIntentPick(player, 1)
+    player.contentRequested = request("VOD")
+    settle(40)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "recorded owner clears previous manual LIVE intent")
+    deliver(player, content("direct", "720p60"))
+    check(player.callFunc("fixtureRead").video.isSubtype("CustomVideo"), "recorded replacement preserves its existing wrapper path")
+    closePlayer(player)
 end sub
 
 function healthPlayer() as object

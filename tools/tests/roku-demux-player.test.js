@@ -137,8 +137,19 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.equal(script.split(before).length, 2, `one current ${mode} health guard required`);
         await addFile(dir, playerPath, script.replace(before, after));
     }
+    if (mode === 'lost-manual-live-quality') {
+        const script = await fs.readFile(path.join(dir, playerPath), 'utf8');
+        const guard = '        if m.top.contentRequested.contentType = "LIVE" and m.manualLiveQuality <> invalid then quality = m.manualLiveQuality';
+        assert.equal(script.split(guard).length, 2, 'one actual remembered manual LIVE quality match required');
+        await addFile(dir, playerPath, script.replace(guard, ''));
+    }
     let main = await fixture('main.brs');
-    if (healthMutations[mode]) {
+    if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testLiveManualQualityIntent()'));
+        const qualityOnly = start.split(/\r?\n/).filter(line => !/^    test/.test(line) || line === '    testLiveManualQualityIntent()').join('\n');
+        main = main.replace(start, qualityOnly);
+    } else if (healthMutations[mode]) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveRecoveryHealth()'));
         const healthOnly = start.split(/\r?\n/).filter(line => !/^    test/.test(line) || line === '    testLiveRecoveryHealth()').join('\n');
@@ -243,6 +254,16 @@ test('actual player callbacks gate Roku opt-in, session ready, retry, quality sw
     const { result, marker } = await runFixture();
     const count = acceptResult(result, marker);
     t.diagnostic(`${count} actual SceneGraph assertions; Session and network are explicit inert IO boundaries; no decoder/hardware proof`);
+});
+
+test('manual LIVE quality intent survives a missing recovery rung and rejects genuine intent loss', { timeout: 150000 }, async t => {
+    const actual = await runFixture('manual-live-quality');
+    t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual manual-intent assertions with existing callbacks; no network/native playback claim`);
+    const lost = await runFixture('lost-manual-live-quality');
+    assertNormalExit(lost.result, 'lost-manual-live-quality');
+    assert.match(lost.result.output, /STITCH_UI_FAIL:restored ladder returns to explicit manual quality/);
+    assert.throws(() => acceptResult(lost.result, lost.marker));
+    t.diagnostic('actual remembered manual-quality matching removal fails normally and is rejected');
 });
 
 test('a genuine failed BrightScript assertion and a stale success marker are rejected', { timeout: 180000 }, async () => {
