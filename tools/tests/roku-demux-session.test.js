@@ -258,6 +258,20 @@ end sub
         assert.match(detachFailure.output, /SESSION_ASSERT_FAIL: disposal completes only after actual acknowledgment/);
         assert.throws(() => requirePositive(detachFailure, marker));
         t.diagnostic('premature teardown observer removal abandons acknowledgment and is rejected');
+        for (const [gate, expected, name] of [
+            ['    if not m.readyReceived then return "worker_finished"', 'transition classification requires exact ready reason and safe cleanup', 'startup-ready'],
+            ['    if not sessionCleanupSafe() then return "worker_finished"', 'transition classification requires exact ready reason and safe cleanup', 'unsafe-resource-cleanup']
+        ]) {
+            assert.equal(fixtureSource.split(gate).length, 2, `one actual ${name} transition guard required`);
+            await add(managerPath, fixtureSource.replace(gate, ''));
+            const guardZip = path.join(dir, `${name}-transition-mutation.zip`);
+            await zipFolder(packageDir, guardZip);
+            const guardFailure = await run(guardZip, 'positive', dir);
+            requireNormal(guardFailure);
+            assert.ok(guardFailure.output.includes(`SESSION_ASSERT_FAIL: ${expected}`));
+            assert.throws(() => requirePositive(guardFailure, marker));
+            t.diagnostic(`actual ${name} transition guard removal is rejected`);
+        }
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));

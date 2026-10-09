@@ -130,6 +130,20 @@ sub onRokuSessionEvent()
         m.top.content = playable
         playContent(m.rokuPlayRecovery)
     else if event.status = "failed"
+        sourceTransition = false
+        if GetInterface(event.reason, "ifString") <> invalid then sourceTransition = event.reason = "source_transition"
+        if sourceTransition
+            if m.isExiting or m.manualRetryPending or m.errorDialog <> invalid then return
+            if m.rokuPendingContent <> invalid or m.rokuPreparedContent = invalid or m.video = invalid or not m.rokuChosen then return
+            if m.top.contentRequested = invalid then return
+            if m.top.contentRequested.contentType <> "LIVE" then return
+            if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
+            m.rokuPreparedContent = invalid
+            ' The owner still acknowledges old Task/Video cleanup before a
+            ' refreshed, decoder-validated session can replace the timeline.
+            beginLiveReconnect("source_transition")
+            return
+        end if
         m.rokuPendingContent = invalid
         m.rokuPreparedContent = invalid
         showErrorDialog(tr("Roku playback stopped"), tr("This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service."), not m.rokuSession.cleanupBlocked)

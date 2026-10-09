@@ -14,6 +14,14 @@ Manual 1080p60 live playback rebuffered briefly and later stopped. Passive captu
 
 All scripted playback/navigation helpers have ended and the exact sealed regular Alpha 1 package was reinstalled successfully; the passive console capture is separate and sends no remote input. Earlier diagnostic casing, initial-focus and keyboard-edge navigation failures are retained separately and do not count as application playback failures or completed acceptance runs. The two watched cases establish their bounded picture/audio/chat observations on this TV; they do not establish sustained stability, decoded resolution, emote coverage, secure/signed-in transport or broad-device acceptance.
 
+## October 9 live discontinuity reproduction
+
+The published Alpha 1 ZIP (`8c6d3c84d21a7c4697b04987471d5ac78a14d3ff406647c8b423b26e21868e69`) was installed after the user resumed TV testing. A fresh marked full-app capture then added read-only exports and a bounded Main loop; the remaining production BrightScript bodies stayed byte-identical. Actual Following navigation, Try on Roku and the quality dialog selected 1080p60, with no external service configured. The user confirmed normal moving picture and clear, synchronized audio.
+
+This run stopped at position 252.133 seconds. The worker reported `live_helper_failed` with `selected_discontinuity_change_unsupported`, 130 converted segment pairs and a cache peak of 17,523,992 bytes under the 32 MiB budget. Task stop and all five resource-cleanup acknowledgements were observed; there were no runtime errors after the fresh marker. The published regular package was restored and the capture ended. This establishes the cause of this run, not the unlogged October 8 stop at position 715.874.
+
+A narrow follow-up uses the existing finite reconnect budget to open a new validated session after this exact failure in an already-ready session. It preserves timeline/init rejection, selected quality and the old Task/Video stop gate. Candidate hardware recovery and sustained acceptance remain pending.
+
 ## Device record
 
 For each device, record model name/number, Roku OS, display resolution, network type, reported AVC/HEVC decoder capabilities, proxy version/configuration, package commit and date. Exclude credentials, signed playback URLs and account identifiers.

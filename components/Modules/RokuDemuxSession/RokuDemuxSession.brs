@@ -155,11 +155,22 @@ sub onSessionResult()
     ' Never include the session identity, source URL, credentials or raw errors.
     print "[RokuPlayback] Worker result: "; FormatJSON(sessionWorkerDiagnostic(result))
     if not m.stopping
-        sessionEvent(m.currentId, "failed", "worker_finished")
+        sessionEvent(m.currentId, "failed", sessionWorkerFailureReason(result))
         beginSessionStop()
     end if
     checkSessionCleanup()
 end sub
+
+function sessionWorkerFailureReason(result as object) as string
+    if not m.readyReceived then return "worker_finished"
+    if not sessionCleanupSafe() then return "worker_finished"
+    if not rokuDemuxString(result.reason) then return "worker_finished"
+    if result.reason <> "live_helper_failed" then return "worker_finished"
+    if not rokuDemuxString(result.helperFailureReason) then return "worker_finished"
+    ' Restart a new timeline; never reuse the refused epoch or its init/cache.
+    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" then return "source_transition"
+    return "worker_finished"
+end function
 
 function sessionWorkerDiagnostic(result as object) as object
     summary = { reason: "unknown" }

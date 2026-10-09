@@ -99,6 +99,20 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.equal(script.split(reset).length, 2, 'one current quality consumption reset required');
         await addFile(dir, file, script.replace(reset, ''));
     }
+    if (mode === 'no-source-transition-recovery') {
+        const file = snapshotFiles[2];
+        const script = await fs.readFile(path.join(dir, file), 'utf8');
+        const gate = '        if sourceTransition';
+        assert.equal(script.split(gate).length, 2, 'one actual transition dispatch gate required');
+        await addFile(dir, file, script.replace(gate, '        if false'));
+    }
+    if (mode === 'no-source-transition-retry-guard') {
+        const file = snapshotFiles[2];
+        const script = await fs.readFile(path.join(dir, file), 'utf8');
+        const guard = '            if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return';
+        assert.equal(script.split(guard).length, 2, 'one actual pending-retry transition guard required');
+        await addFile(dir, file, script.replace(guard, '            if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return'));
+    }
     let main = await fixture('main.brs');
     if (mode === 'failed-assertion') {
         assert.ok(main.includes('check(true, "failure-control anchor")'));
@@ -219,6 +233,22 @@ test('actual recovery and retained-wrapper selections reject historical quality 
         assert.throws(() => acceptResult(result, marker));
         t.diagnostic(`${mode}: ${summary[1]} failed of ${summary[2]} actual assertions; rejected despite normal engine exit`);
     }
+});
+
+test('removing actual source-transition recovery fails its ready-session behavior', { timeout: 90000 }, async t => {
+    const { result, marker } = await runFixture('no-source-transition-recovery');
+    assertNormalExit(result, 'no-source-transition-recovery');
+    assert.match(result.output, /STITCH_UI_FAIL:ready source transition schedules one bounded automatic reconnect/);
+    assert.throws(() => acceptResult(result, marker));
+    t.diagnostic('actual transition dispatch removal is rejected despite normal engine exit');
+});
+
+test('removing the actual pending-retry guard rejects duplicate transition recovery', { timeout: 90000 }, async t => {
+    const { result, marker } = await runFixture('no-source-transition-retry-guard');
+    assertNormalExit(result, 'no-source-transition-retry-guard');
+    assert.match(result.output, /STITCH_UI_FAIL:source transition preserves one actual error retry without a second timer or budget charge/);
+    assert.throws(() => acceptResult(result, marker));
+    t.diagnostic('actual pending-retry guard removal creates duplicate timers and is rejected');
 });
 
 test('bounded child transport rejects failure output, timeout, overflow and nonzero exit', { timeout: 15000 }, async () => {
