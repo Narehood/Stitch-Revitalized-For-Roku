@@ -1,6 +1,6 @@
 ' Read-only inspection and direct calls to actual production handlers.
 function fixtureRead() as object
-    return { task: m.PlayVideo, video: m.video, session: m.rokuSession, sessionId: m.rokuSessionId, chosen: m.rokuChosen, pendingContent: m.rokuPendingContent, prepared: m.rokuPreparedContent, deferred: m.rokuDeferredPlay, exitPending: m.rokuExitPending, pending: m.manualRetryPending, errorDialog: m.errorDialog, transmuxDialog: m.transmuxDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, reconnectTask: m.reconnectTask, reconnectTimer: m.reconnectTimer, retryTimer: m.retryTimer, disposed: m.disposed }
+    return { task: m.PlayVideo, video: m.video, session: m.rokuSession, sessionId: m.rokuSessionId, chosen: m.rokuChosen, pendingContent: m.rokuPendingContent, prepared: m.rokuPreparedContent, deferred: m.rokuDeferredPlay, exitPending: m.rokuExitPending, pending: m.manualRetryPending, errorDialog: m.errorDialog, transmuxDialog: m.transmuxDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, reconnectTask: m.reconnectTask, reconnectTimer: m.reconnectTimer, retryTimer: m.retryTimer, disposed: m.disposed, transitionCharges: m.sourceTransitionCharges, healthVideo: m.liveRecoveryVideo }
 end function
 sub fixtureChoiceAgain()
     onTransmuxDialogButton()
@@ -37,3 +37,20 @@ sub fixtureProlongedBufferCheck()
     m.bufferStartTime = createObject("roDateTime").asSeconds() - 11
     handleBufferingState()
 end sub
+function fixtureWatchdogClock() as integer
+    if m.fixtureWatchdogSec = invalid then return CreateObject("roDateTime").AsSeconds()
+    return m.fixtureWatchdogSec
+end function
+sub fixtureWatchdog(nowSec as integer)
+    m.fixtureWatchdogSec = nowSec
+    onWatchdogFire()
+end sub
+sub fixtureCooldown(nowSec as integer)
+    m.lastReconnectSuccessSec = nowSec
+end sub
+sub fixtureSessionIdentity(id as string)
+    m.rokuSessionId = id
+end sub
+function fixtureErrorStatistics() as object
+    return m.errorHandler.callFunc("getErrorStatistics")
+end function

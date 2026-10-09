@@ -12,12 +12,230 @@
     testMixedAutomaticRecoveryChoice()
     testFailedRetryAndRecovery()
     testSourceTransitionRecovery()
+    testLiveRecoveryHealth()
     testRefusalAndBlockedOwner()
     testDialogBackAndAttachRefusal()
     testCleanupFailureWhileWaiting()
     testBlockedCancelledReplacement()
     check(true, "failure-control anchor")
     fixtureEnd()
+end sub
+
+function healthPlayer() as object
+    player = openPlayer("LIVE")
+    selected = content("roku-demux", "1080p60")
+    metadata = [selected.getFields(), content("roku-demux", "720p60").getFields()]
+    deliver(player, selected, metadata)
+    chooseRoku(player)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    healthTransition(player)
+    state = player.callFunc("fixtureRead")
+    if state.video <> invalid then state.video.state = "playing"
+    return player
+end function
+
+sub healthTransition(player as object)
+    state = player.callFunc("fixtureRead")
+    sessionOf(player).event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    settle(20)
+    state = player.callFunc("fixtureRead")
+    if state.reconnectTimer = invalid then return
+    player.callFunc("fixtureReconnect")
+    healthRefresh(player)
+end sub
+
+sub healthRefresh(player as object)
+    task = player.callFunc("fixtureRead").reconnectTask
+    if task = invalid then return
+    selected = content("roku-demux", "1080p60")
+    task.metadata = [selected.getFields(), content("roku-demux", "720p60").getFields()]
+    task.response = selected
+    settle(20)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub healthSample(player as object, nowSec as integer, position as float)
+    video = player.callFunc("fixtureRead").video
+    if video <> invalid then video.position = position
+    player.callFunc("fixtureWatchdog", nowSec)
+end sub
+
+sub healthProgress(player as object, startSec as integer, startPosition as float, seconds as integer, rate = 1 as float)
+    for offset = 0 to seconds step 2
+        healthSample(player, startSec + offset, startPosition + offset * rate)
+    end for
+end sub
+
+sub testLiveRecoveryHealth()
+    player = healthPlayer()
+    healthTransition(player)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 2 and state.recovery = 2 and state.reconnect = 2, "only actually scheduled transitions own refundable charges")
+    video = state.video
+    video.errorCode = -1
+    video.errorStr = "fixture health error"
+    video.state = "error"
+    state = player.callFunc("fixtureRead")
+    check(state.retryTimer <> invalid and state.recovery = 3 and state.transitionCharges = 2, "actual network error retains a separate shared recovery charge")
+    player.callFunc("fixtureFireRetry")
+    healthRefresh(player)
+    video = player.callFunc("fixtureRead").video
+    if video <> invalid then video.state = "playing"
+    stats = player.callFunc("fixtureErrorStatistics")
+    check(stats.retryCount = 1 and stats.totalErrors = 1, "actual error handler records its independent retry history")
+    base = CreateObject("roDateTime").AsSeconds() + 46
+    healthProgress(player, base, 100, 118)
+    healthSample(player, base + 119, 219)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 2 and state.recovery = 3 and state.reconnect = 2, "119 healthy seconds cannot forgive transition charges")
+    healthSample(player, base + 120, 220)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 1, "120 healthy seconds refund only scheduled transitions and preserve actual error debt")
+    stats = player.callFunc("fixtureErrorStatistics")
+    check(stats.retryCount = 1 and stats.totalErrors = 1, "healthy transition refund preserves actual error handler limits and history")
+    healthSample(player, base + 122, 222)
+    check(player.callFunc("fixtureRead").recovery = 1, "duplicate healthy completion never refunds unrelated recovery twice")
+    session = sessionOf(player)
+    session.event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 1 and state.recovery = 2 and state.transitionCharges = 1 and state.reconnectTimer <> invalid, "next transition starts a bounded episode retaining generic spent debt")
+    if state.reconnectTimer <> invalid then check(state.reconnectTimer.duration = 1, "healthy transition episode restarts existing one-second backoff")
+    player.callFunc("fixtureEventAgain")
+    check(player.callFunc("fixtureRead").transitionCharges = 1, "duplicate transition cannot add another refundable charge")
+    closePlayer(player)
+
+    player = healthPlayer()
+    video = player.callFunc("fixtureRead").video
+    base = CreateObject("roDateTime").AsSeconds() + 46
+    for offset = 0 to 16 step 2
+        healthSample(player, base + offset, 100)
+    end for
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 2 and state.recovery = 2 and state.transitionCharges = 1 and state.reconnectTimer <> invalid, "actual stalled watchdog spends a non-transition reconnect charge")
+    player.callFunc("fixtureReconnect")
+    healthRefresh(player)
+    player.callFunc("fixtureRead").video.state = "playing"
+    healthProgress(player, base + 50, 100, 120)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 1 and state.recovery = 1 and state.transitionCharges = 0, "healthy source refund preserves the actual generic stall reconnect budget")
+    closePlayer(player)
+
+    for each mode in ["stalled", "noise", "pause", "buffer", "backward", "jump", "gap", "clock", "seek", "cooldown", "duplicate", "quality", "retry", "dialog", "back", "disposed", "blocked", "pending", "foreign", "inconsistent"]
+        player = healthPlayer()
+        session = sessionOf(player)
+        video = player.callFunc("fixtureRead").video
+        base = CreateObject("roDateTime").AsSeconds() + 46
+        if mode = "stalled" or mode = "noise"
+            rate = 0.0
+            if mode = "noise" then rate = 0.1
+            healthProgress(player, base, 100, 130, rate)
+        else if mode = "duplicate"
+            healthSample(player, base, 100)
+            for duplicate = 1 to 70
+                healthSample(player, base, 100 + duplicate / 100)
+            end for
+            healthSample(player, base + 120, 220)
+        else
+            healthProgress(player, base, 100, 118)
+            if mode = "pause" or mode = "buffer"
+                if mode = "pause" then video.state = "paused" else video.state = "buffering"
+                check(player.callFunc("fixtureRead").healthVideo = invalid, "non-playing observation clears health before watchdog restarts")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 122, 222)
+            else if mode = "backward"
+                video.position = 200
+                healthSample(player, base + 119, 219)
+                healthSample(player, base + 120, 220)
+            else if mode = "jump"
+                healthSample(player, base + 120, 1218)
+                healthSample(player, base + 122, 1220)
+            else if mode = "gap"
+                healthSample(player, base + 130, 230)
+                healthSample(player, base + 132, 232)
+            else if mode = "clock"
+                healthSample(player, base + 117, 219)
+                healthSample(player, base + 120, 222)
+            else if mode = "seek"
+                video.recentSeekTimestamp = base + 118
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 138, 238)
+                healthSample(player, base + 140, 240)
+            else if mode = "cooldown"
+                player.callFunc("fixtureCooldown", base + 118)
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 163, 263)
+                healthSample(player, base + 165, 265)
+            else if mode = "quality"
+                video.QualityChangeRequest = 1
+                video.QualityChangeRequestFlag = true
+                ready(session, player.callFunc("fixtureRead").sessionId)
+                replacement = player.callFunc("fixtureRead").video
+                check(not replacement.isSameNode(video) and replacement.selectedQuality = "720p60", "actual quality replacement starts a distinct current wrapper")
+                replacement.state = "playing"
+                healthSample(player, base + 120, 0)
+                healthSample(player, base + 122, 2)
+            else if mode = "retry"
+                video.errorCode = -1
+                video.errorStr = "fixture pending health retry"
+                video.state = "error"
+                check(player.callFunc("fixtureRead").retryTimer <> invalid, "health guard uses an actual pending automatic retry")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+            else if mode = "dialog"
+                session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "worker_finished" }
+                healthSample(player, base + 120, 220)
+            else if mode = "back" or mode = "disposed"
+                if mode = "back" then player.callFunc("fixtureBack") else player.callFunc("onDestroy")
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").healthVideo = invalid, "Back or disposal releases the borrowed health wrapper")
+            else if mode = "blocked"
+                session.cleanupBlocked = true
+                healthSample(player, base + 120, 220)
+            else if mode = "pending"
+                session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "source_transition" }
+                player.callFunc("fixtureReconnect")
+                task = player.callFunc("fixtureRead").reconnectTask
+                if task <> invalid then task.response = content("roku-demux")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").pendingContent <> invalid, "pending current descriptor cannot credit old ready health")
+            else if mode = "foreign"
+                player.callFunc("fixtureSessionIdentity", "foreign-health-owner")
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 122, 222)
+            else if mode = "inconsistent"
+                player.callFunc("fixtureRecovery", 0)
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").recovery = 0 and player.callFunc("fixtureRead").reconnect = 0, "inconsistent source accounting cannot underflow either counter")
+            end if
+        end if
+        state = player.callFunc("fixtureRead")
+        expectedCharges = 1
+        if mode = "pending" then expectedCharges = 2
+        check(state.transitionCharges = expectedCharges, mode + " interrupts health without forgiving transition debt")
+        closePlayer(player)
+    end for
+
+    player = healthPlayer()
+    for transition = 2 to 6
+        healthTransition(player)
+    end for
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 6 and state.reconnect = 6 and state.recovery = 6, "six rapid transitions retain the exact existing cap")
+    sessionOf(player).event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 6 and state.reconnect = 7 and state.recovery = 7 and state.errorDialog <> invalid and state.reconnectTimer = invalid, "seventh rapid transition schedules nothing and grants no refundable charge")
+    player.callFunc("fixtureRetry")
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 0, "actual explicit retry resets charge accounting with its existing budgets")
+    closePlayer(player)
+
+    player = healthPlayer()
+    player.contentRequested = request("LIVE")
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 0 and state.healthVideo = invalid, "actual new-content entry clears its previous health and accounting")
+    closePlayer(player)
 end sub
 
 sub testSourceTransitionRecovery()

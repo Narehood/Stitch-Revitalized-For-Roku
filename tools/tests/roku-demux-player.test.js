@@ -76,6 +76,17 @@ async function buildPackage(dir, marker, mode = 'normal') {
         await copyFile(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), `${file} must execute unchanged`);
     }
+    // Control only the watchdog's native wall-clock read; its health/stall
+    // handlers and all other production bodies remain byte-identical.
+    const playerPath = snapshotFiles[0];
+    const actualPlayer = await fs.readFile(path.join(dir, playerPath), 'utf8');
+    const watchdog = /sub onWatchdogFire\(\)[\s\S]*?end sub/;
+    const watchdogSource = actualPlayer.match(watchdog)?.[0];
+    const nativeClock = 'nowSec = CreateObject("roDateTime").AsSeconds()';
+    assert.equal(watchdogSource?.split(nativeClock).length, 2, 'one actual watchdog clock read required');
+    const controlledWatchdog = watchdogSource.replace(nativeClock, 'nowSec = fixtureWatchdogClock()');
+    assert.equal(controlledWatchdog.replace('nowSec = fixtureWatchdogClock()', nativeClock), watchdogSource);
+    await addFile(dir, playerPath, actualPlayer.replace(watchdog, controlledWatchdog));
     if (mode === 'old-buffer-downgrade' || mode === 'old-error-downgrade') {
         const buffer = mode === 'old-buffer-downgrade';
         const name = buffer ? 'findLowerQuality' : 'getNextLowerQuality';
@@ -113,7 +124,36 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.equal(script.split(guard).length, 2, 'one actual pending-retry transition guard required');
         await addFile(dir, file, script.replace(guard, '            if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return'));
     }
+    const healthMutations = {
+        'health-time': ['nowSec - m.liveRecoveryStartSec < 120', 'nowSec - m.liveRecoveryStartSec < 0'],
+        'health-media': [' or position - m.liveRecoveryStartPosition < 90', ''],
+        'health-blanket': ['    m.recoveryAttempts -= charges', '    m.recoveryAttempts = 0'],
+        'health-state': ['    if m.video.state <> "playing" then resetLiveRecoveryHealth()', ''],
+        'health-gap': ['elapsed < 0 or elapsed > 6 or progress <= 0', 'elapsed < 0 or progress <= 0']
+    };
+    if (healthMutations[mode]) {
+        const [before, after] = healthMutations[mode];
+        const script = await fs.readFile(path.join(dir, playerPath), 'utf8');
+        assert.equal(script.split(before).length, 2, `one current ${mode} health guard required`);
+        await addFile(dir, playerPath, script.replace(before, after));
+    }
     let main = await fixture('main.brs');
+    if (healthMutations[mode]) {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testLiveRecoveryHealth()'));
+        const healthOnly = start.split(/\r?\n/).filter(line => !/^    test/.test(line) || line === '    testLiveRecoveryHealth()').join('\n');
+        main = main.replace(start, healthOnly);
+        // Normal covers every interruption. Each mutation needs only its
+        // specific behavior plus the actual mixed-budget/cap paths.
+        const selectedCases = { 'health-time': [], 'health-media': ['noise'],
+            'health-blanket': [], 'health-state': ['pause'], 'health-gap': ['gap'] };
+        const cases = /    for each mode in \["stalled", "noise", "pause", "buffer"[^\r\n]+/;
+        assert.equal([...main.matchAll(new RegExp(cases.source, 'g'))].length, 1, 'one current health interruption matrix required');
+        main = main.replace(cases, `    for each mode in ${JSON.stringify(selectedCases[mode])}`);
+    } else if (mode !== 'normal') {
+        assert.equal(main.split('    testLiveRecoveryHealth()').length, 2);
+        main = main.replace('    testLiveRecoveryHealth()', '');
+    }
     if (mode === 'failed-assertion') {
         assert.ok(main.includes('check(true, "failure-control anchor")'));
         main = main.replace('check(true, "failure-control anchor")', 'check(false, "deliberate wrong assertion")');
@@ -249,6 +289,22 @@ test('removing the actual pending-retry guard rejects duplicate transition recov
     assert.match(result.output, /STITCH_UI_FAIL:source transition preserves one actual error retry without a second timer or budget charge/);
     assert.throws(() => acceptResult(result, marker));
     t.diagnostic('actual pending-retry guard removal creates duplicate timers and is rejected');
+});
+
+test('actual live health thresholds and interruption guards reject premature or blanket forgiveness', { timeout: 240000 }, async t => {
+    for (const [mode, failure] of [
+        ['health-time', '119 healthy seconds cannot forgive transition charges'],
+        ['health-media', 'noise interrupts health without forgiving transition debt'],
+        ['health-blanket', '120 healthy seconds refund only scheduled transitions and preserve actual error debt'],
+        ['health-state', 'non-playing observation clears health before watchdog restarts'],
+        ['health-gap', 'gap interrupts health without forgiving transition debt']
+    ]) {
+        const { result, marker } = await runFixture(mode);
+        assertNormalExit(result, mode);
+        assert.ok(result.output.includes(`STITCH_UI_FAIL:${failure}`), childDiagnostic(result, mode));
+        assert.throws(() => acceptResult(result, marker));
+        t.diagnostic(`${mode}: actual health behavior rejects the mutation despite normal engine exit`);
+    }
 });
 
 test('bounded child transport rejects failure output, timeout, overflow and nonzero exit', { timeout: 15000 }, async () => {
