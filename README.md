@@ -4,6 +4,8 @@ Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph.
 
 **[3.0.0 Alpha 1](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.0-alpha.1)** is the first preview of the modernization. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku. Alpha 1 is a prerelease: compatibility and longer playback sessions still need testing.
 
+**[Download the latest preview ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.0-alpha.1/Stitch-Revitalized-For-Roku.zip).** GitHub's “Latest” badge links to the last stable release; Alpha 1 is listed as a prerelease on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
 ## What's new in 3.0.0 Alpha 1
