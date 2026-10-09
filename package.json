@@ -13,7 +13,7 @@
     "lint:fix": "bslint --fix",
     "fmt": "brighterscript-formatter --write \"source/**/*.{brs,bs}\" \"components/**/*.{brs,bs}\"",
     "fmt:check": "brighterscript-formatter --check \"source/**/*.{brs,bs}\" \"components/**/*.{brs,bs}\"",
-    "test": "node tools/run-offline-tests.js && node --test tools/tests/*.test.js",
+    "test": "node tools/run-offline-tests.js && node tools/run-node-tests.js",
     "test:compile": "node tools/prepare-device-tests.js && bsc --project bsconfig.test.json --create-package",
     "test:device": "npm run test:compile && node tools/deploy-test.js",
     "postinstall": "node tools/prepare-source-map-decoder.js",
