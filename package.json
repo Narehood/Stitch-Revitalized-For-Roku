@@ -16,6 +16,7 @@
     "test": "node tools/run-offline-tests.js && node --test tools/tests/*.test.js",
     "test:compile": "node tools/prepare-device-tests.js && bsc --project bsconfig.test.json --create-package",
     "test:device": "npm run test:compile && node tools/deploy-test.js",
+    "postinstall": "node tools/prepare-source-map-decoder.js",
     "prepare": "husky",
     "sign": "node scripts/sign-package.js"
   },
@@ -31,6 +32,9 @@
     "roku-deploy": "^3.18.4"
   },
   "overrides": {
+    "source-map-resolve": {
+      "decode-uri-component": "0.5.0"
+    },
     "form-data": "^4.0.6",
     "qs": "^6.16.0",
     "tough-cookie": "^4.1.3",
