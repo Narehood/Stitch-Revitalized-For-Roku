@@ -156,6 +156,16 @@ async function buildPackage(dir, marker, mode = 'normal') {
             assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded dialog dispatch wait required');
             main = main.replace(wait, '    settle(160)');
         }
+    } else if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testFailedRetryAndRecovery()'));
+        const retryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testFailedRetryAndRecovery()').join('\n');
+        main = main.replace(start, retryOnly);
+        if (mode === 'fixed-retry-wait') {
+            const wait = /    dispatch = createObject\("roTimespan"\)\r?\n    while player\.callFunc\("fixtureRead"\)\.task = invalid and dispatch\.totalMilliseconds\(\) < 2000\r?\n        pump\(20\)\r?\n    end while/;
+            assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded manual retry wait required');
+            main = main.replace(wait, '    settle(160)');
+        }
     } else if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveManualQualityIntent()'));
@@ -252,7 +262,7 @@ async function runFixture(mode = 'normal') {
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
         let driver = keyDriver;
-        if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog'].includes(mode)) {
+        if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog', 'repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
             let script = await fs.readFile(keyDriver, 'utf8');
             const gap = 'const repeatGapMs = 250;';
             assert.equal(script.split(gap).length, 2);
@@ -260,7 +270,7 @@ async function runFixture(mode = 'normal') {
             const schedule = 'nextFree = start + hold;';
             assert.equal(script.split(schedule).length, 2);
             script = script.replace(schedule, 'if (key === lastKey && start === nextFree + repeatGapMs) process.stderr.write("FIXTURE_REPEAT_QUEUED\\n");\n    ' + schedule);
-            if (mode === 'dropped-dialog') {
+            if (mode === 'dropped-dialog' || mode === 'dropped-retry') {
                 const emit = "process.stdin.emit('keypress', '', { name, ctrl: false, meta: false, shift: false, sequence: '' });";
                 assert.equal(script.split(emit).length, 2);
                 script = script.replace('function emit(name) {', 'let emittedKeys = 0;\nfunction emit(name) {')
@@ -320,6 +330,21 @@ test('a genuine failed BrightScript assertion and a stale success marker are rej
     assertNormalExit(stale.result, 'stale-marker');
     assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/);
     assert.throws(() => acceptResult(stale.result, stale.marker), /fresh success marker missing/);
+});
+
+test('actual repeated Try again waits for its request and a missing retry key fails safely', { timeout: 180000 }, async t => {
+    const actual = await runFixture('repeated-retry');
+    assert.match(actual.result.output, /FIXTURE_REPEAT_QUEUED/);
+    t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual retry/session assertions after queued repeated OK`);
+    for (const mode of ['fixed-retry-wait', 'dropped-retry']) {
+        const failed = await runFixture(mode);
+        assertNormalExit(failed.result, mode);
+        assert.match(failed.result.output, /FIXTURE_REPEAT_QUEUED/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:manual retry requests one fresh LIVE descriptor/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:\s*1 failures;\s*[1-9]\d* assertions/);
+        assert.throws(() => acceptResult(failed.result, failed.marker));
+        t.diagnostic(`${mode}: exactly one actual retry failure closes normally without forcing the callback`);
+    }
 });
 
 test('actual recovery and retained-wrapper selections reject historical quality defects and a missing consumption reset', { timeout: 270000 }, async t => {
