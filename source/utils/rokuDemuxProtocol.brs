@@ -54,8 +54,9 @@ function loopbackPublicationValid(pub as dynamic) as boolean
         if not loopbackKeys(segment, ["sequence", "duration", "durationUs", "videoId", "audioId"]) then return false
         if not loopbackInteger(segment.sequence) or segment.sequence <> nextSequence then return false
         if not loopbackInteger(segment.durationUs) or loopbackDurationUs(segment.duration) <> segment.durationUs then return false
-        if segment.durationUs > pub.targetDuration * 1000000 then return false
-        if segment.durationUs > 2000000 then return false
+        ' EXTINF rounds to the nearest integer; local TARGETDURATION stays 2.
+        if segment.durationUs > pub.targetDuration * 1000000 + 499999 then return false
+        if segment.durationUs >= 2500000 then return false
         if not loopbackAssetId(segment.videoId) or not loopbackAssetId(segment.audioId) then return false
         if loopbackAssetSession(segment.videoId) <> sessionId or loopbackAssetSession(segment.audioId) <> sessionId then return false
         if seen.DoesExist(segment.videoId) or seen.DoesExist(segment.audioId) or segment.videoId = segment.audioId then return false

@@ -15,6 +15,7 @@ const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const sourceNames = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch',
     'rokuDemuxCommon', 'rokuDemuxProtocol'];
 const caseNames = ['binary-goldens-and-strict-malformed',
+    'rounded-publication-duration-and-stable-manifests',
     'rolling-past-finite-limits-with-held-lease', 'poll-gaps-contiguous-and-fail-closed',
     'actual-cache-leases-and-atomic-admission', 'active-publication-generation-cap',
     'monotonic-long-clock-quotas-and-exhaustion',
@@ -141,7 +142,7 @@ async function withFixture(run) {
         await fs.writeFile(path.join(dir, 'manifest'), 'title=Actual Core Binary Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         const execute = () => runChild([cli, '--no-sg', '--root', dir,
             ...sourceNames.map(name => `${name}.brs`), 'main.brs'], dir);
-        await run({ dir, corpus, sources, marker, execute });
+        await run({ dir, corpus, sources, marker, harness, execute });
         for (const [file, bytes] of sources) {
             assert.deepEqual(await fs.readFile(path.join(root, file)), bytes, `frozen actual ${file} changed during run`);
         }
@@ -162,8 +163,32 @@ test('actual Bulk/Core bytes, rolling generations, cache leases, continuity and 
     });
 });
 
-test('actual permissive-duration mutation and a corrupt full-byte golden cannot pass', { timeout: 90000 }, async () => {
-    await withFixture(async ({ dir, sources, marker, execute, corpus }) => {
+test('actual duration guard mutations and a corrupt full-byte golden cannot pass', { timeout: 90000 }, async () => {
+    await withFixture(async ({ dir, sources, marker, harness, execute, corpus }) => {
+        const protocolPath = path.join(dir, 'rokuDemuxProtocol.brs');
+        const protocol = sources.get('source/utils/rokuDemuxProtocol.brs').toString();
+        const localGuard = 'if segment.durationUs >= 2500000 then return false';
+        const sourceGuard = 'if segment.durationUs > pub.targetDuration * 1000000 + 499999 then return false';
+        assert.equal(protocol.split(localGuard).length, 2, 'one actual local rounded duration guard');
+        assert.equal(protocol.split(sourceGuard).length, 2, 'one actual source rounded duration guard');
+        // Reuse the actual Core/publication/manifest case without repeatedly
+        // running its unrelated historical 260-pair rolling matrix.
+        const durationHarness = harness.replace(/^        (?:bulkCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
+        await fs.writeFile(path.join(dir, 'main.brs'), durationHarness);
+        for (const control of [
+            { before: localGuard, after: 'if segment.durationUs > 2000000 then return false', expected: 'actual fractional Core publication accepted 2.002' },
+            { before: localGuard, after: 'if segment.durationUs > 2500000 then return false', expected: 'publication rejects local half-second boundary' },
+            { before: sourceGuard, after: 'if segment.durationUs > pub.targetDuration * 1000000 then return false', expected: 'actual fractional Core publication accepted 2.499999' },
+            { before: sourceGuard, after: "' Deliberately removed source-target boundary", expected: 'publication rejects source half-second boundary' }
+        ]) {
+            await fs.writeFile(protocolPath, protocol.replace(control.before, control.after));
+            const result = await execute();
+            requireExecution(result);
+            assert.ok(result.output.includes(`STITCH_ROKU_CORE_FAIL: core-fixture: ${control.expected}`), result.output.slice(-14000));
+            assert.throws(() => requirePositive(result, marker));
+        }
+        await fs.writeFile(protocolPath, protocol);
+        await fs.writeFile(path.join(dir, 'main.brs'), harness);
         const bulkPath = path.join(dir, 'rokuDemuxBulk.brs');
         const bulk = sources.get('source/utils/rokuDemuxBulk.brs').toString();
         assert.equal(bulk.split('&hfdffc4').length, 2, 'one actual duration-is-empty mask');

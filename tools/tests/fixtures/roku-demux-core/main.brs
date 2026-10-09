@@ -26,15 +26,15 @@ function newCore(steady = true as boolean, nowMs = 0& as dynamic) as object
     return nativeLiveCreate("https://cdn.example.invalid/live.m3u8", nowMs, 0, invalid, steady, 16777216&, options)
 end function
 
-function playlistCore(first as longinteger, count = 3 as integer, special = "" as string) as string
-    text = "#EXTM3U" + Chr(10) + "#EXT-X-TARGETDURATION:2" + Chr(10) + "#EXT-X-MEDIA-SEQUENCE:" + first.ToStr() + Chr(10) + "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
+function playlistCore(first as longinteger, count = 3 as integer, special = "" as string, duration = "2.000000" as string, target = 2 as integer) as string
+    text = "#EXTM3U" + Chr(10) + "#EXT-X-TARGETDURATION:" + target.ToStr() + Chr(10) + "#EXT-X-MEDIA-SEQUENCE:" + first.ToStr() + Chr(10) + "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
     ' An Integer index avoids brs-node's unrelated LongInteger for-loop gap.
     for offset = 0 to count - 1
         sequence = first + offset
         if special = "map" and sequence = 13 then text += "#EXT-X-MAP:URI=" + Chr(34) + "other.mp4" + Chr(34) + Chr(10)
         if special = "map" and sequence = 15 then text += "#EXT-X-MAP:URI=" + Chr(34) + "init.mp4" + Chr(34) + Chr(10)
         if special = "epoch" and (sequence = 13 or sequence = 15) then text += "#EXT-X-DISCONTINUITY" + Chr(10)
-        text += "#EXTINF:2.000000," + Chr(10) + "segment-" + sequence.ToStr() + ".m4s" + Chr(10)
+        text += "#EXTINF:" + duration + "," + Chr(10) + "segment-" + sequence.ToStr() + ".m4s" + Chr(10)
     end for
     return text
 end function
@@ -56,9 +56,9 @@ sub pairCore(state as object, sequence as integer, nowMs as dynamic)
     m.pairs += 1
 end sub
 
-function preparedCore(steady = true as boolean) as object
+function preparedCore(steady = true as boolean, duration = "2.000000" as string, target = 2 as integer, count = 3 as integer) as object
     state = newCore(steady)
-    nativeLiveFeed(state, "playlist", playlistCore(10&), 0&)
+    nativeLiveFeed(state, "playlist", playlistCore(10&, count, "", duration, target), 0&)
     input = bytesCore(m.corpus.init.input.hex)
     nativeLiveFeed(state, "init", input, 0&)
     nativeLiveAdvance(state, 0&)
@@ -69,7 +69,7 @@ function preparedCore(steady = true as boolean) as object
         nativeLiveRelease(state, pair[0])
     end for
     checkCore(nlBodyDigest(input) = m.corpus.init.input.sha256, "init input immutable")
-    for sequence = 10 to 12
+    for sequence = 10 to 9 + count
         pairCore(state, sequence, 0&)
     end for
     return state
@@ -89,6 +89,107 @@ sub closeCore(state as object)
     retireCore(state)
     checkCore(nativeLiveClose(state), "actual helper accepts retired/unleased close")
     checkCore(state.closed and state.assets.Count() = 0 and state.cacheBytes = 0 and state.input = invalid and state.sourceUrl = "", "actual close clears cache/source/scratch")
+end sub
+
+sub manifestDurationCore(pub as object, duration as string)
+    for each track in ["video", "audio"]
+        body = loopbackManifest(track, pub)
+        checkCore(body <> invalid, "accepted fractional publication renders " + track + " manifest")
+        text = body.ToAsciiString()
+        lines = text.Split(Chr(10))
+        targets = 0
+        durations = 0
+        for each line in lines
+            if line.Left(22) = "#EXT-X-TARGETDURATION:"
+                checkCore(line = "#EXT-X-TARGETDURATION:2", "local target2 remains constant across tracks and generations")
+                targets += 1
+            end if
+            if line.Left(8) = "#EXTINF:"
+                checkCore(line = "#EXTINF:" + duration + ",", "exact fractional EXTINF is preserved")
+                durations += 1
+            end if
+        end for
+        checkCore(targets = 1 and durations = pub.segments.Count(), "one local target and every exact duration advertised")
+        checkCore(text.InStr("#EXT-X-MEDIA-SEQUENCE:" + pub.mediaSequence.ToStr() + Chr(10)) >= 0, "actual generation sequence rendered")
+    end for
+end sub
+
+sub publicationDurationCore()
+    for each item in [{ duration: "2.002", micros: 2002000, target: 6, count: 3 }, { duration: "2.499999", micros: 2499999, target: 2, count: 3 }, { duration: "1.499999", micros: 1499999, target: 1, count: 5 }]
+        state = preparedCore(true, item.duration, item.target, item.count)
+        first = nativeLivePublication(state)
+        checkCore(loopbackDurationUs(item.duration) = item.micros and loopbackPublicationValid(first), "actual fractional Core publication accepted " + item.duration)
+        checkCore(first.targetDuration = item.target and first.durationUs = item.micros * item.count and first.segments.Count() = item.count and not first.ended, "actual fractional aggregate retains live readiness floor")
+        for each segment in first.segments
+            checkCore(segment.duration = item.duration and segment.durationUs = item.micros, "producer exact decimal and microseconds agree")
+        end for
+        manifestDurationCore(first, item.duration)
+        nowMs = item.target * 1000&
+        nativeLiveFeed(state, "playlist", playlistCore(11&, item.count, "", item.duration, item.target), nowMs)
+        pairCore(state, 10 + item.count, nowMs)
+        nextPub = nativeLivePublication(state)
+        checkCore(loopbackPublicationValid(nextPub) and nextPub.generation = first.generation + 1& and nextPub.mediaSequence = first.mediaSequence + 1&, "actual fractional next generation remains contiguous")
+        manifestDurationCore(nextPub, item.duration)
+        closeCore(state)
+    end for
+    for each item in [{ duration: "2.500000", target: 6, count: 3, label: "local half-second boundary" }, { duration: "2.500001", target: 6, count: 3, label: "local above-half boundary" }, { duration: "3.000000", target: 6, count: 3, label: "local longer segment" }, { duration: "1.500000", target: 1, count: 4, label: "source half-second boundary" }, { duration: "1.500001", target: 1, count: 4, label: "source above-half boundary" }]
+        state = preparedCore(true, item.duration, item.target, item.count)
+        pub = nativeLivePublication(state)
+        checkCore(pub.durationUs >= 6000000 and loopbackDurationUs(item.duration) > 0, "rejected duration has valid live window and decimal")
+        checkCore(not loopbackPublicationValid(pub), "publication rejects " + item.label)
+        checkCore(loopbackManifest("video", pub) = invalid and loopbackManifest("audio", pub) = invalid, "rejected duration never reaches either manifest")
+        closeCore(state)
+    end for
+    state = preparedCore(true, "2.002", 6)
+    pub = nativeLivePublication(state)
+    for each label in ["malformed", "precision", "mismatched micros", "sum", "sequence", "live floor", "source target cap"]
+        bad = nativeLivePublication(state)
+        checkCore(loopbackPublicationValid(bad), "actual negative-control baseline is valid " + label)
+        segments = bad.segments
+        segment = segments[0]
+        if label = "malformed"
+            segment.duration = "2.002x"
+        else if label = "precision"
+            segment.duration = "2.0020000"
+        else if label = "mismatched micros"
+            segment.durationUs += 1
+            bad.durationUs += 1
+        else if label = "sum"
+            bad.durationUs += 1
+        else if label = "sequence"
+            segment.sequence += 1
+        else if label = "live floor"
+            for index = 0 to segments.Count() - 1
+                shorter = segments[index]
+                shorter.duration = "1.999999"
+                shorter.durationUs = 1999999
+                segments[index] = shorter
+            end for
+            segment = segments[0]
+            bad.durationUs = 5999997
+        else if label = "source target cap"
+            bad.targetDuration = 11
+        end if
+        segments[0] = segment
+        bad.segments = segments
+        checkCore(not loopbackPublicationValid(bad), "fractional publication retains " + label + " rejection")
+        checkCore(loopbackManifest("video", bad) = invalid and loopbackManifest("audio", bad) = invalid, "invalid fractional publication emits no manifests " + label)
+    end for
+    shortPub = nativeLivePublication(state)
+    segments = shortPub.segments
+    shortPub.segments = [segments[0]]
+    shortPub.durationUs = segments[0].durationUs
+    checkCore(not loopbackPublicationValid(shortPub), "short fractional live publication remains rejected")
+    shortPub.ended = true
+    checkCore(loopbackPublicationValid(shortPub), "short ended fractional publication remains accepted")
+    for each track in ["video", "audio"]
+        body = loopbackManifest(track, shortPub)
+        checkCore(body <> invalid, "short ended fractional manifest is produced")
+        text = body.ToAsciiString()
+        checkCore(text.InStr("#EXTINF:2.002," + Chr(10)) >= 0 and text.Right(15) = "#EXT-X-ENDLIST" + Chr(10), "short ended manifest retains exact duration and ENDLIST")
+    end for
+    closeCore(state)
+    caseCore("rounded-publication-duration-and-stable-manifests")
 end sub
 
 sub bulkCore()
@@ -410,6 +511,7 @@ sub main()
     try
         m.corpus = ParseJSON(ReadAsciiFile("pkg:/corpus.json"))
         bulkCore()
+        publicationDurationCore()
         rollingCore()
         continuityCore()
         admissionCore()
