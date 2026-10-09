@@ -111,6 +111,7 @@ async function buildPackage(dir, marker, mode = 'normal') {
 
 function runChild(command, args, cwd, timeoutMs = 60000, outputLimit = 1024 * 1024) {
     return new Promise((resolve, reject) => {
+        const started = Date.now();
         const child = spawn(command, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
         let output = '';
         let bytes = 0;
@@ -128,13 +129,17 @@ function runChild(command, args, cwd, timeoutMs = 60000, outputLimit = 1024 * 10
         child.on('error', error => { clearTimeout(timer); reject(error); });
         child.on('close', (code, signal) => {
             clearTimeout(timer);
-            resolve({ code, signal, output, timedOut, exceeded });
+            resolve({ code, signal, output, timedOut, exceeded, elapsedMs: Date.now() - started });
         });
     });
 }
 
-function acceptResult(result, marker) {
-    const failure = result.output.slice(-16000);
+function childDiagnostic(result, context = 'fixture') {
+    return `${context}: code=${result.code} signal=${result.signal} timedOut=${result.timedOut} exceeded=${result.exceeded} elapsedMs=${result.elapsedMs}\n${result.output.slice(-16000)}`;
+}
+
+function assertNormalExit(result, context = 'fixture') {
+    const failure = childDiagnostic(result, context);
     assert.equal(result.timedOut, false, `fixture timed out\n${failure}`);
     assert.equal(result.exceeded, false, `fixture exceeded output limit\n${failure}`);
     assert.equal(result.code, 0, `fixture exited ${result.code} (${result.signal})\n${failure}`);
@@ -143,8 +148,14 @@ function acceptResult(result, marker) {
     // hardware behavior. Every other engine error remains a failure.
     const supportedOutput = result.output.replace(/^BRIGHTSCRIPT: ERROR: roSGNode\.AddReplace: "TwitchContentNode\.(?:streams|streamqualities)": Type mismatch! pkg:.*TwitchContentNode\.brs\(\d+\)\r?\n/gm, '');
     assert.doesNotMatch(supportedOutput, /BRIGHTSCRIPT: ERROR:/, failure);
-    assert.doesNotMatch(result.output, /STITCH_UI_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
+    assert.doesNotMatch(result.output, /FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
     assert.match(result.output, /EXIT_USER_NAV/, `fixture did not close normally\n${failure}`);
+}
+
+function acceptResult(result, marker) {
+    assertNormalExit(result);
+    const failure = childDiagnostic(result);
+    assert.doesNotMatch(result.output, /STITCH_UI_FAIL:/, failure);
     const summaries = [...result.output.matchAll(/STITCH_UI_PASS:[0-9a-f-]+:\s*(\d+) assertions/g)];
     assert.equal(summaries.length, 1, `expected exactly one summary\n${failure}`);
     const summary = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
@@ -182,11 +193,11 @@ test('actual player callbacks gate Roku opt-in, session ready, retry, quality sw
 
 test('a genuine failed BrightScript assertion and a stale success marker are rejected', { timeout: 180000 }, async () => {
     const failed = await runFixture('failed-assertion');
-    assert.equal(failed.result.code, 0, 'engine may exit normally despite a test assertion failure');
+    assertNormalExit(failed.result, 'failed-assertion');
     assert.match(failed.result.output, /STITCH_UI_FAIL:deliberate wrong assertion/);
     assert.throws(() => acceptResult(failed.result, failed.marker));
     const stale = await runFixture('stale-marker');
-    assert.equal(stale.result.code, 0);
+    assertNormalExit(stale.result, 'stale-marker');
     assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/);
     assert.throws(() => acceptResult(stale.result, stale.marker), /fresh success marker missing/);
 });
@@ -200,10 +211,11 @@ test('actual recovery and retained-wrapper selections reject historical quality 
     ];
     for (const [mode, expectedFailure] of cases) {
         const { result, marker } = await runFixture(mode);
-        assert.equal(result.code, 0, `${mode} should reach a normal engine exit`);
-        assert.ok(result.output.includes(`STITCH_UI_FAIL:${expectedFailure}`), `${mode} must fail its actual behavior assertion`);
+        const failure = childDiagnostic(result, mode);
+        assertNormalExit(result, mode);
+        assert.ok(result.output.includes(`STITCH_UI_FAIL:${expectedFailure}`), `${mode} must fail its actual behavior assertion\n${failure}`);
         const summary = result.output.match(/STITCH_UI_FAIL:\s*(\d+) failures;\s*(\d+) assertions/);
-        assert.ok(summary && Number(summary[1]) > 0 && Number(summary[2]) > 0, `${mode} must complete actual failing assertions`);
+        assert.ok(summary && Number(summary[1]) > 0 && Number(summary[2]) > 0, `${mode} must complete actual failing assertions\n${failure}`);
         assert.throws(() => acceptResult(result, marker));
         t.diagnostic(`${mode}: ${summary[1]} failed of ${summary[2]} actual assertions; rejected despite normal engine exit`);
     }

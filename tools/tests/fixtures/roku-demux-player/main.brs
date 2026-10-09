@@ -194,7 +194,14 @@ sub testRepeatedRetainedQualityChoices()
     secondDelivered = false
     if type(secondEvent) = "roSGNodeEvent" then secondDelivered = secondEvent.getData() = 2 and secondEvent.getRoSGNode().isSameNode(video)
     check(secondDelivered, "a second distinct pick on the retained wrapper delivers another actual event")
-    check(player.callFunc("fixtureRead").video.isSameNode(video) and secondId <> firstId and started.count() = 3 and started[2].descriptor.qualityId = "480p30", "same retained wrapper starts the second exact 480 descriptor")
+    secondApplied = player.callFunc("fixtureRead").video.isSameNode(video) and secondId <> firstId and started.count() = 3 and started[2].descriptor.qualityId = "480p30"
+    check(secondApplied, "same retained wrapper starts the second exact 480 descriptor")
+    if not secondApplied
+        ' Latest-ready and stale-source checks require this replacement.
+        ' Historical mutants must report the failed precondition and clean up.
+        closePlayer(player)
+        return
+    end if
     check(not video.QualityChangeRequestFlag, "consuming the second choice also clears its retained-wrapper flag")
     check(player.content.QualityID = "480p30" and video.selectedQuality = "480p30", "second selection preserves its metadata index and selected label")
 
