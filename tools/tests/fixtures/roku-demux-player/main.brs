@@ -1037,9 +1037,15 @@ sub testFailedRetryAndRecovery()
     check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try again", "matching session failure opens an actionable retry dialog")
     before = m.global.fixtureContentTasks
     press("ok")
-    settle(160)
+    dispatch = createObject("roTimespan")
+    while player.callFunc("fixtureRead").task = invalid and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
     task = player.callFunc("fixtureRead").task
-    check(task <> invalid and task.enableRokuDemux and player.callFunc("fixtureRead").pending, "manual retry requests one fresh LIVE descriptor")
+    requested = false
+    if task <> invalid then requested = task.enableRokuDemux and player.callFunc("fixtureRead").pending
+    if not requested then throw "manual retry requests one fresh LIVE descriptor"
+    check(requested, "manual retry requests one fresh LIVE descriptor")
     player.callFunc("fixtureRetry")
     check(m.global.fixtureContentTasks = before + 1, "duplicate manual retry while pending starts no second fetch")
     deliver(player, content("roku-demux"))
@@ -1080,4 +1086,3 @@ sub testRefusalAndBlockedOwner()
     check(m.scene.dialog.buttons.count() = 1 and m.scene.dialog.buttons[0] = "Back" and calls(session, "start").count() = 0, "blocked owner offers Back-only fallback without start")
     closePlayer(player)
 end sub
-
