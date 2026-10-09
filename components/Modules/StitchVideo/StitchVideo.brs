@@ -504,6 +504,7 @@ sub setupQualityDialog()
 end sub
 
 sub onQualityButtonSelect()
+    if m.disposed then return
     ' ? "[StitchVideo] Quality dialog button selected: "; m.qualityDialog.buttonSelected
 
     selectedIndex = m.qualityDialog.buttonSelected

@@ -15,7 +15,9 @@ const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const keyDriver = path.join(fixtures, 'key-driver.js');
 const snapshotFiles = ['components/Scenes/VideoPlayer/VideoPlayer.brs',
     'components/Scenes/VideoPlayer/VideoPlayer.xml', 'components/Scenes/VideoPlayer/RokuPlayback.brs',
-    'components/heroScene.brs', 'components/heroScene.xml'];
+    'components/heroScene.brs', 'components/heroScene.xml',
+    'components/Modules/StitchVideo/StitchVideo.brs', 'components/Modules/StitchVideo/StitchVideo.xml',
+    'components/Modules/VideoErrorHandler/VideoErrorHandler.brs'];
 
 async function snapshot() {
     return Promise.all(snapshotFiles.map(async file => [file,
@@ -73,6 +75,29 @@ async function buildPackage(dir, marker, mode = 'normal') {
     for (const file of [snapshotFiles[0], snapshotFiles[2]]) {
         await copyFile(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), `${file} must execute unchanged`);
+    }
+    if (mode === 'old-buffer-downgrade' || mode === 'old-error-downgrade') {
+        const buffer = mode === 'old-buffer-downgrade';
+        const name = buffer ? 'findLowerQuality' : 'getNextLowerQuality';
+        const file = buffer ? snapshotFiles[0] : 'components/Modules/VideoErrorHandler/VideoErrorHandler.brs';
+        const script = await fs.readFile(path.join(dir, file), 'utf8');
+        const pattern = new RegExp(`^function ${name}\\([^]*?^end function`, 'gm');
+        assert.equal([...script.matchAll(pattern)].length, 1, `one actual ${name} helper required`);
+        await addFile(dir, file, script.replace(pattern, (await fixture(`${name}.before.brs`)).trimEnd()));
+    }
+    if (mode === 'old-quality-flag') {
+        const file = 'components/Modules/StitchVideo/StitchVideo.xml';
+        const xml = await fs.readFile(path.join(dir, file), 'utf8');
+        const field = '<field id="QualityChangeRequestFlag" type="bool" value="false" alwaysNotify="true" />';
+        assert.equal(xml.split(field).length, 2, 'one current quality flag required');
+        await addFile(dir, file, xml.replace(field, '<field id="QualityChangeRequestFlag" type="bool" value="false" />'));
+    }
+    if (mode === 'old-quality-flag' || mode === 'no-quality-flag-reset') {
+        const file = snapshotFiles[0];
+        const script = await fs.readFile(path.join(dir, file), 'utf8');
+        const reset = '    if m.video.isSubtype("StitchVideo") then m.video.QualityChangeRequestFlag = false';
+        assert.equal(script.split(reset).length, 2, 'one current quality consumption reset required');
+        await addFile(dir, file, script.replace(reset, ''));
     }
     let main = await fixture('main.brs');
     if (mode === 'failed-assertion') {
@@ -164,6 +189,24 @@ test('a genuine failed BrightScript assertion and a stale success marker are rej
     assert.equal(stale.result.code, 0);
     assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/);
     assert.throws(() => acceptResult(stale.result, stale.marker), /fresh success marker missing/);
+});
+
+test('actual recovery and retained-wrapper selections reject historical quality defects and a missing consumption reset', { timeout: 270000 }, async t => {
+    const cases = [
+        ['old-buffer-downgrade', 'buffer recovery never promotes Automatic to the highest rung'],
+        ['old-error-downgrade', 'decode recovery never promotes Automatic to the highest rung'],
+        ['old-quality-flag', 'same retained wrapper starts the second exact 480 descriptor'],
+        ['no-quality-flag-reset', 'consuming the first choice clears the flag on the same retained wrapper']
+    ];
+    for (const [mode, expectedFailure] of cases) {
+        const { result, marker } = await runFixture(mode);
+        assert.equal(result.code, 0, `${mode} should reach a normal engine exit`);
+        assert.ok(result.output.includes(`STITCH_UI_FAIL:${expectedFailure}`), `${mode} must fail its actual behavior assertion`);
+        const summary = result.output.match(/STITCH_UI_FAIL:\s*(\d+) failures;\s*(\d+) assertions/);
+        assert.ok(summary && Number(summary[1]) > 0 && Number(summary[2]) > 0, `${mode} must complete actual failing assertions`);
+        assert.throws(() => acceptResult(result, marker));
+        t.diagnostic(`${mode}: ${summary[1]} failed of ${summary[2]} actual assertions; rejected despite normal engine exit`);
+    }
 });
 
 test('bounded child transport rejects failure output, timeout, overflow and nonzero exit', { timeout: 15000 }, async () => {

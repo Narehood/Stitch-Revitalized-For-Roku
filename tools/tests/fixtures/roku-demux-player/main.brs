@@ -7,6 +7,9 @@
     testChoiceReadyAndBack()
     testCancelledStartAndDisposal()
     testDirectSwitch()
+    testRepeatedRetainedQualityChoices()
+    testQualityRecoveryLadder()
+    testMixedAutomaticRecoveryChoice()
     testFailedRetryAndRecovery()
     testRefusalAndBlockedOwner()
     testDialogBackAndAttachRefusal()
@@ -14,6 +17,216 @@
     testBlockedCancelledReplacement()
     check(true, "failure-control anchor")
     fixtureEnd()
+end sub
+
+sub testMixedAutomaticRecoveryChoice()
+    for each mode in ["buffer", "decode"]
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        metadata = [
+            content("direct", "Automatic").getFields()
+            content("roku-demux", "1080p60").getFields()
+            content("direct", "720p60").getFields()
+            content("roku-demux", "480p30").getFields()
+        ]
+        deliver(player, content("direct", "Automatic"), metadata)
+        original = player.callFunc("fixtureRead").video
+        if mode = "buffer"
+            for checkNumber = 1 to 6
+                player.callFunc("fixtureProlongedBufferCheck")
+            end for
+        else
+            original.errorCode = 9
+            original.errorStr = "fixture media decode error"
+            original.state = "error"
+        end if
+        settle(40)
+        check(player.content.QualityID = "480p30" and player.content.localPlaybackDescriptor.qualityId = "480p30", mode + " mixed-Automatic recovery retains the exact lower local descriptor")
+        check(not player.callFunc("fixtureRead").chosen and calls(session, "start").count() = 0 and original.control = "stop", mode + " recovery waits for explicit Roku opt-in before starting local playback")
+        chooseRoku(player)
+        started = calls(session, "start")
+        check(started.count() = 1 and started[0].descriptor.qualityId = "480p30", mode + " actual Try on Roku choice starts only the selected lower descriptor")
+        ready(session, player.callFunc("fixtureRead").sessionId)
+        video = player.callFunc("fixtureRead").video
+        check(video.control = "play" and video.selectedQuality = "480p30" and video.content.localPlaybackDescriptor.qualityId = "480p30", mode + " opted-in mixed recovery plays the preserved lower selection")
+        closePlayer(player)
+    end for
+end sub
+
+function recoveryMetadata() as object
+    return [
+        { QualityID: "Automatic", url: "http://fixture.invalid/master", playbackTransport: "direct" }
+        { QualityID: "1080p60", url: "http://fixture.invalid/1080p60", playbackTransport: "direct" }
+        { QualityID: "720p60", url: "http://fixture.invalid/720p60", playbackTransport: "direct" }
+        { QualityID: "480p30", url: "http://fixture.invalid/480p30", playbackTransport: "direct" }
+    ]
+end function
+
+sub testQualityRecoveryLadder()
+    for each mode in ["buffer", "decode"]
+        for each quality in ["Automatic", "720p60", "480p30"]
+            player = openPlayer("LIVE")
+            metadata = recoveryMetadata()
+            selected = content("direct", quality)
+            deliver(player, selected, metadata)
+            original = player.callFunc("fixtureRead").video
+            expected = 3
+            if quality = "480p30" then expected = invalid
+            check(sameValue(player.callFunc("fixtureLowerQuality"), expected), mode + " actual lower-quality helper respects " + quality)
+
+            if mode = "buffer"
+                for checkNumber = 1 to 5
+                    player.callFunc("fixtureProlongedBufferCheck")
+                end for
+                check(player.callFunc("fixtureRead").video.isSameNode(original) and player.callFunc("fixtureRead").recovery = 0, "five prolonged checks preserve " + quality + " playback before recovery")
+                player.callFunc("fixtureProlongedBufferCheck")
+                settle(40)
+            else
+                original.errorCode = 9
+                original.errorStr = "fixture media decode error"
+                original.state = "error"
+                settle(40)
+            end if
+
+            video = player.callFunc("fixtureRead").video
+            check(player.content.QualityID = "480p30" and video.selectedQuality = "480p30", mode + " recovery never promotes " + quality + " to the highest rung")
+            if expected <> invalid
+                check(not video.isSameNode(original) and player.content.url = metadata[3].url and player.callFunc("fixtureRead").recovery = 1, mode + " recovery plays the exact lowest metadata URL using one bounded attempt")
+            else
+                check(video.isSameNode(original) and player.content.url = selected.url, mode + " lowest rung has no lower quality replacement")
+                if mode = "decode" then check(player.callFunc("fixtureRead").retryTimer <> invalid, "lowest decode failure keeps the existing bounded retry path")
+                if mode = "buffer" then check(player.callFunc("fixtureRead").recovery = 0, "lowest buffering consumes no quality recovery attempt")
+            end if
+            closePlayer(player)
+        end for
+    end for
+
+    ' Roku Automatic retains the exact fixed rendition in its descriptor.
+    ' Use that rung as the baseline instead of the Automatic option index.
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    metadata = []
+    for each quality in ["1080p60", "720p60", "480p30"]
+        metadata.push(content("roku-demux", quality).getFields())
+    end for
+    fixed = content("roku-demux", "720p60")
+    fixed.QualityID = "Automatic"
+    metadata.unshift(fixed.getFields())
+    deliver(player, fixed, metadata)
+    chooseRoku(player)
+    ready(session, player.callFunc("fixtureRead").sessionId)
+    check(player.callFunc("fixtureLowerQuality") = 3, "fixed Automatic lowers below its actual 720 descriptor")
+    recovery = player.callFunc("fixtureDecodeRecovery")
+    check(recovery.shouldRetry and recovery.action = "change_quality" and recovery.newContent.index = 3 and recovery.newContent.qualityID = "480p30", "actual decode recovery planner lowers fixed Automatic below its retained rendition")
+    for checkNumber = 1 to 6
+        player.callFunc("fixtureProlongedBufferCheck")
+    end for
+    started = calls(session, "start")
+    check(started.count() = 2 and started[1].descriptor.qualityId = "480p30" and player.content.QualityID = "480p30", "sixth actual fixed-Automatic buffer check starts the truly lower descriptor")
+    closePlayer(player)
+
+    for each fixedLowest in [false, true]
+        player = openPlayer("LIVE")
+        selected = content("direct", "Automatic")
+        metadata = [selected.getFields(), content().getFields()]
+        if fixedLowest
+            selected.localPlaybackDescriptor = content("roku-demux", "480p30").localPlaybackDescriptor
+            metadata = recoveryMetadata()
+        end if
+        deliver(player, selected, metadata)
+        check(player.callFunc("fixtureLowerQuality") = invalid, "single concrete or fixed-lowest Automatic offers no verified lower rung")
+        recovery = player.callFunc("fixtureDecodeRecovery")
+        check(recovery.action = "retry" and recovery.newContent = invalid, "single concrete or fixed-lowest decode recovery never invents a lower rung")
+        original = player.callFunc("fixtureRead").video
+        for checkNumber = 1 to 6
+            player.callFunc("fixtureProlongedBufferCheck")
+        end for
+        check(player.callFunc("fixtureRead").video.isSameNode(original) and player.callFunc("fixtureRead").recovery = 0 and player.content.QualityID = "Automatic", "Automatic with no lower rung keeps its current content and recovery budget")
+        closePlayer(player)
+    end for
+end sub
+
+function qualityFlagEvent(port as object) as dynamic
+    elapsed = createObject("roTimespan")
+    while elapsed.totalMilliseconds() < 1000
+        event = wait(20, port)
+        if type(event) = "roSGNodeEvent"
+            if event.getData() = true then return event
+        end if
+    end while
+    return invalid
+end function
+
+sub testRepeatedRetainedQualityChoices()
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    metadata = []
+    for each quality in ["1080p60", "720p60", "480p30"]
+        item = content("roku-demux", quality).getFields()
+        metadata.push(item)
+    end for
+    deliver(player, content("roku-demux"), metadata)
+    chooseRoku(player)
+    originalId = player.callFunc("fixtureRead").sessionId
+    ready(session, originalId)
+    video = player.callFunc("fixtureRead").video
+    flagPort = createObject("roMessagePort")
+    video.observeField("QualityChangeRequestFlag", flagPort)
+    requestPort = createObject("roMessagePort")
+    video.observeField("QualityChangeRequest", requestPort)
+
+    ' The engine cannot focus a child StandardMessageDialog. Its real
+    ' buttonSelected field still invokes the unchanged wrapper handler.
+    video.findNode("QualityDialog").buttonSelected = 1
+    settle(60)
+    firstEvent = wait(1000, requestPort)
+    firstId = player.callFunc("fixtureRead").sessionId
+    started = calls(session, "start")
+    check(type(firstEvent) = "roSGNodeEvent" and firstEvent.getData() = 1, "first actual dialog pick emits its selected request index")
+    check(firstId <> originalId and started.count() = 2 and started[1].descriptor.qualityId = "720p60", "first pick starts the exact 720 descriptor")
+    check(player.callFunc("fixtureRead").video.isSameNode(video) and not video.QualityChangeRequestFlag, "consuming the first choice clears the flag on the same retained wrapper")
+
+    video.findNode("QualityDialog").buttonSelected = 2
+    settle(60)
+    secondEvent = wait(1000, requestPort)
+    secondId = player.callFunc("fixtureRead").sessionId
+    started = calls(session, "start")
+    secondDelivered = false
+    if type(secondEvent) = "roSGNodeEvent" then secondDelivered = secondEvent.getData() = 2 and secondEvent.getRoSGNode().isSameNode(video)
+    check(secondDelivered, "a second distinct pick on the retained wrapper delivers another actual event")
+    check(player.callFunc("fixtureRead").video.isSameNode(video) and secondId <> firstId and started.count() = 3 and started[2].descriptor.qualityId = "480p30", "same retained wrapper starts the second exact 480 descriptor")
+    check(not video.QualityChangeRequestFlag, "consuming the second choice also clears its retained-wrapper flag")
+    check(player.content.QualityID = "480p30" and video.selectedQuality = "480p30", "second selection preserves its metadata index and selected label")
+
+    video.QualityChangeRequestFlag = false
+    settle(40)
+    check(calls(session, "start").count() = 3, "a false flag notification is not a quality command")
+    ready(session, firstId)
+    check(player.callFunc("fixtureRead").video.isSameNode(video), "superseded first-choice ready cannot replace the retained wrapper")
+    ready(session, secondId)
+    replacement = player.callFunc("fixtureRead").video
+    check(not replacement.isSameNode(video) and replacement.selectedQuality = "480p30" and replacement.control = "play", "only the latest exact selection publishes and plays")
+    ' brs-engine dispatches the port observer after the parent clears a flag,
+    ' so the queued flag notifications read false. The request index events
+    ' above are stable; exact start calls prove both commands were consumed.
+    ' After replacement the old node has no parent observer, letting us keep
+    ' an actual true flag event to exercise the source guard without a fake.
+    video.observeField("QualityChangeRequestFlag", flagPort)
+    video.QualityChangeRequestFlag = true
+    staleEvent = qualityFlagEvent(flagPort)
+    check(type(staleEvent) = "roSGNodeEvent" and staleEvent.getData() and staleEvent.getRoSGNode().isSameNode(video), "old detached wrapper supplies a real true flag event for the source guard")
+    player.callFunc("fixtureQualityEvent", staleEvent)
+    check(calls(session, "start").count() = 3 and player.callFunc("fixtureRead").video.isSameNode(replacement), "an actual old-wrapper event cannot restart its replacement")
+    player.callFunc("onDestroy")
+    oldRequest = video.QualityChangeRequest
+    oldQuality = video.selectedQuality
+    video.findNode("QualityDialog").buttonSelected = 0
+    player.callFunc("fixtureQualityEvent", staleEvent)
+    player.callFunc("fixtureQualityEvent")
+    check(video.QualityChangeRequest = oldRequest and video.selectedQuality = oldQuality and calls(session, "start").count() = 3, "disposed wrapper and player reject late selections and quality callbacks")
+    m.scene.removeChild(player)
+    m.scene.dialog = invalid
+    m.scene.localPlaybackSession = invalid
 end sub
 
 sub testBlockedCancelledReplacement()

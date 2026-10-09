@@ -110,8 +110,13 @@ sub initChat()
     end if
 end sub
 
-sub onQualityChangeRequested()
-    if m.video = invalid or m.top.metadata = invalid then return
+sub onQualityChangeRequested(event = invalid as dynamic)
+    if m.disposed or m.isExiting or m.rokuExitPending then return
+    if m.video = invalid or m.top.metadata = invalid or m.top.contentRequested = invalid then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.video) then return
+        if event.getData() <> true then return
+    end if
     request = m.video.qualityChangeRequest
     index = -1
     if GetInterface(request, "ifInt") <> invalid
@@ -122,6 +127,7 @@ sub onQualityChangeRequested()
         end for
     end if
     if index < 0 or index >= m.top.metadata.Count() then return
+    if m.video.isSubtype("StitchVideo") then m.video.QualityChangeRequestFlag = false
     if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
     new_content = CreateObject("roSGNode", "TwitchContentNode")
     new_content.setFields(m.top.contentRequested.getFields()) ' Preserve original request fields
@@ -954,6 +960,7 @@ sub refreshAuthAndRetry()
 end sub
 
 function findLowerQuality() as dynamic
+    if m.video = invalid then return invalid
     options = m.video.GetField("qualityOptions")
     if options = invalid or options.count() = 0
         return invalid
@@ -961,20 +968,35 @@ function findLowerQuality() as dynamic
 
     currentQuality = m.video.selectedQuality
     if currentQuality = invalid
-        currentQuality = m.video.qualityOptions[0]
+        currentQuality = options[0]
+    end if
+
+    if currentQuality = "Automatic"
+        descriptor = invalid
+        if m.video.content <> invalid then descriptor = m.video.content.GetField("localPlaybackDescriptor")
+        if type(descriptor) = "roAssociativeArray"
+            currentQuality = descriptor["qualityId"]
+            if GetInterface(currentQuality, "ifString") = invalid then return invalid
+            if currentQuality = "Automatic" then return invalid
+        else
+            ' Adaptive Automatic has no known current rung. Choose the lowest
+            ' concrete option only when the ladder actually has lower rungs.
+            if options.count() <= 2 then return invalid
+            return options.count() - 1
+        end if
     end if
 
     ' Find current index
     currentIndex = -1
-    for i = 0 to m.video.qualityOptions.count() - 1
-        if m.video.qualityOptions[i] = currentQuality
+    for i = 0 to options.count() - 1
+        if options[i] = currentQuality
             currentIndex = i
             exit for
         end if
     end for
 
     ' Return next lower quality
-    if currentIndex >= 0 and currentIndex < m.video.qualityOptions.count() - 1
+    if currentIndex >= 0 and currentIndex < options.count() - 1
         return currentIndex + 1
     end if
 

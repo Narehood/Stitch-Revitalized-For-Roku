@@ -17,7 +17,7 @@
         <field id="channelAvatar" type="string" alias="avatar.uri" />
         <field id="channelUsername" type="string" alias="channelUsername.text" />
         <field id="videoTitle" type="string" alias="videoTitle.text" />
-        <field id="QualityChangeRequestFlag" type="bool" value="false" />
+        <field id="QualityChangeRequestFlag" type="bool" value="false" alwaysNotify="true" />
         <field id="QualityChangeRequest" type="Integer" />
         <field id="streamDurationSeconds" type="Integer" value="0" />
         <field id="currentProgressBarState" type="Integer" value="1" />

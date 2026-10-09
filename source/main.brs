@@ -61,11 +61,28 @@ sub Main(input as dynamic)
             end if
         end if
     end while
-    m.scene.unobserveField("exitApp")
-    ' callFunc synchronizes with the render thread; only call while it is alive.
-    if not screenClosed
-        m.scene.callFunc("onDestroy")
-        screen.close()
-    end if
+    finishMainScene(screen, m.scene, m.port, screenClosed)
     m.scene = invalid
+end sub
+
+sub finishMainScene(screen as object, scene as object, port as object, screenClosed as boolean)
+    if screenClosed then return
+    session = scene.GetField("localPlaybackSession")
+    scene.unobserveField("exitApp")
+    ' callFunc synchronizes with render; keep it alive for cooperative cleanup.
+    scene.callFunc("onDestroy")
+    clock = CreateObject("roTimeSpan")
+    clock.Mark()
+    while session <> invalid
+        if not session.busy then exit while
+        remaining = 15000 - clock.TotalMilliseconds()
+        if remaining <= 0 then exit while
+        timeout = 100
+        if remaining < timeout then timeout = remaining
+        msg = wait(timeout, port)
+        if type(msg) = "roSGScreenEvent"
+            if msg.isScreenClosed() then return
+        end if
+    end while
+    screen.close()
 end sub

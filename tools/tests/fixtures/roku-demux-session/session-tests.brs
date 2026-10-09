@@ -2,6 +2,31 @@ sub runTests(control as string)
     m.assertions = 0
     m.failures = 0
     m.control = control
+    ' Actual result summaries preserve useful failure codes, never private input.
+    manager = newManager()
+    diagnostic = manager.callFunc("fixtureDiagnostic", { reason: "live_helper_failed", elapsedMs: 720000&, requests: 320&, failureCategory: 1, cleanupOk: true, sourceUrl: "https://private.invalid/DIAGNOSTIC_SECRET_TOKEN", helperFailureReason: "native-live: selected map initialization changed" })
+    check(diagnostic.reason = "live_helper_failed" and diagnostic.helperReason = "selected_map_initialization_changed", "fixed failure codes survive diagnostic filtering")
+    check(diagnostic.elapsedMs = 720000& and diagnostic.requests = 320& and diagnostic.failureCategory = 1 and diagnostic.cleanupOk, "typed diagnostic counters and cleanup acknowledgment survive")
+    check(not diagnostic.DoesExist("sourceUrl") and not diagnostic.DoesExist("helperFailureReason") and not diagnostic.DoesExist("sessionId"), "diagnostic has no signed input or raw error fields")
+    diagnostic = manager.callFunc("fixtureDiagnostic", { reason: "unexpected_sensitive_error", helperFailureReason: "native-live: unexpected_sensitive_error", elapsedMs: "720000", requests: -1, completedRequests: 4294967296&, clientErrors: 2.5, cleanupOk: "true", listenerClosed: 1 })
+    check(diagnostic.reason = "unknown" and diagnostic.Count() = 1, "unknown text and coerced or unbounded diagnostic values omitted")
+    diagnostic = manager.callFunc("fixtureDiagnostic", { reason: "accept_failed|actual_init_required" })
+    check(diagnostic.reason = "unknown", "diagnostic reason must be a single exact code")
+    for each message in ["GET status or range unsupported", "cache byte budget exceeded", "upstream operation deadline"]
+        diagnostic = manager.callFunc("fixtureDiagnostic", { helperFailureReason: "native-live: " + message })
+        check(diagnostic.helperReason = message.Replace(" ", "_"), "fixed upstream/cache failure remains distinguishable")
+    end for
+    id = manager.callFunc("startSession", sessionDescriptor())
+    worker = manager.callFunc("fixtureRead").worker
+    result = cleanupFor(id)
+    result.reason = "live_helper_failed"
+    result.sourceUrl = "https://private.invalid/DIAGNOSTIC_SECRET_TOKEN"
+    result.helperFailureReason = "native-live: unexpected_sensitive_error"
+    worker.result = result
+    check(worker.stopRequested and manager.busy, "actual failure result logs while retaining cooperative owner")
+    worker.state = "stop"
+    check(not manager.busy, "diagnostic logging does not change acknowledged cleanup")
+    manager.callFunc("onDestroy")
     ' Invalid descriptors cannot start a Task or opt an otherwise idle manager in.
     manager = newManager()
     check(manager.callFunc("startSession", { fixture: true }) = "", "arbitrary AA rejected before worker creation")

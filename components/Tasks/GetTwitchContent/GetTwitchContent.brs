@@ -182,7 +182,15 @@ sub loadHlsContent(request as object)
         metadata.Push(entry)
         if not transmux then nativeMetadata.Push(entry)
     end for
-    if proxyUrl = "" and nativeMetadata.Count() > 0 then metadata = nativeMetadata
+    if proxyUrl = "" and nativeMetadata.Count() > 0
+        retainedMetadata = []
+        for each entry in metadata
+            if not entry.isTransmux or (entry.playbackTransport = "roku-demux" and entry.localPlaybackDescriptor <> invalid)
+                retainedMetadata.Push(entry)
+            end if
+        end for
+        metadata = retainedMetadata
+    end if
     if metadata.Count() = 0
         if allVariantsSupported and hasSeparateAudio and not hasMuxedVariants
             ' All renditions have external audio; preserve the upstream master.
@@ -214,9 +222,16 @@ sub loadHlsContent(request as object)
     sortPlaybackMetadata(metadata)
     if metadata[0].QualityID <> "Automatic"
         automatic = invalid
-        if m.rokuDemuxEnabled then automatic = rokuDemuxAutomaticEntry(metadata)
+        automaticMetadata = metadata
+        if proxyUrl = "" and nativeMetadata.Count() > 0
+            ' Keep native Automatic while retaining eligible local manual choices.
+            sortPlaybackMetadata(nativeMetadata)
+            automaticMetadata = nativeMetadata
+        else if m.rokuDemuxEnabled
+            automatic = rokuDemuxAutomaticEntry(metadata)
+        end if
         if automatic = invalid
-            automatic = playbackAutomaticEntry(metadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
+            automatic = playbackAutomaticEntry(automaticMetadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
             if automatic <> invalid then automatic = rokuDemuxPlaybackEntry(automatic)
         end if
         if automatic = invalid

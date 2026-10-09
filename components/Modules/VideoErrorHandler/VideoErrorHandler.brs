@@ -183,7 +183,9 @@ function calculateBackoffDelay() as integer
 end function
 
 function getNextLowerQuality(video as object) as object
-    if video.qualityOptions = invalid or video.qualityOptions.count() = 0
+    if video = invalid then return invalid
+    options = video.qualityOptions
+    if options = invalid or options.count() = 0
         return invalid
     end if
 
@@ -192,19 +194,34 @@ function getNextLowerQuality(video as object) as object
         return invalid
     end if
 
+    if currentQuality = "Automatic"
+        descriptor = invalid
+        if video.content <> invalid then descriptor = video.content.GetField("localPlaybackDescriptor")
+        if type(descriptor) = "roAssociativeArray"
+            currentQuality = descriptor["qualityId"]
+            if GetInterface(currentQuality, "ifString") = invalid then return invalid
+            if currentQuality = "Automatic" then return invalid
+        else
+            ' Automatic may already be using a low adaptive rung.
+            if options.count() <= 2 then return invalid
+            lowestIndex = options.count() - 1
+            return { qualityID: options[lowestIndex], index: lowestIndex, isLowerQuality: true }
+        end if
+    end if
+
     ' Find current quality index
     currentIndex = -1
-    for i = 0 to video.qualityOptions.count() - 1
-        if video.qualityOptions[i] = currentQuality
+    for i = 0 to options.count() - 1
+        if options[i] = currentQuality
             currentIndex = i
             exit for
         end if
     end for
 
-    ' Get next lower quality (higher index typically means lower quality)
-    if currentIndex >= 0 and currentIndex < video.qualityOptions.count() - 1
+    ' Concrete options are ordered from highest to lowest bitrate.
+    if currentIndex >= 0 and currentIndex < options.count() - 1
         return {
-            qualityID: video.qualityOptions[currentIndex + 1],
+            qualityID: options[currentIndex + 1],
             index: currentIndex + 1,
             isLowerQuality: true
         }

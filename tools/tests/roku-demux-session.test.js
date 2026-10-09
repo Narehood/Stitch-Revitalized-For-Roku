@@ -88,6 +88,9 @@ function fixtureRead() as object
     return { worker: m.worker, video: m.video, pending: m.pending, currentId: m.currentId,
         stopping: m.stopping, workerResult: m.workerResult, cleanupClock: m.cleanupClock, disposed: m.disposed }
 end function
+function fixtureDiagnostic(result as object) as object
+    return sessionWorkerDiagnostic(result)
+end function
 sub fixtureTimeout()
     m.cleanupClock = { TotalMilliseconds: function() as integer
         return 15000
@@ -107,7 +110,7 @@ end sub
         'every production manager handler must execute unchanged');
         let xml = await fs.readFile(path.join(root, managerXmlPath), 'utf8');
         assert.equal(xml.split('</interface>').length, 2);
-        xml = xml.replace('</interface>', '<function name="fixtureRead" /><function name="fixtureTimeout" /><function name="fixtureArmResult" /><function name="fixtureTick" /></interface>');
+        xml = xml.replace('</interface>', '<function name="fixtureRead" /><function name="fixtureDiagnostic" /><function name="fixtureTimeout" /><function name="fixtureArmResult" /><function name="fixtureTick" /></interface>');
         await add(managerXmlPath, xml);
         const dependencies = ['source/utils/taskFactory.brs', 'source/utils/rokuDemuxDescriptor.brs',
             'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs'];
@@ -167,6 +170,8 @@ end sub
             const result = await run(zip, mode, dir);
             if (mode === 'positive') {
                 const count = requirePositive(result, marker);
+                assert.doesNotMatch(result.output, /DIAGNOSTIC_SECRET_TOKEN|private\.invalid|unexpected_sensitive_error/,
+                    'actual result logging must exclude private input and unrecognized text');
                 t.diagnostic(`${count} actual manager-handler assertions; worker/Video IO is inert`);
                 assert.throws(() => requirePositive(result, 'STALE_MARKER'), /expected one fresh session summary/);
             } else {
@@ -221,6 +226,38 @@ end sub
         assert.doesNotMatch(videoProofFailure.output, /SESSION_PASS_/);
         assert.throws(() => requirePositive(videoProofFailure, marker));
         t.diagnostic('actual blocked-exit Video STOP proof removal is rejected');
+        const resultLog = 'FormatJSON(sessionWorkerDiagnostic(result))';
+        assert.equal(fixtureSource.split(resultLog).length, 2);
+        await add(managerPath, fixtureSource.replace(resultLog, 'FormatJSON(result)'));
+        const rawLogZip = path.join(dir, 'raw-result-log-mutation.zip');
+        await zipFolder(packageDir, rawLogZip);
+        const rawLogFailure = await run(rawLogZip, 'positive', dir);
+        requirePositive(rawLogFailure, marker);
+        assert.match(rawLogFailure.output, /DIAGNOSTIC_SECRET_TOKEN/);
+        assert.throws(() => assert.doesNotMatch(rawLogFailure.output,
+            /DIAGNOSTIC_SECRET_TOKEN|private\.invalid|unexpected_sensitive_error/));
+        t.diagnostic('raw result logging mutation exposes the sentinel and is rejected');
+        const destroyBody = /sub onDestroy\(\)[\s\S]*?end sub/;
+        const destroySource = fixtureSource.match(destroyBody)?.[0];
+        assert.ok(destroySource);
+        const prematureDetach = destroySource.replace('    stopSession("")', `    if m.worker <> invalid
+        m.worker.unobserveField("ready")
+        m.worker.unobserveField("result")
+        m.worker.unobserveField("state")
+    end if
+    if m.cleanupTimer <> invalid
+        m.cleanupTimer.control = "stop"
+        m.cleanupTimer.unobserveField("fire")
+    end if
+    stopSession("")`);
+        await add(managerPath, fixtureSource.replace(destroySource, prematureDetach));
+        const detachZip = path.join(dir, 'premature-detach-mutation.zip');
+        await zipFolder(packageDir, detachZip);
+        const detachFailure = await run(detachZip, 'positive', dir);
+        requireNormal(detachFailure);
+        assert.match(detachFailure.output, /SESSION_ASSERT_FAIL: disposal completes only after actual acknowledgment/);
+        assert.throws(() => requirePositive(detachFailure, marker));
+        t.diagnostic('premature teardown observer removal abandons acknowledgment and is rejected');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));

@@ -77,7 +77,7 @@ function requireFreshSummary(result, marker) {
     assert.equal(lines.length, 1, `expected one fresh fixture summary\n${detail}`);
     const counts = lines[0].match(/:\s*(\d+) assertions,\s*(\d+) cases$/);
     assert.ok(counts && Number(counts[1]) >= 140, detail);
-    assert.equal(Number(counts[2]), 18, detail);
+    assert.equal(Number(counts[2]), 31, detail);
     return counts;
 }
 
@@ -173,6 +173,34 @@ test('actual guarded content task preserves fixed identity, existing transports 
                 assert.throws(() => requireFreshSummary(result, marker), /STITCH_ROKU_DESCRIPTOR_FAIL/);
                 t.diagnostic('actual failed assertion and stale-marker controls rejected');
             }
+        }
+        const taskPath = 'components/Tasks/GetTwitchContent/GetTwitchContent.brs';
+        const taskSource = await fs.readFile(path.join(root, taskPath), 'utf8');
+        const retainedFilter = /    if proxyUrl = "" and nativeMetadata\.Count\(\) > 0\r?\n        retainedMetadata = \[\][^]*?        metadata = retainedMetadata\r?\n    end if/;
+        const automaticPolicy = /        if proxyUrl = "" and nativeMetadata\.Count\(\) > 0\r?\n            ' Keep native Automatic[^]*?            automatic = rokuDemuxAutomaticEntry\(metadata\)\r?\n        end if/;
+        assert.equal(taskSource.match(retainedFilter)?.length, 1, 'mutation must find exactly the retained manual filter');
+        assert.equal(taskSource.match(automaticPolicy)?.length, 1, 'mutation must find exactly the native Automatic policy');
+        for (const mutation of [
+            { name: 'old-native-filter',
+                source: taskSource.replace(retainedFilter,
+                    '    if proxyUrl = "" and nativeMetadata.Count() > 0 then metadata = nativeMetadata'),
+                failure: /STITCH_ROKU_DESCRIPTOR_FAIL: mixed ladder retains every eligible manual quality/ },
+            { name: 'forced-mux-automatic',
+                source: taskSource.replace(automaticPolicy,
+                    '        if m.rokuDemuxEnabled then automatic = rokuDemuxAutomaticEntry(metadata)'),
+                failure: /STITCH_ROKU_DESCRIPTOR_FAIL: mixed ladder Automatic retains direct native preference/ },
+        ]) {
+            assert.notEqual(mutation.source, taskSource, `${mutation.name} must change the actual task`);
+            await add(taskPath, mutation.source);
+            await add('source/main.brs', main.replace('__PASS_MARKER__', marker).replace('__NEGATIVE_CONTROL__', 'no'));
+            const zip = path.join(dir, `${mutation.name}.zip`);
+            await zipFolder(packageDir, zip);
+            const result = await runPackage(zip, dir);
+            requireExecution(result);
+            assert.match(result.output, mutation.failure, result.output.slice(-16000));
+            assert.doesNotMatch(result.output, new RegExp(marker));
+            assert.throws(() => requireFreshSummary(result, marker), /STITCH_ROKU_DESCRIPTOR_FAIL/);
+            t.diagnostic(`${mutation.name}: actual task mutation rejected by mixed-ladder assertions despite normal engine exit`);
         }
     } finally {
         const resolved = path.resolve(dir);

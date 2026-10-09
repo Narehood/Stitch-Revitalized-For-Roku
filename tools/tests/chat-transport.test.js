@@ -30,17 +30,34 @@ function extractConnection(source) {
     return matches[0][0];
 }
 
-async function runFixture(body, connection = '') {
+function extractSendLogin(source) {
+    const matches = [...source.matchAll(/^function (?:sendChatLine|loginToChat)\([^\r\n]*\) as boolean\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
+    assert.equal(matches.length, 2, 'expected complete production send and login functions');
+    for (const match of matches) assert.equal([...match[0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
+    return matches.map(match => match[0]).join('\n');
+}
+
+function extractJob(source) {
+    const matches = [...source.matchAll(/^sub main\(\)\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
+    assert.equal(matches.length, 1, 'expected one complete production job function');
+    assert.equal([...matches[0][0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
+    return matches[0][0].replace(/^sub main\(\)/, 'sub runChatJob()');
+}
+
+async function runFixture(body, connection = '', sendLogin = '', job = '') {
     // The interpreter has no native TCP/WebSocket implementation. Replace only
     // object creation and waiting with explicit, deterministic OS boundaries.
-    // All production connection decisions, deadlines and cleanup execute.
-    const combined = body + '\n' + connection;
-    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, connection ? 9 : 4);
-    assert.equal([...combined.matchAll(/\bwait\(/gi)].length, connection ? 2 : 1);
-    const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(');
+    // All production connection/send/login decisions, deadlines and cleanup execute.
+    const combined = [body, connection, sendLogin, job].join('\n');
+    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, 4 + (connection ? 5 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
+    assert.equal([...combined.matchAll(/\bwait\(/gi)].length, 1 + (connection ? 1 : 0) + (job ? 1 : 0));
+    const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(')
+        .replace(/\bsleep\(/gi, 'fixtureSleep(');
     const marker = `STITCH_CHAT_TRANSPORT_PASS_${randomUUID()}`;
     const main = (await fs.readFile(fixture, 'utf8')).replace('__PASS_MARKER__', marker)
-        .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '');
+        .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '')
+        .replace('__SEND_TESTS__', sendLogin ? 'runSendTests()' : '')
+        .replace('__JOB_TESTS__', job ? 'runJobTests()' : '');
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     try {
         await fs.writeFile(path.join(dir, 'transport.brs'), bounded);
@@ -113,5 +130,22 @@ test('the old empty-buffer disconnect rejects the pending-read case', async () =
         '                return\n            end if';
     const result = await runFixture(extractTransport(source), connection.replace(read, old));
     assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: pending read must allow subsequent welcome and chat packet/);
+    assert.throws(() => acceptResult(result));
+});
+
+test('actual send and login reject invalid sends, preserve complete TCP writes and never read plaintext credentials', async t => {
+    const source = await fs.readFile(production, 'utf8');
+    const count = acceptResult(await runFixture(extractTransport(source), extractConnection(source), extractSendLogin(source), extractJob(source)));
+    t.diagnostic(`${count} transport/receive/send/login/retry assertions; native Send result-object fields remain undocumented and OS16 acceptance remains separate`);
+});
+
+test('ignoring a failed login send is rejected by the actual send/login/retry fixture', async () => {
+    const source = await fs.readFile(production, 'utf8');
+    const functions = extractSendLogin(source);
+    const gate = 'if not sendChatLine(transport, line) then return false';
+    assert.equal(functions.split(gate).length - 1, 1);
+    const result = await runFixture(extractTransport(source), extractConnection(source),
+        functions.replace(gate, 'sendChatLine(transport, line)'), extractJob(source));
+    assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: invalid secure send must fail login before credentials are sent/);
     assert.throws(() => acceptResult(result));
 });

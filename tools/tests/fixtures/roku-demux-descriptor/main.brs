@@ -61,6 +61,22 @@ sub descriptorLegacy(host as object, transport as string)
     descriptorAssert(host.response.playbackTransport = transport and host.response.localPlaybackDescriptor = invalid, "legacy path clears stale local routing")
 end sub
 
+sub descriptorManualLocal(host as object, index as integer, quality as string, url as string)
+    if index < 0 or index >= host.metadata.Count()
+        descriptorAssert(false, "retained manual quality is missing")
+        return
+    end if
+    entry = host.metadata[index]
+    value = entry.localPlaybackDescriptor
+    descriptorAssert(entry.QualityID = quality and entry.playbackTransport = "roku-demux" and rokuDemuxDescriptorValid(value), "retained manual quality has valid local identity")
+    if value = invalid then return
+    descriptorAssert(value["sourceUrl"] = url and value["qualityId"] = quality, "retained manual descriptor keeps exact signed source and quality")
+    descriptorAssert(entry.url = url and entry.StreamUrls.Count() = 1 and entry.StreamUrls[0] = url and entry.Streams.Count() = 1 and entry.Streams[0].url = url, "retained manual quality keeps complete URL contract")
+    descriptorAssert(entry.StreamContentIds[0] = quality and entry.Streams[0].contentid = quality, "retained manual quality keeps stream content identity")
+    descriptorAssert(entry.isTransmux and not entry.isProxied and entry.ForwardQueryStringParams, "retained manual source still requires explicit conversion action")
+    descriptorAssert(value["approvedOrigins"].Count() = 2 and value["approvedOrigins"][0] = "https://use14.playlist.ttvnw.net" and value["approvedOrigins"][1] = "https://fragments.cloudfront.hls.ttvnw.net", "retained manual quality keeps approved media origins")
+end sub
+
 sub descriptorHelperCases()
     base = "https://use14.playlist.ttvnw.net/path/media.m3u8?token=source%2Bvalue&sig=source%2526value"
     body = descriptorPlaylist()
@@ -182,7 +198,59 @@ sub main()
     nativeBodies[mid] = "#EXTM3U" + Chr(10) + "#EXTINF:2," + Chr(10) + "segment.ts" + Chr(10)
     descriptorRun(host, ladder, nativeBodies, true)
     descriptorLegacy(host, "direct")
-    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2 and not host.response.isTransmux, "mixed ladder retains native preference/filter")
+    descriptorAssert(host.response.QualityID = "Automatic" and host.response.url = mid and not host.response.isTransmux, "mixed ladder Automatic retains direct native preference")
+    descriptorAssert(host.metadata.Count() = 4, "mixed ladder retains every eligible manual quality")
+    if host.metadata.Count() = 4
+        descriptorAssert(host.metadata[1].QualityID = "1080p60" and host.metadata[2].QualityID = "720p60" and host.metadata[3].QualityID = "480p", "mixed ladder retains ordered eligible manual qualities")
+        descriptorAssert(host.metadata[2].playbackTransport = "direct" and host.metadata[2].localPlaybackDescriptor = invalid and host.metadata[2].url = mid, "mixed ladder native manual entry stays direct")
+    end if
+    descriptorManualLocal(host, 1, "1080p60", top)
+    descriptorManualLocal(host, 3, "480p", low)
+    descriptorRun(host, ladder, nativeBodies, false)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2 and not host.response.isTransmux, "mixed default-off ladder retains only native choices")
+    descriptorRun(host, ladder, nativeBodies, true, "", "auto", "VOD")
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2 and not host.response.live, "mixed VOD ladder does not gain local manual choices")
+    descriptorRun(host, ladder, nativeBodies, true, "", "highest")
+    descriptorLocal(host, "1080p60", top)
+    descriptorAssert(host.response.QualityID = "1080p60" and host.metadata[0].url = mid and host.metadata[0].playbackTransport = "direct", "mixed highest preference keeps native Automatic and explicit local source")
+    descriptorRun(host, ladder, nativeBodies, true, "", "lowest")
+    descriptorLocal(host, "480p", low)
+    descriptorAssert(host.response.QualityID = "480p" and host.metadata[0].url = mid and host.metadata[0].playbackTransport = "direct", "mixed lowest preference keeps native Automatic and exact local source")
+    twoNativeBodies = {}
+    twoNativeBodies.Append(nativeBodies)
+    twoNativeBodies[low] = nativeBodies[mid]
+    reordered = "#EXTM3U" + Chr(10) + descriptorVariant("native-low", "1327200", "852x480", low, "avc1.4D401F,mp4a.40.2", "30.000") + descriptorVariant("muxed-top", "8042999", "1920x1080", top) + descriptorVariant("native-mid", "3322199", "1280x720", mid)
+    descriptorRun(host, reordered, twoNativeBodies, true)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and not host.response.isTransmux and host.metadata.Count() = 4, "mixed Automatic uses highest native quality after independent native sorting")
+    descriptorManualLocal(host, 1, "1080p60", top)
+    descriptorRun(host, ladder, nativeBodies, true, "http://service.invalid:8080")
+    descriptorLegacy(host, "python")
+    descriptorAssert(host.response.isProxied and not host.response.isTransmux and host.response.url.InStr("/m3u8/selected?u=") > 0 and host.metadata.Count() = 4, "mixed explicit service retains adaptive selected master and manual ladder")
+    descriptorAssert(host.metadata[1].playbackTransport = "python" and host.metadata[1].localPlaybackDescriptor = invalid and host.metadata[1].isProxied and not host.metadata[1].ForwardQueryStringParams, "mixed service manual entry retains proxy contract")
+    descriptorAssert(host.metadata[2].playbackTransport = "direct" and not host.metadata[2].isProxied, "mixed service native manual entry remains direct")
+    nativeMid = descriptorVariant("native-mid", "3322199", "1280x720", mid)
+    for each ineligible in [descriptorVariant("muxed-hevc", "8042999", "1920x1080", top, "hvc1.1.6.L150.B0,mp4a.40.2"), descriptorVariant("muxed-aac", "8042999", "1920x1080", top, "avc1.4D401F,mp4a.40.5"), descriptorVariant("muxed-no-fps", "8042999", "1920x1080", top, "avc1.4D401F,mp4a.40.2", "")]
+        descriptorRun(host, "#EXTM3U" + Chr(10) + ineligible + nativeMid, nativeBodies, true)
+        descriptorLegacy(host, "direct")
+        descriptorAssert(host.response.url = mid and host.metadata.Count() = 2 and not host.response.isTransmux, "mixed ineligible transport cannot add local manual quality")
+    end for
+    descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("reject-decoder", "8042999", "1920x1080", top) + nativeMid, nativeBodies, true)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2 and host.fixtureProbes = 1, "mixed decoder rejection precedes probe and manual eligibility")
+    mixedUnsafe = {}
+    mixedUnsafe.Append(nativeBodies)
+    mixedUnsafe[top] = descriptorPlaylist().Replace("https://fragments.cloudfront.hls.ttvnw.net/canned/seg", "https://unsafe.invalid/canned/seg")
+    descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("muxed-top", "8042999", "1920x1080", top) + nativeMid, mixedUnsafe, true)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2, "mixed unapproved media origin cannot add local manual quality")
+    mixedUnknown = {}
+    mixedUnknown[mid] = nativeBodies[mid]
+    descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("muxed-top", "8042999", "1920x1080", top) + nativeMid, mixedUnknown, true)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = mid and host.metadata.Count() = 2, "mixed failed transport probe cannot add local manual quality")
     hevc = "#EXTM3U" + Chr(10) + descriptorVariant("muxed-hevc", "8042999", "1920x1080", top, "hvc1.1.6.L150.B0,mp4a.40.2")
     descriptorRun(host, hevc, bodies, true)
     descriptorLegacy(host, "direct")
@@ -198,6 +266,10 @@ sub main()
     descriptorRun(host, grouped, bodies, true)
     descriptorLegacy(host, "direct")
     descriptorAssert(host.response.url = host.fixtureUsher.url and host.fixtureProbes = 0 and host.metadata.Count() = 1, "separate audio retains complete direct master")
+    descriptorRun(host, grouped + nativeMid, nativeBodies, true)
+    descriptorLegacy(host, "direct")
+    descriptorAssert(host.response.url = host.fixtureUsher.url and host.metadata.Count() = 2 and host.fixtureProbes = 1, "mixed external audio retains native master without local descriptor")
+    descriptorAssert(host.metadata[1].playbackTransport = "direct" and host.metadata[1].localPlaybackDescriptor = invalid, "mixed external audio cannot add a local manual choice")
     descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("muxed", "3322199", "1280x720", mid, "avc1.4D401F,mp4a.40.5"), bodies, true)
     descriptorLegacy(host, "direct")
     descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("muxed", "3322199", "1280x720", mid, "avc1.4D401F,mp4a.40.2", ""), bodies, true)

@@ -21,3 +21,16 @@ end sub
 sub fixtureBack()
     ignored = onKeyEvent("back", true)
 end sub
+sub fixtureQualityEvent(event = invalid as dynamic)
+    onQualityChangeRequested(event)
+end sub
+function fixtureLowerQuality() as dynamic
+    return findLowerQuality()
+end function
+function fixtureDecodeRecovery() as object
+    return m.errorHandler.callFunc("handleVideoError", 9, "fixture media decode error", m.video, m.top.contentRequested)
+end function
+sub fixtureProlongedBufferCheck()
+    m.bufferStartTime = createObject("roDateTime").asSeconds() - 11
+    handleBufferingState()
+end sub

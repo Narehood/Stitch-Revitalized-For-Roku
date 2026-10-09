@@ -151,12 +151,45 @@ sub onSessionResult()
     if not rokuDemuxString(result.sessionId) then return
     if result.sessionId <> m.currentId then return
     m.workerResult = result
+    ' Log only known codes and bounded counters before cleanup releases the result.
+    ' Never include the session identity, source URL, credentials or raw errors.
+    print "[RokuPlayback] Worker result: "; FormatJSON(sessionWorkerDiagnostic(result))
     if not m.stopping
         sessionEvent(m.currentId, "failed", "worker_finished")
         beginSessionStop()
     end if
     checkSessionCleanup()
 end sub
+
+function sessionWorkerDiagnostic(result as object) as object
+    summary = { reason: "unknown" }
+    reasons = "|accept_failed|actual_init_required|address_not_exact_loopback|advertised_asset_missing|asset_not_advertised|asset_track_conflict|bind_failed|bound_address_missing|bound_address_not_loopback|canonical_decoder_rejected|cleanup_failed|client_closed_before_headers|connection_cleanup_failed|experimental_mode_required|header_cap|header_deadline_or_stop|http_counter_exhausted|http_interval_quota|invalid_cache_budget|invalid_cached_asset|invalid_error_header|invalid_helper_diagnostics|invalid_http_quota|invalid_init_alias_count|invalid_input_descriptor|invalid_live_publication|invalid_logical_buffer_size|invalid_loopback_address|invalid_loopback_port|invalid_manifest_response|invalid_receive_argument_bounds|invalid_receive_buffer_count|invalid_receive_count|invalid_request_range|invalid_send_argument_bounds|invalid_send_count|invalid_send_span_bounds|invalid_server_clock|invalid_session_id|listen_failed|live_helper_failed|live_start_deadline|native_exception|non_ascii_request|not_started|publication_generation_mutated|publication_generation_regressed|publication_pin_cap|publication_session_mismatch|receive_failed|request_body_or_pipeline|request_cap|request_method_path_headers_or_range|response_header_cap|send_deadline_or_stop|send_failed|server_deadline|stop_requested|transmitted_byte_cap|unknown_request_path|"
+    if rokuDemuxString(result.reason)
+        if result.reason <> "" and result.reason.InStr("|") < 0 and reasons.InStr("|" + result.reason + "|") >= 0 then summary.reason = result.reason
+    end if
+    for each field in ["elapsedMs", "requests", "completedRequests", "clientErrors", "convertedSegmentPairs", "cacheBytesPeak", "initAliasCount", "failureCategory"]
+        value = result[field]
+        kind = type(value, 3)
+        if kind = "Integer" or kind = "LongInteger" or kind = "roInt"
+            if value >= 0 and value <= 4294967295& then summary[field] = value
+        end if
+    end for
+    for each field in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
+        kind = type(result[field], 3)
+        if kind = "Boolean" or kind = "roBoolean" then summary[field] = result[field]
+    end for
+    ' These fixed parser/transport messages distinguish common failures without
+    ' copying arbitrary exception text into the console.
+    if rokuDemuxString(result.helperFailureReason)
+        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed"]
+            if result.helperFailureReason = "native-live: " + message or result.helperFailureReason = "native-demux: " + message
+                summary["helperReason"] = message.Replace(" ", "_")
+                exit for
+            end if
+        end for
+    end if
+    return summary
+end function
 
 sub onSessionWorkerState()
     if m.worker = invalid then return
@@ -283,6 +316,8 @@ end sub
 sub onDestroy()
     if m.disposed then return
     m.disposed = true
+    ' heroScene retains this owner. Keep cleanup observers until the Task and
+    ' attached Video acknowledge stop; removing them now abandons live resources.
     stopSession("")
     if m.worker = invalid and m.cleanupTimer <> invalid
         m.cleanupTimer.control = "stop"
