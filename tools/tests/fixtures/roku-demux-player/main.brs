@@ -3,23 +3,56 @@
     m.global.addFields({ fixtureRegistry: { ChatOption: "false", ChatFontSize: "16", "playback.lowLatency": "true" }, fixtureContentTasks: 0, emoteCache: {} })
     m.scene = m.screen.createScene("RokuPlayerHost")
     m.screen.show()
-    testLateBindingAndOrdinaryPaths()
-    testChoiceReadyAndBack()
-    testCancelledStartAndDisposal()
-    testDirectSwitch()
-    testRepeatedRetainedQualityChoices()
-    testQualityRecoveryLadder()
-    testMixedAutomaticRecoveryChoice()
-    testFailedRetryAndRecovery()
-    testSourceTransitionRecovery()
-    testLiveManualQualityIntent()
-    testLiveRecoveryHealth()
-    testRefusalAndBlockedOwner()
-    testDialogBackAndAttachRefusal()
-    testCleanupFailureWhileWaiting()
-    testBlockedCancelledReplacement()
-    check(true, "failure-control anchor")
+    try
+        testLateBindingAndOrdinaryPaths()
+        testChoiceReadyAndBack()
+        testCancelledStartAndDisposal()
+        testDirectSwitch()
+        testRepeatedRetainedQualityChoices()
+        testQualityRecoveryLadder()
+        testMixedAutomaticRecoveryChoice()
+        testFailedRetryAndRecovery()
+        testSourceTransitionRecovery()
+        testLiveManualQualityIntent()
+        testLiveRecoveryHealth()
+        testRefusalAndBlockedOwner()
+        testDialogBackAndAttachRefusal()
+        testCleanupFailureWhileWaiting()
+        testBlockedCancelledReplacement()
+        check(true, "failure-control anchor")
+    catch error
+        ' A failed dispatch must end this fixture before later code dereferences
+        ' a Video that the real callback has not created. It still fails QA.
+        fail(error.message)
+    end try
     fixtureEnd()
+end sub
+
+sub testRepeatedDialogDispatch()
+    player = openPlayer("LIVE")
+    deliver(player, content("roku-demux", "720p60"))
+    dialogFocus = m.scene
+    for depth = 1 to 16
+        child = dialogFocus.focusedChild
+        if child = invalid then exit for
+        if child.isSameNode(dialogFocus) then exit for
+        dialogFocus = child
+    end for
+    primer = createObject("roSGNode", "DialogKeyBoundary")
+    m.scene.appendChild(primer)
+    primer.setFocus(true)
+    press("ok")
+    dispatch = createObject("roTimespan")
+    while primer.pressCount = 0 and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
+    check(primer.pressCount = 1 and player.callFunc("fixtureRead").transmuxDialog <> invalid, "first actual OK reaches the inert focus boundary without choosing playback")
+    if primer.pressCount <> 1 then throw "first actual OK did not reach the inert focus boundary"
+    dialogFocus.setFocus(true)
+    chooseRoku(player)
+    check(calls(sessionOf(player), "start").count() = 1, "queued repeated OK starts exactly one actual session")
+    closePlayer(player)
+    m.scene.removeChild(primer)
 end sub
 
 function manualIntentAutomatic(identity as string) as object
@@ -806,10 +839,18 @@ end function
 
 sub chooseRoku(player as object)
     dialog = m.scene.dialog
-    check(dialog <> invalid and dialog.buttons.count() = 2 and dialog.buttons[0] = "Try on Roku" and dialog.buttons[1] = "Back", "eligible combined stream offers Try on Roku and Back")
+    eligible = dialog <> invalid and dialog.buttons.count() = 2 and dialog.buttons[0] = "Try on Roku" and dialog.buttons[1] = "Back"
+    check(eligible, "eligible combined stream offers Try on Roku and Back")
+    if not eligible then throw "combined-format dialog is not eligible for the remote choice"
     press("ok")
-    settle(160)
-    check(player.callFunc("fixtureRead").transmuxDialog = invalid, "the actual remote choice closes its owned combined-format dialog")
+    ' Repeated OK is queued by the driver; wait for its actual callback.
+    dispatch = createObject("roTimespan")
+    while player.callFunc("fixtureRead").transmuxDialog <> invalid and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
+    closed = player.callFunc("fixtureRead").transmuxDialog = invalid
+    if not closed then throw "the actual remote choice closes its owned combined-format dialog"
+    check(closed, "the actual remote choice closes its owned combined-format dialog")
 end sub
 
 sub ready(session as object, id as string)
@@ -996,9 +1037,15 @@ sub testFailedRetryAndRecovery()
     check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try again", "matching session failure opens an actionable retry dialog")
     before = m.global.fixtureContentTasks
     press("ok")
-    settle(160)
+    dispatch = createObject("roTimespan")
+    while player.callFunc("fixtureRead").task = invalid and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
     task = player.callFunc("fixtureRead").task
-    check(task <> invalid and task.enableRokuDemux and player.callFunc("fixtureRead").pending, "manual retry requests one fresh LIVE descriptor")
+    requested = false
+    if task <> invalid then requested = task.enableRokuDemux and player.callFunc("fixtureRead").pending
+    if not requested then throw "manual retry requests one fresh LIVE descriptor"
+    check(requested, "manual retry requests one fresh LIVE descriptor")
     player.callFunc("fixtureRetry")
     check(m.global.fixtureContentTasks = before + 1, "duplicate manual retry while pending starts no second fetch")
     deliver(player, content("roku-demux"))
@@ -1039,4 +1086,3 @@ sub testRefusalAndBlockedOwner()
     check(m.scene.dialog.buttons.count() = 1 and m.scene.dialog.buttons[0] = "Back" and calls(session, "start").count() = 0, "blocked owner offers Back-only fallback without start")
     closePlayer(player)
 end sub
-

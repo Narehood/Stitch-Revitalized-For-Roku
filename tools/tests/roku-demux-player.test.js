@@ -63,6 +63,8 @@ async function buildPackage(dir, marker, mode = 'normal') {
     for (const file of ['RokuPlayerHost.xml', 'SessionBoundary.xml', 'SessionBoundary.brs',
         'GetTwitchContent.xml', 'GetTwitchContentBoundary.brs', 'TwitchApiTask.xml',
         'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
+    await addFile(dir, 'components/DialogKeyBoundary.xml', '<component name="DialogKeyBoundary" extends="Group"><interface><field id="pressCount" type="integer" /></interface><script uri="DialogKeyBoundary.brs" /></component>');
+    await addFile(dir, 'components/DialogKeyBoundary.brs', 'function onKeyEvent(key as string, press as boolean) as boolean\n    if LCase(key) = "ok" and press then m.top.pressCount++\n    return true\nend function\n');
     const probe = await fixture('PlayerProbe.brs');
     const exports = [...probe.matchAll(/^(?:sub|function) (fixture\w+)\(/gm)]
         .map(match => `<function name="${match[1]}" />`).join('');
@@ -144,15 +146,35 @@ async function buildPackage(dir, marker, mode = 'normal') {
         await addFile(dir, playerPath, script.replace(guard, ''));
     }
     let main = await fixture('main.brs');
-    if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
+    if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog'].includes(mode)) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveManualQualityIntent()'));
-        const qualityOnly = start.split(/\r?\n/).filter(line => !/^    test/.test(line) || line === '    testLiveManualQualityIntent()').join('\n');
+        const setup = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)).join('\n');
+        main = main.replace(start, setup.replace('    try', '    try\n        testRepeatedDialogDispatch()'));
+        if (mode === 'fixed-dialog-wait') {
+            const wait = /    dispatch = createObject\("roTimespan"\)\r?\n    while player\.callFunc\("fixtureRead"\)\.transmuxDialog <> invalid and dispatch\.totalMilliseconds\(\) < 2000\r?\n        pump\(20\)\r?\n    end while/;
+            assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded dialog dispatch wait required');
+            main = main.replace(wait, '    settle(160)');
+        }
+    } else if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testFailedRetryAndRecovery()'));
+        const retryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testFailedRetryAndRecovery()').join('\n');
+        main = main.replace(start, retryOnly);
+        if (mode === 'fixed-retry-wait') {
+            const wait = /    dispatch = createObject\("roTimespan"\)\r?\n    while player\.callFunc\("fixtureRead"\)\.task = invalid and dispatch\.totalMilliseconds\(\) < 2000\r?\n        pump\(20\)\r?\n    end while/;
+            assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded manual retry wait required');
+            main = main.replace(wait, '    settle(160)');
+        }
+    } else if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testLiveManualQualityIntent()'));
+        const qualityOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testLiveManualQualityIntent()').join('\n');
         main = main.replace(start, qualityOnly);
     } else if (healthMutations[mode]) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveRecoveryHealth()'));
-        const healthOnly = start.split(/\r?\n/).filter(line => !/^    test/.test(line) || line === '    testLiveRecoveryHealth()').join('\n');
+        const healthOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testLiveRecoveryHealth()').join('\n');
         main = main.replace(start, healthOnly);
         // Normal covers every interruption. Each mutation needs only its
         // specific behavior plus the actual mixed-budget/cap paths.
@@ -239,7 +261,25 @@ async function runFixture(mode = 'normal') {
         await buildPackage(dir, marker, mode);
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
-        const result = await runChild(process.execPath, [keyDriver, cli, zip], temp);
+        let driver = keyDriver;
+        if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog', 'repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+            let script = await fs.readFile(keyDriver, 'utf8');
+            const gap = 'const repeatGapMs = 250;';
+            assert.equal(script.split(gap).length, 2);
+            script = script.replace(gap, 'const repeatGapMs = 600;');
+            const schedule = 'nextFree = start + hold;';
+            assert.equal(script.split(schedule).length, 2);
+            script = script.replace(schedule, 'if (key === lastKey && start === nextFree + repeatGapMs) process.stderr.write("FIXTURE_REPEAT_QUEUED\\n");\n    ' + schedule);
+            if (mode === 'dropped-dialog' || mode === 'dropped-retry') {
+                const emit = "process.stdin.emit('keypress', '', { name, ctrl: false, meta: false, shift: false, sequence: '' });";
+                assert.equal(script.split(emit).length, 2);
+                script = script.replace('function emit(name) {', 'let emittedKeys = 0;\nfunction emit(name) {')
+                    .replace(emit, 'if (++emittedKeys > 1) return;\n    ' + emit);
+            }
+            driver = path.join(temp, 'controlled-key-driver.js');
+            await fs.writeFile(driver, script);
+        }
+        const result = await runChild(process.execPath, [driver, cli, zip], temp);
         assert.deepEqual(await snapshot(), before, 'the production snapshot changed while the fixture ran');
         return { result, marker };
     } finally {
@@ -266,6 +306,21 @@ test('manual LIVE quality intent survives a missing recovery rung and rejects ge
     t.diagnostic('actual remembered manual-quality matching removal fails normally and is rejected');
 });
 
+test('actual repeated OK dispatch waits for its dialog and a missed deadline exits safely', { timeout: 180000 }, async t => {
+    const actual = await runFixture('repeated-dialog');
+    assert.match(actual.result.output, /FIXTURE_REPEAT_QUEUED/);
+    t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual assertions after the nextFree + repeatGapMs branch queues repeated OK`);
+    for (const mode of ['fixed-dialog-wait', 'dropped-dialog']) {
+        const failed = await runFixture(mode);
+        assertNormalExit(failed.result, mode);
+        assert.match(failed.result.output, /FIXTURE_REPEAT_QUEUED/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:the actual remote choice closes its owned combined-format dialog/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:\s*1 failures;\s*[1-9]\d* assertions/);
+        assert.throws(() => acceptResult(failed.result, failed.marker));
+        t.diagnostic(`${mode}: one real dispatch failure closes normally without continuing into a missing Video`);
+    }
+});
+
 test('a genuine failed BrightScript assertion and a stale success marker are rejected', { timeout: 180000 }, async () => {
     const failed = await runFixture('failed-assertion');
     assertNormalExit(failed.result, 'failed-assertion');
@@ -275,6 +330,21 @@ test('a genuine failed BrightScript assertion and a stale success marker are rej
     assertNormalExit(stale.result, 'stale-marker');
     assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/);
     assert.throws(() => acceptResult(stale.result, stale.marker), /fresh success marker missing/);
+});
+
+test('actual repeated Try again waits for its request and a missing retry key fails safely', { timeout: 180000 }, async t => {
+    const actual = await runFixture('repeated-retry');
+    assert.match(actual.result.output, /FIXTURE_REPEAT_QUEUED/);
+    t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual retry/session assertions after queued repeated OK`);
+    for (const mode of ['fixed-retry-wait', 'dropped-retry']) {
+        const failed = await runFixture(mode);
+        assertNormalExit(failed.result, mode);
+        assert.match(failed.result.output, /FIXTURE_REPEAT_QUEUED/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:manual retry requests one fresh LIVE descriptor/);
+        assert.match(failed.result.output, /STITCH_UI_FAIL:\s*1 failures;\s*[1-9]\d* assertions/);
+        assert.throws(() => acceptResult(failed.result, failed.marker));
+        t.diagnostic(`${mode}: exactly one actual retry failure closes normally without forcing the callback`);
+    }
 });
 
 test('actual recovery and retained-wrapper selections reject historical quality defects and a missing consumption reset', { timeout: 270000 }, async t => {
