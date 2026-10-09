@@ -5,18 +5,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
-// Keep independent engine processes within a small pool without increasing
-// fixture deadlines or overriding the smaller default on constrained hosts.
-const concurrency = Math.min(4, Math.max(1, os.availableParallelism() - 1));
+// Bound engine contention without increasing any fixture deadline or the
+// smaller default pool on constrained hosts.
+const concurrency = Math.min(2, Math.max(1, os.availableParallelism() - 1));
 const cwd = path.resolve(__dirname, '..');
 const files = fs.readdirSync(path.join(cwd, 'tools/tests'))
     .filter(file => file.endsWith('.test.js')).sort();
-const isolated = 'roku-vod-chunks.test.js';
-if (!files.includes(isolated)) throw new Error('Recorded chunk regression is missing');
+const core = 'roku-demux-core.test.js';
+if (!files.includes(core)) throw new Error('Core binary regression is missing');
+if (!files.includes('roku-vod-chunks.test.js')) throw new Error('Recorded chunk regression is missing');
 
-// This binary-golden matrix approaches its finite child deadline on Windows
-// when it competes with other engine processes. Run all its cases alone.
-for (const [limit, batch] of [[1, [isolated]], [concurrency, files.filter(file => file !== isolated)]]) {
+// These complete binary matrices approach their child deadlines on Windows
+// when competing with other engines. VOD chunks are present on that layer.
+const isolated = [core, 'roku-vod-chunks.test.js'].filter(file => files.includes(file));
+for (const [limit, batch] of [[1, isolated], [concurrency, files.filter(file => !isolated.includes(file))]]) {
     if (batch.length === 0) continue;
     const result = spawnSync(process.execPath, [
         '--test', `--test-concurrency=${limit}`, ...batch.map(file => `tools/tests/${file}`)

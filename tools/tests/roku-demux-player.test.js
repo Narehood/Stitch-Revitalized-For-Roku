@@ -166,6 +166,14 @@ async function buildPackage(dir, marker, mode = 'normal') {
             assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded manual retry wait required');
             main = main.replace(wait, '    settle(160)');
         }
+    } else if (mode === 'failed-assertion' || mode === 'stale-marker') {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testChoiceReadyAndBack()'));
+        // Summary controls need a genuine player lifecycle, not every unrelated
+        // quality/recovery matrix. The normal run still executes that matrix.
+        const summaryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
+            || line.trim() === 'testChoiceReadyAndBack()').join('\n');
+        main = main.replace(start, summaryOnly);
     } else if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveManualQualityIntent()'));
@@ -325,10 +333,12 @@ test('a genuine failed BrightScript assertion and a stale success marker are rej
     const failed = await runFixture('failed-assertion');
     assertNormalExit(failed.result, 'failed-assertion');
     assert.match(failed.result.output, /STITCH_UI_FAIL:deliberate wrong assertion/);
+    assert.match(failed.result.output, /STITCH_UI_FAIL:\s*1 failures;\s*[1-9]\d* assertions/, childDiagnostic(failed.result, 'failed-assertion'));
     assert.throws(() => acceptResult(failed.result, failed.marker));
     const stale = await runFixture('stale-marker');
     assertNormalExit(stale.result, 'stale-marker');
-    assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/);
+    assert.doesNotMatch(stale.result.output, /STITCH_UI_FAIL:/, childDiagnostic(stale.result, 'stale-marker'));
+    assert.match(stale.result.output, /STITCH_UI_PASS:[0-9a-f-]+:\s*[1-9]\d* assertions/, childDiagnostic(stale.result, 'stale-marker'));
     assert.throws(() => acceptResult(stale.result, stale.marker), /fresh success marker missing/);
 });
 
