@@ -172,6 +172,10 @@ end sub
                 const count = requirePositive(result, marker);
                 assert.doesNotMatch(result.output, /DIAGNOSTIC_SECRET_TOKEN|private\.invalid|unexpected_sensitive_error/,
                     'actual result logging must exclude private input and unrecognized text');
+                assert.match(result.output, /"helperReason"\s*:\s*"continuity_window_crosses_map_or_discontinuity"/,
+                    'actual known continuity failure logs only its static code');
+                assert.match(result.output, /"helperReason"\s*:\s*"selected_window_crosses_map_or_discontinuity"/,
+                    'actual selected-window failure logs only its fixed static code');
                 t.diagnostic(`${count} actual manager-handler assertions; worker/Video IO is inert`);
                 assert.throws(() => requirePositive(result, 'STALE_MARKER'), /expected one fresh session summary/);
             } else {
@@ -258,6 +262,42 @@ end sub
         assert.match(detachFailure.output, /SESSION_ASSERT_FAIL: disposal completes only after actual acknowledgment/);
         assert.throws(() => requirePositive(detachFailure, marker));
         t.diagnostic('premature teardown observer removal abandons acknowledgment and is rejected');
+        for (const [gate, expected, name] of [
+            ['    if not m.readyReceived then return "worker_finished"', 'transition classification requires exact ready reason and safe cleanup', 'startup-ready'],
+            ['    if not sessionCleanupSafe() then return "worker_finished"', 'transition classification requires exact ready reason and safe cleanup', 'unsafe-resource-cleanup']
+        ]) {
+            assert.equal(fixtureSource.split(gate).length, 2, `one actual ${name} transition guard required`);
+            await add(managerPath, fixtureSource.replace(gate, ''));
+            const guardZip = path.join(dir, `${name}-transition-mutation.zip`);
+            await zipFolder(packageDir, guardZip);
+            const guardFailure = await run(guardZip, 'positive', dir);
+            requireNormal(guardFailure);
+            assert.ok(guardFailure.output.includes(`SESSION_ASSERT_FAIL: ${expected}`));
+            assert.throws(() => requirePositive(guardFailure, marker));
+            t.diagnostic(`actual ${name} transition guard removal is rejected`);
+        }
+        const transitionReturn = 'then return "source_transition"';
+        assert.equal(fixtureSource.split(transitionReturn).length, 2, 'three known exact reasons share one transition result');
+        await add(managerPath, fixtureSource.replace(transitionReturn, 'then return "old_source_transition"'));
+        const oldTransitionZip = path.join(dir, 'old-source-transition-mutation.zip');
+        await zipFolder(packageDir, oldTransitionZip);
+        const oldTransitionFailure = await run(oldTransitionZip, 'positive', dir);
+        requireNormal(oldTransitionFailure);
+        for (const label of ['selected epoch', 'continuity window', 'selected window']) {
+            assert.ok(oldTransitionFailure.output.includes(`SESSION_ASSERT_FAIL: transition classification requires exact ready reason and safe cleanup: ${label}`));
+        }
+        assert.throws(() => requirePositive(oldTransitionFailure, marker));
+        t.diagnostic('shared transition-result mutation independently rejects all three exact native reasons');
+        const selectedWindow = ' or result.helperFailureReason = "native-live: selected window crosses map or discontinuity"';
+        assert.equal(fixtureSource.split(selectedWindow).length, 2, 'one exact selected-window classification seam');
+        await add(managerPath, fixtureSource.replace(selectedWindow, ''));
+        const selectedWindowZip = path.join(dir, 'selected-window-classification-mutation.zip');
+        await zipFolder(packageDir, selectedWindowZip);
+        const selectedWindowFailure = await run(selectedWindowZip, 'positive', dir);
+        requireNormal(selectedWindowFailure);
+        assert.match(selectedWindowFailure.output, /SESSION_ASSERT_FAIL: transition classification requires exact ready reason and safe cleanup: selected window/);
+        assert.throws(() => requirePositive(selectedWindowFailure, marker));
+        t.diagnostic('actual exact selected-window classifier removal is rejected normally');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));

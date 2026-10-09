@@ -285,7 +285,7 @@ function nativeLiveParsePlaylist(text as string, baseUrl as string, approvedOrig
     return { mapUrl: mapUrl, mediaSequence: sequence, targetDuration: target, segments: segments, ended: ended }
 end function
 
-function nlWindow(playlist as object, delayUs as longinteger) as object
+function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean) as object
     nlCheck(not playlist.ended or delayUs = 0&, "historical ENDLIST unsupported")
     segments = playlist.segments
     finish = segments.Count() - 1
@@ -312,6 +312,9 @@ function nlWindow(playlist as object, delayUs as longinteger) as object
     selectedMap = result[0].mapUrl
     selectedEpoch = result[0].epoch
     for each segment in result
+        if waitForStartup and not playlist.ended
+            if segment.mapUrl <> selectedMap or segment.epoch <> selectedEpoch then return invalid
+        end if
         nlCheck(segment.mapUrl = selectedMap and segment.epoch = selectedEpoch, "selected window crosses map or discontinuity")
     end for
     return { segments: result, durationUs: total, sourceOffsetUs: behind, targetDuration: playlist.targetDuration, mapUrl: selectedMap, epoch: selectedEpoch, ended: playlist.ended }
@@ -475,7 +478,10 @@ function nlIntent(state as object, nowMs as dynamic) as object
     nlTime(state, nowMs)
     if state.closed or state.phase = "failed" or state.phase = "ended" then return invalid
     if state.phase = "ready" and nowMs >= state.nextPoll then state.phase = "playlist"
-    if state.phase = "playlist" then return { kind: "playlist", url: state.sourceUrl, limit: 262144 }
+    if state.phase = "playlist"
+        if nowMs < state.nextPoll then return invalid
+        return { kind: "playlist", url: state.sourceUrl, limit: 262144 }
+    end if
     if state.phase = "init" then return { kind: "init", url: state.mapUrl, limit: 2097152 }
     if state.phase = "init-rotation" then return { kind: "init", url: state.pendingWindow.mapUrl, limit: 2097152 }
     if state.phase = "segment"
@@ -493,7 +499,16 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         nlCheck(nlString(payload), "playlist payload must be string")
         parsed = nativeLiveParsePlaylist(payload, state.sourceUrl, state.approvedOrigins)
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
-        window = nlWindow(parsed, state.delayUs)
+        waitForStartup = state.steadyMode and not state.started and state.publishedLast < 0& and state.initIds.Count() = 0 and not parsed.ended
+        window = nlWindow(parsed, state.delayUs, waitForStartup)
+        if window = invalid
+            ' Wait on this normal mixed window; never select an older timeline.
+            state.lastPlaylistSequence = parsed.mediaSequence
+            nlIncrement(state, "playlistCount")
+            state.nextPoll = nowMs + parsed.targetDuration * 500&
+            if state.steadyMode then state.lastUpstreamProgress = nowMs
+            return
+        end if
         if state.publishedLast >= 0& then window = nlContinuityWindow(parsed, window, state.publishedLast)
         nlCheck(state.epoch < 0& or state.epoch = window.epoch, "selected discontinuity change unsupported")
         if state.publishedLast >= 0& then nlCheck(window.segments[0].sequence <= state.publishedLast + 1&, "source sequence gap")

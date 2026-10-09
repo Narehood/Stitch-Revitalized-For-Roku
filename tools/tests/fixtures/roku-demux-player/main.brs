@@ -3,20 +3,505 @@
     m.global.addFields({ fixtureRegistry: { ChatOption: "false", ChatFontSize: "16", "playback.lowLatency": "true" }, fixtureContentTasks: 0, emoteCache: {} })
     m.scene = m.screen.createScene("RokuPlayerHost")
     m.screen.show()
-    testLateBindingAndOrdinaryPaths()
-    testChoiceReadyAndBack()
-    testCancelledStartAndDisposal()
-    testDirectSwitch()
-    testRepeatedRetainedQualityChoices()
-    testQualityRecoveryLadder()
-    testMixedAutomaticRecoveryChoice()
-    testFailedRetryAndRecovery()
-    testRefusalAndBlockedOwner()
-    testDialogBackAndAttachRefusal()
-    testCleanupFailureWhileWaiting()
-    testBlockedCancelledReplacement()
-    check(true, "failure-control anchor")
+    try
+        testLateBindingAndOrdinaryPaths()
+        testChoiceReadyAndBack()
+        testCancelledStartAndDisposal()
+        testDirectSwitch()
+        testRepeatedRetainedQualityChoices()
+        testQualityRecoveryLadder()
+        testMixedAutomaticRecoveryChoice()
+        testFailedRetryAndRecovery()
+        testSourceTransitionRecovery()
+        testLiveManualQualityIntent()
+        testLiveRecoveryHealth()
+        testRefusalAndBlockedOwner()
+        testDialogBackAndAttachRefusal()
+        testCleanupFailureWhileWaiting()
+        testBlockedCancelledReplacement()
+        check(true, "failure-control anchor")
+    catch error
+        ' A failed dispatch must end this fixture before later code dereferences
+        ' a Video that the real callback has not created. It still fails QA.
+        fail(error.message)
+    end try
     fixtureEnd()
+end sub
+
+sub testRepeatedDialogDispatch()
+    player = openPlayer("LIVE")
+    deliver(player, content("roku-demux", "720p60"))
+    dialogFocus = m.scene
+    for depth = 1 to 16
+        child = dialogFocus.focusedChild
+        if child = invalid then exit for
+        if child.isSameNode(dialogFocus) then exit for
+        dialogFocus = child
+    end for
+    primer = createObject("roSGNode", "DialogKeyBoundary")
+    m.scene.appendChild(primer)
+    primer.setFocus(true)
+    press("ok")
+    dispatch = createObject("roTimespan")
+    while primer.pressCount = 0 and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
+    check(primer.pressCount = 1 and player.callFunc("fixtureRead").transmuxDialog <> invalid, "first actual OK reaches the inert focus boundary without choosing playback")
+    if primer.pressCount <> 1 then throw "first actual OK did not reach the inert focus boundary"
+    dialogFocus.setFocus(true)
+    chooseRoku(player)
+    check(calls(sessionOf(player), "start").count() = 1, "queued repeated OK starts exactly one actual session")
+    closePlayer(player)
+    m.scene.removeChild(primer)
+end sub
+
+function manualIntentAutomatic(identity as string) as object
+    node = content("roku-demux", "Automatic")
+    node.localPlaybackDescriptor = { qualityId: "720p60", mediaUrl: "https://fixture.invalid/fresh-auto.m3u8", bandwidth: 4000000, isHD: true, fixtureIdentity: identity }
+    return node
+end function
+
+sub manualIntentPick(player as object, index as integer)
+    video = player.callFunc("fixtureRead").video
+    video.findNode("QualityDialog").buttonSelected = index
+    settle(60)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub manualIntentRefresh(player as object, automatic as object, metadata as object)
+    oldVideo = player.callFunc("fixtureRead").video
+    before = calls(sessionOf(player), "start").count()
+    player.callFunc("fixtureReconnect")
+    task = player.callFunc("fixtureRead").reconnectTask
+    check(task <> invalid, "manual intent uses actual fresh recovery request")
+    if task = invalid then return
+    task.metadata = metadata
+    task.response = automatic
+    settle(60)
+    expected = before
+    if automatic.playbackTransport = "roku-demux" then expected++
+    check(oldVideo.control = "stop" and calls(sessionOf(player), "start").count() = expected, "manual intent refresh stops old video and preserves the exact owner path")
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub testLiveManualQualityIntent()
+    player = openPlayer("LIVE")
+    automatic = manualIntentAutomatic("initial-auto")
+    selected = content("roku-demux", "1080p60")
+    lower = content("roku-demux", "720p60")
+    ladder = [automatic.getFields(), selected.getFields(), lower.getFields()]
+    deliver(player, automatic, ladder)
+    chooseRoku(player)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    manualIntentPick(player, 1)
+    check(player.callFunc("fixtureRead").manualLiveQuality = "1080p60", "actual explicit LIVE dialog choice records manual intent")
+
+    fallback = manualIntentAutomatic("fallback-auto")
+    missing = [fallback.getFields(), lower.getFields()]
+    manualIntentRefresh(player, fallback, missing)
+    state = player.callFunc("fixtureRead")
+    check(state.video.selectedQuality = "Automatic" and player.content.QualityID = "Automatic" and state.video.content.localPlaybackDescriptor.fixtureIdentity = "fallback-auto", "missing manual rung preserves the actual fresh safe fallback")
+    check(state.manualLiveQuality = "1080p60", "temporary fallback retains desired manual LIVE intent")
+
+    restored = content("roku-demux", "1080p60")
+    restored.url = "https://fixture.invalid/restored1080.m3u8"
+    restored.localPlaybackDescriptor = { qualityId: "1080p60", mediaUrl: "https://fixture.invalid/restored-combined.m3u8", bandwidth: 7000000, isHD: true, fixtureIdentity: "restored1080" }
+    automatic = manualIntentAutomatic("restored-auto")
+    available = [automatic.getFields(), restored.getFields(), lower.getFields()]
+    before = calls(sessionOf(player), "start").count()
+    player.metadata = available
+    settle(40)
+    check(player.callFunc("fixtureRead").video.isSameNode(state.video) and state.video.selectedQuality = "Automatic" and calls(sessionOf(player), "start").count() = before, "a newly available rung alone never upgrades playing video")
+    manualIntentRefresh(player, automatic, available)
+    state = player.callFunc("fixtureRead")
+    check(state.video.selectedQuality = "1080p60" and player.content.QualityID = "1080p60", "restored ladder returns to explicit manual quality")
+    check(state.video.content.localPlaybackDescriptor.fixtureIdentity = "restored1080" and state.video.content.localPlaybackDescriptor.bandwidth = 7000000, "restored manual intent uses fresh descriptor and metadata")
+    check(state.recovery = 0 and state.reconnect = 0 and state.video.suppressStartupSeek, "manual quality matching preserves recovery state and startup suppression")
+
+    ' An intentional recovery downshift must not later promote playback.
+    state.video.qualityChangeRequest = 2
+    player.callFunc("fixtureQualityEvent")
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "internal deliberate downshift clears manual upgrade intent")
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "720p60", "later recovery retains deliberate lower quality")
+
+    manualIntentPick(player, 1)
+    manualIntentRefresh(player, fallback, missing)
+    sessionOf(player).event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "server_failed" }
+    settle(40)
+    check(player.callFunc("fixtureRead").errorDialog <> invalid, "fallback failure reaches actual Try again dialog")
+    player.callFunc("fixtureRetry")
+    deliver(player, automatic, available)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "1080p60" and player.callFunc("fixtureRead").manualLiveQuality = "1080p60", "same-owner Try again reuses manual intent through existing preferred quality path")
+
+    manualIntentPick(player, 0)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "explicit Automatic clears previous manual intent")
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "Automatic", "recovery respects explicit Automatic after earlier manual selection")
+
+    manualIntentPick(player, 1)
+    owner = request("LIVE")
+    owner.streamerLogin = "anotherfixture"
+    owner.streamerId = "43"
+    owner.contentId = "fixture-v2"
+    player.contentRequested = owner
+    settle(40)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "new channel request clears previous manual intent")
+    ' The inert owner supplies its actual stop acknowledgement before direct play.
+    sessionOf(player).busy = false
+    automatic = content("direct", "Automatic")
+    available = [automatic.getFields(), content("direct", "1080p60").getFields(), content("direct", "720p60").getFields()]
+    deliver(player, automatic, available)
+    manualIntentRefresh(player, automatic, available)
+    check(player.callFunc("fixtureRead").video.selectedQuality = "Automatic", "new LIVE owner does not inherit prior manual quality")
+    manualIntentPick(player, 1)
+    player.contentRequested = request("VOD")
+    settle(40)
+    check(player.callFunc("fixtureRead").manualLiveQuality = invalid, "recorded owner clears previous manual LIVE intent")
+    deliver(player, content("direct", "720p60"))
+    check(player.callFunc("fixtureRead").video.isSubtype("CustomVideo"), "recorded replacement preserves its existing wrapper path")
+    closePlayer(player)
+end sub
+
+function healthPlayer() as object
+    player = openPlayer("LIVE")
+    selected = content("roku-demux", "1080p60")
+    metadata = [selected.getFields(), content("roku-demux", "720p60").getFields()]
+    deliver(player, selected, metadata)
+    chooseRoku(player)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    healthTransition(player)
+    state = player.callFunc("fixtureRead")
+    if state.video <> invalid then state.video.state = "playing"
+    return player
+end function
+
+sub healthTransition(player as object)
+    state = player.callFunc("fixtureRead")
+    sessionOf(player).event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    settle(20)
+    state = player.callFunc("fixtureRead")
+    if state.reconnectTimer = invalid then return
+    player.callFunc("fixtureReconnect")
+    healthRefresh(player)
+end sub
+
+sub healthRefresh(player as object)
+    task = player.callFunc("fixtureRead").reconnectTask
+    if task = invalid then return
+    selected = content("roku-demux", "1080p60")
+    task.metadata = [selected.getFields(), content("roku-demux", "720p60").getFields()]
+    task.response = selected
+    settle(20)
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+end sub
+
+sub healthSample(player as object, nowSec as integer, position as float)
+    video = player.callFunc("fixtureRead").video
+    if video <> invalid then video.position = position
+    player.callFunc("fixtureWatchdog", nowSec)
+end sub
+
+sub healthProgress(player as object, startSec as integer, startPosition as float, seconds as integer, rate = 1 as float)
+    for offset = 0 to seconds step 2
+        healthSample(player, startSec + offset, startPosition + offset * rate)
+    end for
+end sub
+
+sub testLiveRecoveryHealth()
+    player = healthPlayer()
+    healthTransition(player)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 2 and state.recovery = 2 and state.reconnect = 2, "only actually scheduled transitions own refundable charges")
+    video = state.video
+    video.errorCode = -1
+    video.errorStr = "fixture health error"
+    video.state = "error"
+    state = player.callFunc("fixtureRead")
+    check(state.retryTimer <> invalid and state.recovery = 3 and state.transitionCharges = 2, "actual network error retains a separate shared recovery charge")
+    player.callFunc("fixtureFireRetry")
+    healthRefresh(player)
+    video = player.callFunc("fixtureRead").video
+    if video <> invalid then video.state = "playing"
+    stats = player.callFunc("fixtureErrorStatistics")
+    check(stats.retryCount = 1 and stats.totalErrors = 1, "actual error handler records its independent retry history")
+    base = CreateObject("roDateTime").AsSeconds() + 46
+    healthProgress(player, base, 100, 118)
+    healthSample(player, base + 119, 219)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 2 and state.recovery = 3 and state.reconnect = 2, "119 healthy seconds cannot forgive transition charges")
+    healthSample(player, base + 120, 220)
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 1, "120 healthy seconds refund only scheduled transitions and preserve actual error debt")
+    stats = player.callFunc("fixtureErrorStatistics")
+    check(stats.retryCount = 1 and stats.totalErrors = 1, "healthy transition refund preserves actual error handler limits and history")
+    healthSample(player, base + 122, 222)
+    check(player.callFunc("fixtureRead").recovery = 1, "duplicate healthy completion never refunds unrelated recovery twice")
+    session = sessionOf(player)
+    session.event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 1 and state.recovery = 2 and state.transitionCharges = 1 and state.reconnectTimer <> invalid, "next transition starts a bounded episode retaining generic spent debt")
+    if state.reconnectTimer <> invalid then check(state.reconnectTimer.duration = 1, "healthy transition episode restarts existing one-second backoff")
+    player.callFunc("fixtureEventAgain")
+    check(player.callFunc("fixtureRead").transitionCharges = 1, "duplicate transition cannot add another refundable charge")
+    closePlayer(player)
+
+    player = healthPlayer()
+    video = player.callFunc("fixtureRead").video
+    base = CreateObject("roDateTime").AsSeconds() + 46
+    for offset = 0 to 16 step 2
+        healthSample(player, base + offset, 100)
+    end for
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 2 and state.recovery = 2 and state.transitionCharges = 1 and state.reconnectTimer <> invalid, "actual stalled watchdog spends a non-transition reconnect charge")
+    player.callFunc("fixtureReconnect")
+    healthRefresh(player)
+    player.callFunc("fixtureRead").video.state = "playing"
+    healthProgress(player, base + 50, 100, 120)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 1 and state.recovery = 1 and state.transitionCharges = 0, "healthy source refund preserves the actual generic stall reconnect budget")
+    closePlayer(player)
+
+    for each mode in ["stalled", "noise", "pause", "buffer", "backward", "jump", "gap", "clock", "seek", "cooldown", "duplicate", "quality", "retry", "dialog", "back", "disposed", "blocked", "pending", "foreign", "inconsistent"]
+        player = healthPlayer()
+        session = sessionOf(player)
+        video = player.callFunc("fixtureRead").video
+        base = CreateObject("roDateTime").AsSeconds() + 46
+        if mode = "stalled" or mode = "noise"
+            rate = 0.0
+            if mode = "noise" then rate = 0.1
+            healthProgress(player, base, 100, 130, rate)
+        else if mode = "duplicate"
+            healthSample(player, base, 100)
+            for duplicate = 1 to 70
+                healthSample(player, base, 100 + duplicate / 100)
+            end for
+            healthSample(player, base + 120, 220)
+        else
+            healthProgress(player, base, 100, 118)
+            if mode = "pause" or mode = "buffer"
+                if mode = "pause" then video.state = "paused" else video.state = "buffering"
+                check(player.callFunc("fixtureRead").healthVideo = invalid, "non-playing observation clears health before watchdog restarts")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 122, 222)
+            else if mode = "backward"
+                video.position = 200
+                healthSample(player, base + 119, 219)
+                healthSample(player, base + 120, 220)
+            else if mode = "jump"
+                healthSample(player, base + 120, 1218)
+                healthSample(player, base + 122, 1220)
+            else if mode = "gap"
+                healthSample(player, base + 130, 230)
+                healthSample(player, base + 132, 232)
+            else if mode = "clock"
+                healthSample(player, base + 117, 219)
+                healthSample(player, base + 120, 222)
+            else if mode = "seek"
+                video.recentSeekTimestamp = base + 118
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 138, 238)
+                healthSample(player, base + 140, 240)
+            else if mode = "cooldown"
+                player.callFunc("fixtureCooldown", base + 118)
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 163, 263)
+                healthSample(player, base + 165, 265)
+            else if mode = "quality"
+                video.QualityChangeRequest = 1
+                video.QualityChangeRequestFlag = true
+                ready(session, player.callFunc("fixtureRead").sessionId)
+                replacement = player.callFunc("fixtureRead").video
+                check(not replacement.isSameNode(video) and replacement.selectedQuality = "720p60", "actual quality replacement starts a distinct current wrapper")
+                replacement.state = "playing"
+                healthSample(player, base + 120, 0)
+                healthSample(player, base + 122, 2)
+            else if mode = "retry"
+                video.errorCode = -1
+                video.errorStr = "fixture pending health retry"
+                video.state = "error"
+                check(player.callFunc("fixtureRead").retryTimer <> invalid, "health guard uses an actual pending automatic retry")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+            else if mode = "dialog"
+                session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "worker_finished" }
+                healthSample(player, base + 120, 220)
+            else if mode = "back" or mode = "disposed"
+                if mode = "back" then player.callFunc("fixtureBack") else player.callFunc("onDestroy")
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").healthVideo = invalid, "Back or disposal releases the borrowed health wrapper")
+            else if mode = "blocked"
+                session.cleanupBlocked = true
+                healthSample(player, base + 120, 220)
+            else if mode = "pending"
+                session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "source_transition" }
+                player.callFunc("fixtureReconnect")
+                task = player.callFunc("fixtureRead").reconnectTask
+                if task <> invalid then task.response = content("roku-demux")
+                video.state = "playing"
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").pendingContent <> invalid, "pending current descriptor cannot credit old ready health")
+            else if mode = "foreign"
+                player.callFunc("fixtureSessionIdentity", "foreign-health-owner")
+                healthSample(player, base + 120, 220)
+                healthSample(player, base + 122, 222)
+            else if mode = "inconsistent"
+                player.callFunc("fixtureRecovery", 0)
+                healthSample(player, base + 120, 220)
+                check(player.callFunc("fixtureRead").recovery = 0 and player.callFunc("fixtureRead").reconnect = 0, "inconsistent source accounting cannot underflow either counter")
+            end if
+        end if
+        state = player.callFunc("fixtureRead")
+        expectedCharges = 1
+        if mode = "pending" then expectedCharges = 2
+        check(state.transitionCharges = expectedCharges, mode + " interrupts health without forgiving transition debt")
+        closePlayer(player)
+    end for
+
+    player = healthPlayer()
+    for transition = 2 to 6
+        healthTransition(player)
+    end for
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 6 and state.reconnect = 6 and state.recovery = 6, "six rapid transitions retain the exact existing cap")
+    sessionOf(player).event = { id: state.sessionId, status: "failed", reason: "source_transition" }
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 6 and state.reconnect = 7 and state.recovery = 7 and state.errorDialog <> invalid and state.reconnectTimer = invalid, "seventh rapid transition schedules nothing and grants no refundable charge")
+    player.callFunc("fixtureRetry")
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 0, "actual explicit retry resets charge accounting with its existing budgets")
+    closePlayer(player)
+
+    player = healthPlayer()
+    player.contentRequested = request("LIVE")
+    state = player.callFunc("fixtureRead")
+    check(state.transitionCharges = 0 and state.reconnect = 0 and state.recovery = 0 and state.healthVideo = invalid, "actual new-content entry clears its previous health and accounting")
+    closePlayer(player)
+end sub
+
+sub testSourceTransitionRecovery()
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    deliver(player, content("roku-demux"))
+    chooseRoku(player)
+    first = player.callFunc("fixtureRead").sessionId
+    ready(session, first)
+    original = player.callFunc("fixtureRead").video
+    before = m.global.fixtureContentTasks
+    session.event = { id: first, status: "failed", reason: "source_transition" }
+    settle(40)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer <> invalid and state.reconnect = 1 and state.recovery = 1 and state.errorDialog = invalid, "ready source transition schedules one bounded automatic reconnect")
+    check(state.prepared = invalid and calls(session, "start").count() = 1 and m.global.fixtureContentTasks = before, "source transition consumes old preparation without starting or fetching a replacement early")
+    ' A mutation must finish cleanly after reporting the actual missing behavior.
+    if state.reconnectTimer = invalid
+        closePlayer(player)
+        return
+    end if
+    player.callFunc("fixtureEventAgain")
+    check(player.callFunc("fixtureRead").reconnect = 1, "duplicate transition while scheduled consumes no second attempt")
+    player.callFunc("fixtureReconnect")
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer = invalid and state.reconnectTask <> invalid and state.reconnectTask.enableRokuDemux, "actual scheduled reconnect requests a fresh opted-in LIVE descriptor")
+    player.callFunc("fixtureEventAgain")
+    check(m.global.fixtureContentTasks = before + 1 and player.callFunc("fixtureRead").recovery = 1, "duplicate transition during refresh starts no second fetch or budget charge")
+    refreshed = content("roku-demux", "1080p60")
+    refreshed.localPlaybackDescriptor = { qualityId: "1080p60", mediaUrl: "https://fixture.invalid/fresh1080.m3u8", bandwidth: 8000000, isHD: true, fixtureIdentity: "fresh-descriptor" }
+    automatic = content("roku-demux", "Automatic")
+    task = state.reconnectTask
+    task.metadata = [automatic.getFields(), refreshed.getFields()]
+    task.response = automatic
+    settle(60)
+    second = player.callFunc("fixtureRead").sessionId
+    started = calls(session, "start")
+    check(second <> first and started.count() = 2 and started[1].descriptor.qualityId = "1080p60" and started[1].descriptor.fixtureIdentity = "fresh-descriptor", "transition refresh retains selected 1080 quality using the fresh descriptor")
+    check(original.control = "stop" and player.callFunc("fixtureRead").pendingContent <> invalid and player.callFunc("fixtureRead").recovery = 1, "refresh stops the old wrapper and retains spent budget while replacement awaits ready")
+    ready(session, first)
+    check(calls(session, "attach").count() = 1, "stale old ready cannot attach the refreshed transition session")
+    ready(session, second)
+    video = player.callFunc("fixtureRead").video
+    check(video.control = "play" and video.selectedQuality = "1080p60" and video.content.localPlaybackDescriptor.fixtureIdentity = "fresh-descriptor", "only fresh ready resumes selected 1080 playback")
+    check(video.suppressStartupSeek and player.callFunc("fixtureRead").reconnect = 1 and player.callFunc("fixtureRead").recovery = 1, "transition recovery preserves local startup-seek suppression and finite budgets")
+    closePlayer(player)
+
+    ' A real Video error can schedule its retry before the source result lands.
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    deliver(player, content("roku-demux"))
+    chooseRoku(player)
+    first = player.callFunc("fixtureRead").sessionId
+    ready(session, first)
+    video = player.callFunc("fixtureRead").video
+    video.errorCode = -1
+    video.errorStr = "fixture network failure"
+    video.state = "error"
+    settle(40)
+    state = player.callFunc("fixtureRead")
+    check(state.retryTimer <> invalid and state.recovery = 1 and state.reconnect = 0, "actual Video error schedules its single existing recovery timer")
+    retry = state.retryTimer
+    before = m.global.fixtureContentTasks
+    session.event = { id: first, status: "failed", reason: "source_transition" }
+    settle(40)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer = invalid and state.reconnectTask = invalid and state.recovery = 1 and state.reconnect = 0, "source transition preserves one actual error retry without a second timer or budget charge")
+    check(state.retryTimer <> invalid and state.retryTimer.isSameNode(retry) and m.global.fixtureContentTasks = before and calls(session, "start").count() = 1, "pending actual error retry owns recovery until its timer fires")
+    player.callFunc("fixtureFireRetry")
+    state = player.callFunc("fixtureRead")
+    check(state.retryTimer = invalid and state.reconnectTimer = invalid and state.reconnectTask <> invalid and state.reconnectTask.enableRokuDemux and m.global.fixtureContentTasks = before + 1, "actual existing retry performs exactly one fresh LIVE descriptor request")
+    state.reconnectTask.metadata = [automatic.getFields(), refreshed.getFields()]
+    state.reconnectTask.response = automatic
+    settle(60)
+    second = player.callFunc("fixtureRead").sessionId
+    started = calls(session, "start")
+    check(second <> first and started.count() = 2 and started[1].descriptor.qualityId = "1080p60" and started[1].descriptor.fixtureIdentity = "fresh-descriptor", "error retry after transition retains the same selected quality and fresh descriptor")
+    ready(session, second)
+    state = player.callFunc("fixtureRead")
+    check(state.video.control = "play" and state.video.selectedQuality = "1080p60" and state.recovery = 1 and state.reconnect = 0, "one existing error retry resumes selected playback without resetting spent recovery")
+    closePlayer(player)
+
+    for each mode in ["startup", "stale", "other", "malformed", "blocked", "exit", "deferred", "disposed", "manual", "budget"]
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        metadata = [content("roku-demux").getFields(), content("direct", "720p60").getFields()]
+        deliver(player, content("roku-demux"), metadata)
+        chooseRoku(player)
+        id = player.callFunc("fixtureRead").sessionId
+        if mode <> "startup" then ready(session, id)
+        event = { id: id, status: "failed", reason: "source_transition" }
+        if mode = "stale" then event.id = "old-identity"
+        if mode = "other" then event.reason = "worker_finished"
+        if mode = "malformed" then event.reason = {}
+        if mode = "blocked" then session.cleanupBlocked = true
+        if mode = "exit" then player.callFunc("fixtureBack")
+        if mode = "deferred"
+            player.callFunc("fixtureRead").video.QualityChangeRequest = 1
+            player.callFunc("fixtureRead").video.QualityChangeRequestFlag = true
+            settle(40)
+            check(player.callFunc("fixtureRead").deferred, "transition guard fixture has an actual pending direct-quality handoff")
+        end if
+        if mode = "disposed" then player.callFunc("onDestroy")
+        if mode = "manual"
+            session.event = { id: id, status: "failed", reason: "worker_finished" }
+            settle(40)
+            press("ok")
+            settle(160)
+            check(player.callFunc("fixtureRead").pending, "transition guard fixture has an actual manual retry pending")
+        end if
+        if mode = "budget" then player.callFunc("fixtureRecovery", 6)
+        before = m.global.fixtureContentTasks
+        session.event = event
+        settle(40)
+        state = player.callFunc("fixtureRead")
+        check(state.reconnectTimer = invalid and state.reconnectTask = invalid and m.global.fixtureContentTasks = before, mode + " transition cannot start an automatic refresh")
+        if mode = "other" or mode = "malformed" or mode = "blocked" or mode = "budget"
+            check(state.errorDialog <> invalid, mode + " failure retains an actionable dialog")
+        end if
+        if mode = "budget" then check(state.reconnect = 7 and state.recovery = 7 and calls(session, "start").count() = 1, "transition cannot exceed the existing six-attempt recovery budget")
+        closePlayer(player)
+    end for
 end sub
 
 sub testMixedAutomaticRecoveryChoice()
@@ -354,10 +839,18 @@ end function
 
 sub chooseRoku(player as object)
     dialog = m.scene.dialog
-    check(dialog <> invalid and dialog.buttons.count() = 2 and dialog.buttons[0] = "Try on Roku" and dialog.buttons[1] = "Back", "eligible combined stream offers Try on Roku and Back")
+    eligible = dialog <> invalid and dialog.buttons.count() = 2 and dialog.buttons[0] = "Try on Roku" and dialog.buttons[1] = "Back"
+    check(eligible, "eligible combined stream offers Try on Roku and Back")
+    if not eligible then throw "combined-format dialog is not eligible for the remote choice"
     press("ok")
-    settle(160)
-    check(player.callFunc("fixtureRead").transmuxDialog = invalid, "the actual remote choice closes its owned combined-format dialog")
+    ' Repeated OK is queued by the driver; wait for its actual callback.
+    dispatch = createObject("roTimespan")
+    while player.callFunc("fixtureRead").transmuxDialog <> invalid and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
+    closed = player.callFunc("fixtureRead").transmuxDialog = invalid
+    if not closed then throw "the actual remote choice closes its owned combined-format dialog"
+    check(closed, "the actual remote choice closes its owned combined-format dialog")
 end sub
 
 sub ready(session as object, id as string)
@@ -544,9 +1037,15 @@ sub testFailedRetryAndRecovery()
     check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try again", "matching session failure opens an actionable retry dialog")
     before = m.global.fixtureContentTasks
     press("ok")
-    settle(160)
+    dispatch = createObject("roTimespan")
+    while player.callFunc("fixtureRead").task = invalid and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
     task = player.callFunc("fixtureRead").task
-    check(task <> invalid and task.enableRokuDemux and player.callFunc("fixtureRead").pending, "manual retry requests one fresh LIVE descriptor")
+    requested = false
+    if task <> invalid then requested = task.enableRokuDemux and player.callFunc("fixtureRead").pending
+    if not requested then throw "manual retry requests one fresh LIVE descriptor"
+    check(requested, "manual retry requests one fresh LIVE descriptor")
     player.callFunc("fixtureRetry")
     check(m.global.fixtureContentTasks = before + 1, "duplicate manual retry while pending starts no second fetch")
     deliver(player, content("roku-demux"))
@@ -587,4 +1086,3 @@ sub testRefusalAndBlockedOwner()
     check(m.scene.dialog.buttons.count() = 1 and m.scene.dialog.buttons[0] = "Back" and calls(session, "start").count() = 0, "blocked owner offers Back-only fallback without start")
     closePlayer(player)
 end sub
-

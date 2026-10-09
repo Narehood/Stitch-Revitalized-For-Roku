@@ -155,11 +155,22 @@ sub onSessionResult()
     ' Never include the session identity, source URL, credentials or raw errors.
     print "[RokuPlayback] Worker result: "; FormatJSON(sessionWorkerDiagnostic(result))
     if not m.stopping
-        sessionEvent(m.currentId, "failed", "worker_finished")
+        sessionEvent(m.currentId, "failed", sessionWorkerFailureReason(result))
         beginSessionStop()
     end if
     checkSessionCleanup()
 end sub
+
+function sessionWorkerFailureReason(result as object) as string
+    if not m.readyReceived then return "worker_finished"
+    if not sessionCleanupSafe() then return "worker_finished"
+    if not rokuDemuxString(result.reason) then return "worker_finished"
+    if result.reason <> "live_helper_failed" then return "worker_finished"
+    if not rokuDemuxString(result.helperFailureReason) then return "worker_finished"
+    ' Restart a new timeline; never reuse the refused epoch or its init/cache.
+    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" then return "source_transition"
+    return "worker_finished"
+end function
 
 function sessionWorkerDiagnostic(result as object) as object
     summary = { reason: "unknown" }
@@ -181,7 +192,7 @@ function sessionWorkerDiagnostic(result as object) as object
     ' These fixed parser/transport messages distinguish common failures without
     ' copying arbitrary exception text into the console.
     if rokuDemuxString(result.helperFailureReason)
-        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed"]
+        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "continuity window crosses map or discontinuity", "selected window crosses map or discontinuity", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed"]
             if result.helperFailureReason = "native-live: " + message or result.helperFailureReason = "native-demux: " + message
                 summary["helperReason"] = message.Replace(" ", "_")
                 exit for
