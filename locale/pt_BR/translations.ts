@@ -79,12 +79,14 @@
         </message>
         <message>
             <source>Views</source>
-            <translation>Visualizações</translation>
+            <translation>visualizações</translation>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
             <context>The count of users that have watched a VOD/CLIP</context>
         </message>
         <message>
             <source>Followers</source>
-            <translation>Seguidores</translation>
+            <translation>seguidores</translation>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
             <context>Count of users currently following a user on Twitch</context>
         </message>
         <message>

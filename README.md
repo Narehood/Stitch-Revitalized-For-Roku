@@ -2,7 +2,7 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-Modernization is in progress. The [plan](docs/MODERNIZATION_PLAN.md) records audit decisions and release gates; the [device verification matrix](docs/DEVICE_VERIFICATION.md) records what still needs real Roku testing. Passing local tests does not establish working 1440p playback, sound or lower latency on hardware. Native interface work and final independent review remain pending.
+The planned modernization release is **3.0.0 Alpha 1**. The Twitch-inspired native interface is implemented, and bounded Roku-only picture/audio and anonymous chat tests pass on the test TV. The [plan](docs/MODERNIZATION_PLAN.md) and [device verification record](docs/DEVICE_VERIFICATION.md) distinguish those results from remaining 1440p, VOD, broader-device, native UI and latency acceptance. Further Kimi/Grok review rounds are deferred at the maintainer's request.
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
@@ -27,7 +27,7 @@ For development, `npm run build` compiles without a package and `npm run watch` 
 
 The existing manifest minimum remains Roku OS 15.1 with an HD SceneGraph layout. Video selection uses decoder capabilities rather than UI resolution. A device must support the stream's codec, profile, level and dimensions to receive that quality; 1440p is not enabled indiscriminately on every Roku. Unsupported qualities are filtered, with compatible AVC alternatives retained when Twitch supplies them.
 
-Some Enhanced Broadcasting streams combine audio and video in CMAF fragments. These need the optional demux service described below. Ordinary compatible streams play directly. Twitch controls which renditions are available, and its playback interfaces can change independently of Stitch.
+Some Enhanced Broadcasting streams combine audio and video in CMAF fragments. Eligible clear AVC/AAC live streams offer **Try on Roku**, an opt-in experimental splitter that runs on the Roku without another computer or container. This path has bounded full-app picture/audio confirmation on one TV; broader source/device and long-term acceptance remain open. The optional demux service below remains available as a fallback. Ordinary compatible streams play directly. Twitch controls which renditions are available, and its playback interfaces can change independently of Stitch.
 
 Live chat uses secure WebSocket IRC when that component is available on the device. Older devices retain anonymous IRC chat without sending account credentials over its plaintext connection. Chat has bounded reconnection and visible connection status. VODs and clips show an unavailable-chat notice when chat is opened.
 

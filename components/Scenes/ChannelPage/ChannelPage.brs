@@ -80,6 +80,9 @@ sub updateChannelInfo()
     if rsp.profileImageUrl <> invalid
         m.avatar.uri = rsp.profileImageUrl
     end if
+    isLive = false
+    if GetInterface(rsp.isLive, "ifBoolean") <> invalid then isLive = rsp.isLive
+    showLiveMarker(isLive)
     channelContent = buildContentNodeFromShelves(rsp)
     if channelContent.getChildCount() = 0
         setPageStatus("empty", tr("Nothing to watch yet"), Substitute(tr("{0} isn't live and has no recent videos or clips."), channelName()), ["back"])
@@ -87,6 +90,19 @@ sub updateChannelInfo()
     end if
     updateRowList(channelContent)
     hidePageStatus()
+end sub
+
+' A live channel's avatar gets Twitch's red ring and a LIVE pill below it.
+sub showLiveMarker(isLive as boolean)
+    ring = m.top.findNode("liveRing")
+    pill = m.top.findNode("livePill")
+    if ring <> invalid then ring.visible = isLive
+    if pill = invalid then return
+    pill.visible = isLive
+    if not isLive then return
+    width = fitLabelPlate(m.top.findNode("livePillLabel"), m.top.findNode("livePillPlate"), tr("LIVE"), 16, 48)
+    ' Centre the pill under the 120 px avatar.
+    pill.translation = [60 - Int(width / 2), 110]
 end sub
 
 function buildContentNodeFromShelves(rsp)

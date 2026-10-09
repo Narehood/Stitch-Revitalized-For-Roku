@@ -334,8 +334,9 @@ sub setConstants()
                 blue: "0x1f69ffFF",
                 magenta: "0xc53dffFF"
             },
-            ' Interface tokens (HD 1280x720 coordinates). Purple marks focus and
-            ' selection only; red marks LIVE only. XML literals mirror these values.
+            ' Interface tokens (HD 1280x720 coordinates), from Twitch's dark
+            ' theme. Purple marks focus and selection only (plus the Stitch
+            ' wordmark); red marks LIVE only. XML literals mirror these values.
             ui: {
                 color: {
                     canvas: "0x0E0E10FF",
@@ -344,6 +345,9 @@ sub setConstants()
                     raised: "0x26262CFF",
                     divider: "0x323239FF",
                     scrim: "0x0E0E10D9",
+                    ' Stat pills over thumbnails (viewers, dates).
+                    overlay: "0x000000B3",
+                    brand: "0x9147FFFF",
                     text: "0xEFEFF1FF",
                     textSecondary: "0xADADB8FF",
                     textTertiary: "0x848494FF",
@@ -389,7 +393,10 @@ sub setConstants()
                     safeTop: 32,
                     safeBottom: 688,
                     statusY: 200,
-                    statusWidth: 720
+                    statusWidth: 720,
+                    ' Offset of the purple slab behind a focused card.
+                    cardLift: 8,
+                    cardAvatar: 40
                 }
             },
             icons: {

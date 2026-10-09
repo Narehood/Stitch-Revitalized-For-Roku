@@ -8,11 +8,24 @@
         <field id="itemContent" type="node" onChange="showcontent" />
         <field id="rowFocusPercent" type="float" onChange="showrowfocus" />
         <field id="itemHasFocus" type="boolean" onChange="onGetfocus" />
+        <!-- Set by RowList. The card draws its own focus from these, because
+             RowList focus bitmaps are drawn under opaque thumbnails. -->
+        <field id="focusPercent" type="float" onChange="onFocusChange" />
+        <field id="rowListHasFocus" type="boolean" onChange="onFocusChange" />
     </interface>
 
     <script type="text/brightscript" uri="VideoItem.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <children>
+        <!-- Focus lift: a purple slab stays behind the thumbnail, offset down
+             and left, with bevelled ends (Twitch's card hover, for remotes). -->
+        <Group id="lift" visible="false">
+            <Rectangle id="liftSlab" color="0x9147FFFF" width="320" height="180" />
+            <Poster id="liftTop" uri="pkg:/images/twitch-redesign/lift-tl.png" blendColor="0x9147FFFF" />
+            <Poster id="liftBottom" uri="pkg:/images/twitch-redesign/lift-br.png" blendColor="0x9147FFFF" />
+        </Group>
+        <!-- Shows while the thumbnail loads -->
+        <Rectangle id="posterBase" color="0x1F1F23FF" width="320" height="180" />
         <Poster
             id="itemPoster"
             height="180"
@@ -21,13 +34,13 @@
             loadHeight="180"
             loadDisplayMode="scaleToFit">
             <!-- Native LIVE badge: red fill marks live only; text is localized -->
-            <Group id="liveIcon" translation="[6,6]">
-                <Rectangle id="liveBadge" color="0xEB0400FF" width="52" height="24" />
+            <Group id="liveIcon" translation="[8,8]">
+                <Poster id="liveBadge" uri="pkg:/images/twitch-redesign/round4.9.png" blendColor="0xEB0400FF" width="48" height="24" />
                 <Label
                     id="liveLabel"
                     text="LIVE"
                     color="0xFFFFFFFF"
-                    width="52"
+                    width="48"
                     height="24"
                     horizAlign="center"
                     vertAlign="center">
@@ -37,6 +50,15 @@
 
         </Poster>
         <CirclePoster id="circlePoster" height="150" width="150" visible="false" />
+        <!-- Focus ring for circular channel tiles -->
+        <Poster
+            id="circleRing"
+            uri="pkg:/images/twitch-redesign/circle-ring.png"
+            blendColor="0x9147FFFF"
+            width="166"
+            height="166"
+            translation="[-6,-6]"
+            visible="false" />
         <Rectangle
             id="itemMask"
             color="0x0e0e10ff"
@@ -45,13 +67,20 @@
             width="512"
             height="288"
             scaleRotateCenter="[ 256.0, 144.0 ]" />
+        <!-- Channel avatar beside the title on live cards; the corner overlay
+             rounds it against the canvas without a MaskGroup. -->
+        <Group id="avatarGroup" translation="[0,202]" visible="false">
+            <Rectangle id="avatarBase" color="0x26262CFF" width="40" height="40" />
+            <Poster id="avatar" width="40" height="40" loadWidth="80" loadHeight="80" loadDisplayMode="scaleToFill" />
+            <Poster id="avatarCorners" uri="pkg:/images/twitch-redesign/avatar-corners.png" width="40" height="40" />
+        </Group>
         <EmojiLabel
             id="itemLabel"
             height="28"
             maxWidth="320"
             color="0xEFEFF1FF"
-            translation="[0, 192]">
-            <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="22" />
+            translation="[0, 208]">
+            <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
         </EmojiLabel>
         <Label
             id="itemSubtitle"
@@ -59,45 +88,62 @@
             width="320"
             horizAlign="left"
             color="0xADADB8FF"
-            translation="[0, 222]">
+            translation="[0, 226]">
             <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
         </Label>
+        <!-- Stat pills over the thumbnail: viewers / views bottom-left -->
         <Poster
             id="viewsRect"
-            uri="pkg:/images/live_rectangle.9.png"
-            translation="[6,152]">
+            uri="pkg:/images/twitch-redesign/round4.9.png"
+            blendColor="0x000000FF"
+            opacity="0.7"
+            height="24"
+            translation="[8,148]">
         </Poster>
         <Label
             id="itemViewers"
             horizAlign="left"
+            vertAlign="center"
+            height="24"
             color="0xFFFFFFFF"
-            translation="[9,152]">
+            translation="[16,148]">
             <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
         </Label>
         <Poster
             id="runtimeRect"
-            uri="pkg:/images/live_rectangle.9.png"
+            uri="pkg:/images/twitch-redesign/round4.9.png"
+            blendColor="0x000000FF"
+            opacity="0.7"
             visible="false"
-            translation="[5,23]">
+            height="24"
+            translation="[8,8]">
         </Poster>
         <Label
             id="runtimeLabel"
             horizAlign="left"
+            vertAlign="center"
+            height="24"
             color="0xFFFFFFFF"
             visible="false"
-            translation="[7,23]">
+            translation="[16,8]">
             <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
         </Label>
+        <!-- Publish date pill top-left on videos and clips -->
         <Poster
             id="timestampRect"
-            uri="pkg:/images/live_rectangle.9.png"
-            translation="[6,6]">
+            uri="pkg:/images/twitch-redesign/round4.9.png"
+            blendColor="0x000000FF"
+            opacity="0.7"
+            height="24"
+            translation="[8,8]">
         </Poster>
         <Label
             id="timestampLabel"
             horizAlign="left"
+            vertAlign="center"
+            height="24"
             color="0xFFFFFFFF"
-            translation="[9,6]">
+            translation="[16,8]">
             <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
         </Label>
 

@@ -27,15 +27,17 @@
         <Poster
             id="icon"
             uri="pkg:/images/icons/recent.png"
+            blendColor="0xADADB8FF"
             width="24"
             height="24"
-            translation="[27, 0]"
+            translation="[27, 16]"
         />
-        <!-- Name (and LIVE) of the focused channel, beside the rail -->
-        <Group id="caption" visible="false" translation="[84, 0]">
-            <Rectangle id="captionPlate" color="0x1F1F23FF" width="120" height="32" />
-            <Label id="captionLabel" color="0xEFEFF1FF" translation="[12, 5]">
-                <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="18" />
+        <!-- Name (and LIVE) of the focused channel in a tooltip beside the
+             rail, like Twitch's collapsed side nav -->
+        <Group id="caption" visible="false" translation="[88, 0]">
+            <Poster id="captionPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="120" height="40" />
+            <Label id="captionLabel" color="0xEFEFF1FF" height="40" vertAlign="center" translation="[14, 0]">
+                <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
             </Label>
         </Group>
     </children>

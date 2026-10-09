@@ -45,6 +45,8 @@
                 opacity="1"
                 translation="[0,0]" />
         </MaskGroup>
+        <!-- Edge between the video and the chat column -->
+        <Rectangle id="chatDivider" color="0x323239FF" width="2" height="720" />
         <Label id="chatStatus" translation="[12, 12]" width="251" height="130" wrap="true" numLines="5" visible="false" color="0xEFEFF1FF">
             <font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
         </Label>

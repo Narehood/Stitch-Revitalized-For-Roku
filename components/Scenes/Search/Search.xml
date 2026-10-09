@@ -26,8 +26,8 @@
             visible="true"
             iconUri="pkg:/images/icons/clock-o.png"
             focusedIconUri="pkg:/images/icons/clock-o.png"
-            focusFootprintBitmapUri="null"
-            focusBitmapUri="null">
+            focusFootprintBitmapUri="pkg:/images/transparent.9.png"
+            focusBitmapUri="pkg:/images/twitch-redesign/focus-round6.9.png">
             <Font role="textFont" uri="pkg:/fonts/Archivo-Regular.otf" size="20" />
             <Font role="focusedTextFont" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
         </ButtonGroup>
@@ -57,7 +57,7 @@
             itemSize="[1280,295]"
             itemSpacing="[ 0, 40 ]"
             showRowLabel="[ true ]"
-            focusBitmapUri="pkg:/images/focusindicator.9.png"
+            focusBitmapUri="pkg:/images/transparent.9.png"
             vertFocusAnimationStyle="fixedFocus"
             rowFocusAnimationStyle="fixedFocus">
             <Font role="rowLabelFont" uri="pkg:/fonts/Archivo-Bold.otf" size="24" />

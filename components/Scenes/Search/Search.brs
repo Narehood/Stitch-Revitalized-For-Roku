@@ -5,13 +5,14 @@ sub init()
     ' m.recents.buttons = ["Ammo", "paymoneywubby", "three"]
     if m.recents <> invalid
         m.recents.TextColor = m.global.constants.ui.color.text
-        m.recents.FocusedTextColor = m.global.constants.ui.color.focus
+        m.recents.FocusedTextColor = m.global.constants.ui.color.onAccent
         m.recents.observeField("buttonSelected", "onRecentItemSelected")
     end if
     m.recentsHeading = m.top.findNode("recentsHeading")
     if m.recentsHeading <> invalid then m.recentsHeading.text = tr("Recent searches")
     m.searchStatus = m.top.findNode("searchStatus")
     m.kb = m.top.findNode("keyboard")
+    applyKeyboardPalette(m.kb)
     m.kb.textEditBox.hintText = tr("Enter Search Query")
     m.kb.textEditBox.voiceEnabled = true
     m.kb.observefield("text", "handleTextInput")
@@ -22,6 +23,24 @@ sub init()
     m.searchTimer = m.top.findNode("searchDebounce")
     if m.searchTimer <> invalid then m.searchTimer.observeField("fire", "onSearchDebounce")
     updateRecents()
+end sub
+
+' Twitch colours on the on-screen keyboard: dark keys, purple focus.
+sub applyKeyboardPalette(keyboard as dynamic)
+    if keyboard = invalid or not keyboard.hasField("palette") then return
+    color = m.global?.constants?.ui?.color
+    if color = invalid then return
+    palette = CreateObject("roSGNode", "RSGPalette")
+    if palette = invalid then return
+    palette.colors = {
+        PrimaryTextColor: color.text,
+        SecondaryTextColor: color.textSecondary,
+        InputFieldColor: color.raised,
+        KeyboardColor: color.surface,
+        FocusColor: color.focusFill,
+        FocusItemColor: color.onAccent
+    }
+    keyboard.palette = palette
 end sub
 
 sub updateRecents(appendItem = invalid)

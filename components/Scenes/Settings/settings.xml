@@ -14,9 +14,9 @@
             itemSpacing="[0,4]"
             numRows="9"
             vertFocusAnimationStyle="floatingFocus"
-            focusBitmapUri="pkg:/images/focusindicator.9.png"
+            focusBitmapUri="pkg:/images/transparent.9.png"
             focusFootprintBitmapUri="pkg:/images/transparent.9.png" />
-        <Rectangle id="detailsCard" translation="[662,96]" width="570" height="592" color="0x1F1F23FF" />
+        <Poster id="detailsCard" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" translation="[662,96]" width="570" height="592" />
         <LayoutGroup
             id="settingDetail"
             translation="[694,128]"
@@ -46,7 +46,7 @@
                 vertFocusAnimationStyle="floatingFocus"
                 color="0xEFEFF1FF"
                 focusedColor="0xFFFFFFFF"
-                focusBitmapUri="pkg:/images/focusindicator.9.png"
+                focusBitmapUri="pkg:/images/twitch-redesign/focus-round6.9.png"
                 focusFootprintBitmapUri="pkg:/images/transparent.9.png" />
             <Poster
                 id="supportQrPoster"

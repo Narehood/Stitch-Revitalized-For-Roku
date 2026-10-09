@@ -20,7 +20,9 @@
     <children>
         <!-- Delays the spinner so fast loads do not flash it. -->
         <Timer id="spinnerDelay" duration="0.6" repeat="false" />
-        <Rectangle id="plate" color="0x1F1F23FF" width="720" height="100" />
+        <Poster id="plate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="720" height="100" />
+        <!-- Coral rule down the left edge marks an error -->
+        <Rectangle id="accent" color="0xFF8280FF" width="4" height="100" visible="false" />
         <BusySpinner
             id="spinner"
             uri="pkg:/images/spinner.png"
@@ -47,13 +49,14 @@
             id="buttons"
             visible="false"
             minWidth="280"
+            maxWidth="280"
             buttonHeight="48"
             itemSpacings="[12]"
             iconUri=""
             focusedIconUri=""
             textColor="0xEFEFF1FF"
             focusedTextColor="0xFFFFFFFF"
-            focusBitmapUri="pkg:/images/focusindicator.9.png"
+            focusBitmapUri="pkg:/images/twitch-redesign/focus-round6.9.png"
             focusFootprintBitmapUri="pkg:/images/transparent.9.png">
             <Font role="textFont" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
             <Font role="focusedTextFont" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />

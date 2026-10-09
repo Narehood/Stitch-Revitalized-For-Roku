@@ -3,6 +3,7 @@ sub init()
     m.padding = 32
     m.spinnerSize = 40
     m.plate = m.top.findNode("plate")
+    m.accent = m.top.findNode("accent")
     m.spinner = m.top.findNode("spinner")
     m.titleLabel = m.top.findNode("title")
     m.messageLabel = m.top.findNode("message")
@@ -86,6 +87,12 @@ sub layout()
     end if
     m.plate.width = width
     m.plate.height = y + pad
+    if m.accent <> invalid
+        ' Inset so the rule clears the plate's rounded corners.
+        m.accent.translation = [0, 8]
+        m.accent.height = m.plate.height - 16
+        m.accent.visible = m.top.state = "error"
+    end if
 end sub
 
 function labelHeight(label as object, lineHeight as integer) as integer

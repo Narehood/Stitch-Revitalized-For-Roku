@@ -3,6 +3,7 @@ sub init()
     m.plate = m.top.findNode("plate")
     m.name = m.top.findNode("name")
     m.value = m.top.findNode("value")
+    m.focusRing = m.top.findNode("focusRing")
 end sub
 
 sub onContentChange()
@@ -20,6 +21,7 @@ sub onFocusChange()
     color = m.global?.constants?.ui?.color
     if color = invalid then return
     focused = m.top.focusPercent > 0.5 and m.top.listHasFocus
+    if m.focusRing <> invalid then m.focusRing.visible = focused
     if focused
         m.plate.color = color.raised
         m.name.color = color.onAccent
@@ -38,6 +40,10 @@ sub onSizeChange()
     if width <= 0 or height <= 0 then return
     m.plate.width = width
     m.plate.height = height
+    if m.focusRing <> invalid
+        m.focusRing.width = width
+        m.focusRing.height = height
+    end if
     m.name.height = height
     m.value.height = height
     layoutRow()

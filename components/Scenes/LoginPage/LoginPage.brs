@@ -163,17 +163,17 @@ sub RunContentTask()
         m.OauthTask = destroyTask(m.OauthTask, "response")
         m.UserLoginTask = destroyTask(m.UserLoginTask, "response")
         setTitle(tr("Sign in to Twitch"), false)
-        m.title.translation = [96, 104]
+        m.title.translation = [110, 104]
         m.avatar.visible = false
         m.steps.text = tr("On your phone or computer, go to twitch.tv/activate and enter this code:")
-        m.steps.translation = [96, 168]
+        m.steps.translation = [110, 168]
         m.steps.visible = true
         m.code.text = ""
         m.codeGroup.visible = false
         m.qrHint.text = tr("Or scan the QR code with your phone.")
         m.qrHint.visible = false
         m.status.text = tr("Getting a sign-in code…")
-        m.status.translation = [96, 404]
+        m.status.translation = [110, 404]
         m.status.visible = true
         m.optional.text = tr("Signing in is optional — you can watch public streams without an account. Press Back to keep browsing.")
         m.optional.visible = true
@@ -198,7 +198,7 @@ sub showLoginFailure(message as string)
     m.qrGroup.visible = false
     m.status.visible = false
     m.optional.visible = false
-    m.actions.translation = [96, 296]
+    m.actions.translation = [110, 296]
     setActions([tr("Try again"), tr("Back to browsing")], ["retry", "back"])
     if pageWasFocused then m.actions.setFocus(true)
 end sub
@@ -209,22 +209,22 @@ sub showAccount()
     name = get_user_setting("display_name", "")
     if name = invalid or name = "" then name = login
     setTitle(name, false)
-    m.title.translation = [240, 112]
+    m.title.translation = [254, 112]
     avatarUri = get_user_setting("profile_image_url", "")
     if avatarUri = invalid or avatarUri = "" then avatarUri = m.global?.constants?.defaultIcons?.login
     if avatarUri <> invalid then m.avatar.uri = avatarUri
     m.avatar.visible = true
     m.steps.text = Substitute(tr("Signed in to Twitch as {0}."), login)
-    m.steps.translation = [240, 168]
+    m.steps.translation = [254, 168]
     m.steps.visible = true
     m.codeGroup.visible = false
     m.qrHint.visible = false
     m.qrGroup.visible = false
     m.status.text = tr("Signing out keeps your settings and recent channels on this Roku.")
-    m.status.translation = [96, 248]
+    m.status.translation = [110, 248]
     m.status.visible = true
     m.optional.visible = false
-    m.actions.translation = [96, 320]
+    m.actions.translation = [110, 320]
     setActions([tr("Your channel"), tr("Sign out"), tr("Back")], ["channel", "signout", "back"])
     if m.top.isInFocusChain() then m.actions.setFocus(true)
 end sub

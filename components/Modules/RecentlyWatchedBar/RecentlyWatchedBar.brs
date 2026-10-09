@@ -14,9 +14,9 @@ sub init()
     m.captionLabel = m.top.findNode("captionLabel")
 
     ' Layout constants
-    m.itemSpacing = 60 ' px between item origins
-    m.itemStartY = 30 ' px below the icon (icon height + space 6px)
-    m.itemX = 10 ' px from bar left edge
+    m.itemSpacing = 62 ' px between item origins
+    m.itemStartY = 56 ' px below the icon (icon top 16 + height 24 + space 16)
+    m.itemX = 12 ' centres the 54 px avatar in the 78 px rail
     m.visibleWindow = 8 ' number of items visible at once before scrolling
 
     m.items = []
@@ -172,10 +172,10 @@ sub updateCaption()
         width = m.captionLabel.boundingRect().width
     catch e
     end try
-    if width <= 0 then width = len(name) * 10
-    m.captionPlate.width = width + 24
-    ' Centre the 32px plate on the 54px avatar.
-    m.caption.translation = [84, item.translation[1] + 11]
+    if width <= 0 then width = len(name) * 11
+    m.captionPlate.width = width + 28
+    ' Centre the 40px tooltip on the 54px avatar.
+    m.caption.translation = [88, item.translation[1] + 7]
     m.caption.visible = true
 end sub
 

@@ -10,7 +10,25 @@ end sub
 
 sub updatePage()
     m.top.pageTitle = m.top.contentRequested.gameName
+    showCategoryHeader(m.top.contentRequested)
     loadDirectory()
+end sub
+
+' Box art and viewer count come from the category tile that opened the page.
+sub showCategoryHeader(content as dynamic)
+    if content = invalid then return
+    boxArt = m.top.findNode("boxArt")
+    viewers = m.top.findNode("viewers")
+    header = m.top.findNode("Header")
+    title = content.gameDisplayName
+    if title = invalid or title = "" then title = content.gameName
+    if header <> invalid and title <> invalid then header.text = title
+    if boxArt <> invalid and content.gameBoxArtUrl <> invalid then boxArt.uri = content.gameBoxArtUrl
+    if viewers <> invalid
+        text = ""
+        if content.viewersCount <> invalid and content.viewersCount > 0 then text = content.viewersDisplay
+        viewers.text = text
+    end if
 end sub
 
 ' One finite request on open or explicit Try again.

@@ -75,17 +75,20 @@
         </message>
         <message>
             <source>Viewers</source>
-            <translation>Espectadores</translation>
+            <translation>espectadores</translation>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
             <context>displayed after the count of current viewership of a stream</context>
         </message>
         <message>
             <source>Views</source>
-            <translation>Vistas</translation>
+            <translation>vistas</translation>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
             <context>The count of users that have watched a VOD/CLIP</context>
         </message>
         <message>
             <source>Followers</source>
-            <translation>Seguidores</translation>
+            <translation>seguidores</translation>
+            <extracomment>Translation awaits native-speaker review.</extracomment>
             <context>Count of users currently following a user on Twitch</context>
         </message>
         <message>

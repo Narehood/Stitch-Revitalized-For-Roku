@@ -14,20 +14,24 @@ sub init()
     '* Layout Constants
     '*******************'
     m.screenWidth = 1280
-    m.iconRightPadding = 24
-    m.iconSize = 44
+    m.iconRightPadding = 48
+    m.iconSize = 32
+    ' Tabs and icons are 44 px pills centred in the 64 px header. Roku Buttons
+    ' inset their label 24 px on each side.
+    m.buttonHeight = 44
+    m.buttonInset = 24
+    m.tabsX = 152
 
     '*******************'
-    '* Per-group focus bitmap URIs. Each ButtonGroup uses a different
-    '* focus image (text buttons get an underline indicator, icon buttons
-    '* get a footprint). We toggle focusBitmapUri on each Button to either
+    '* Per-group focus bitmap URIs. Tabs and icons both get the purple
+    '* focus pill. We toggle focusBitmapUri on each Button to either
     '* the real image (when its group is focused) or a transparent 9-patch
     '* (when its group is not). Setting the URI to "" leaves the previously
     '* loaded bitmap cached on screen, so a real (transparent) image is used
     '* to forcibly clear the rendered focus indicator.
     '*******************'
-    m.menuOptionsFocusUri = "pkg:/images/focusindicator.9.png"
-    m.iconOptionsFocusUri = "pkg:/images/focusfootprint.9.png"
+    m.menuOptionsFocusUri = "pkg:/images/twitch-redesign/focus-round6.9.png"
+    m.iconOptionsFocusUri = "pkg:/images/twitch-redesign/focus-round6.9.png"
     m.transparentFocusUri = "pkg:/images/transparent.9.png"
 
     m.top.observeField("focusedChild", "onGetfocus")
@@ -49,9 +53,9 @@ sub init()
     m.top.observeField("focusItem", "onFocusItem")
 
     ' Active tab reads as primary text, other tabs as secondary; the focused
-    ' tab adds the focus colour and underline indicator.
+    ' tab is white on the purple focus pill.
     m.top.menuTextColor = m.global.constants.ui.color.textSecondary
-    m.top.menuFocusColor = m.global.constants.ui.color.focus
+    m.top.menuFocusColor = m.global.constants.ui.color.onAccent
 end sub
 
 ' Remove all children from a ButtonGroup so updateMenuOptions can be re-run.
@@ -255,9 +259,11 @@ function buildIcon(icon)
     newItem.focusedTextColor = m.top.menuTextColor
     newItem.iconUri = map[icon]
     newItem.focusedIconUri = map[icon]
-    newItem.minWidth = 0
-    newItem.focusFootprintBitmapUri = "pkg:/images/focusfootprint.9.png"
-    newItem.focusBitmapUri = "pkg:/images/focusfootprint.9.png"
+    newItem.height = m.buttonHeight
+    newItem.minWidth = m.iconSize + (m.buttonInset * 2)
+    newItem.maxWidth = newItem.minWidth
+    newItem.focusFootprintBitmapUri = m.transparentFocusUri
+    newItem.focusBitmapUri = m.iconOptionsFocusUri
     newItem.showFocusFootprint = false
     ' Some runtimes omit these internal Posters; the public icon fields remain valid.
     iconPoster = newItem.getChild(3)
@@ -293,30 +299,34 @@ sub updateMenuOptions()
     clearGroup(m.menuOptions)
     clearGroup(m.iconOptions)
 
-    m.menuOptions.translation = [78, 0]
+    m.menuOptions.translation = [m.tabsX, (64 - m.buttonHeight) / 2]
+    m.iconOptions.translation = [m.iconOptions.translation[0], (64 - m.buttonHeight) / 2]
 
     '*******************'
-    '* Build text buttons -> MenuOptions (left-anchored)
+    '* Build text buttons -> MenuOptions (left-anchored). Each tab is as wide
+    '* as its localized label plus the Button inset, like Twitch's nav links.
     '*******************'
+    font = CreateObject("roSGNode", "Font")
+    font.size = m.top.menuFontSize
+    font.uri = m.top.menuFontUri
     menuButtons = []
     for i = 0 to (m.top.menuOptionsText.count() - 1)
         if m.top.menuOptionsText[i] <> ""
             newItem = createObject("roSGNode", "Button")
-            font = CreateObject("roSGNode", "Font")
-            font.size = m.top.menuFontSize
-            font.uri = m.top.menuFontUri
-            newItem.minWidth = 245
             newItem.textFont = font
             newItem.focusedTextFont = font
             newItem.textColor = m.top.menuTextColor
             newItem.focusedTextColor = m.top.menuFocusColor
             newItem.iconUri = ""
             newItem.focusedIconUri = ""
-            newItem.focusFootprintBitmapUri = "pkg:/images/focusfootprint.9.png"
-            newItem.focusBitmapUri = "pkg:/images/focusindicator.9.png"
+            newItem.focusFootprintBitmapUri = m.transparentFocusUri
+            newItem.focusBitmapUri = m.menuOptionsFocusUri
             newItem.showFocusFootprint = false
+            newItem.height = m.buttonHeight
             newItem.id = m.top.menuOptionsText[i]
             newItem.text = tr(m.top.menuOptionsText[i])
+            newItem.minWidth = tabWidth(newItem.text, font)
+            newItem.maxWidth = newItem.minWidth
             menuButtons.push(newItem)
         end if
     end for
@@ -363,15 +373,31 @@ sub positionIconOptions()
         width = 0
     end try
     if width <= 0
-        ' Fallback: estimate based on icon size when boundingRect is unavailable.
-        ' Each icon button is ~ iconSize wide plus button chrome (~16px).
-        perIcon = m.iconSize + 16
+        ' Fallback when boundingRect is unavailable: fixed-width icon pills.
+        perIcon = m.iconSize + (m.buttonInset * 2) + 4
         width = m.iconOptions.getChildCount() * perIcon
     end if
     x = m.screenWidth - m.iconRightPadding - width
     if x < 0 then x = 0
-    m.iconOptions.translation = [x, 0]
+    m.iconOptions.translation = [x, (64 - m.buttonHeight) / 2]
 end sub
+
+' Label width plus the Button's inset on both sides, so the focus pill hugs
+' the localized text and the label sits centred in it.
+function tabWidth(text as string, font as object) as integer
+    width = 0
+    try
+        probe = CreateObject("roSGNode", "Label")
+        probe.font = font
+        probe.text = text
+        ' Round up so the label never ellipsizes by a fraction of a pixel.
+        width = Int(probe.boundingRect().width + 0.999) + 1
+    catch e
+        width = 0
+    end try
+    if width <= 0 then width = len(text) * 14
+    return width + (m.buttonInset * 2)
+end function
 
 sub handleUserLoginResponse()
     ? "[MenuBar] - handleUserLoginResponse()"

@@ -57,7 +57,7 @@
             <Group id="infoRow" translation="[48,66]">
                 <CirclePoster id="avatar" width="48" height="48" translation="[0,0]" />
                 <Group id="liveIndicator" translation="[64,3]">
-                    <Rectangle id="liveBadge" color="0xEB0400FF" width="56" height="26" />
+                    <Poster id="liveBadge" uri="pkg:/images/twitch-redesign/round4.9.png" blendColor="0xEB0400FF" width="56" height="26" />
                     <Label id="liveLabel" color="0xFFFFFFFF" width="56" height="26" horizAlign="center" vertAlign="center">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
                     </Label>
@@ -76,7 +76,7 @@
 
             <!-- Focus caption: names the focused button above it. -->
             <Group id="caption" visible="false" translation="[0,140]">
-                <Rectangle id="captionPlate" width="160" height="30" color="0x1F1F23FF" />
+                <Poster id="captionPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="160" height="30" />
                 <Label id="captionLabel" width="160" height="30" horizAlign="center" vertAlign="center" color="0xEFEFF1FF">
                     <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="18" />
                 </Label>
@@ -85,25 +85,25 @@
             <!-- Back · Chat · Play/Pause · Quality, one contiguous group. -->
             <Group id="controls" translation="[494,178]">
                 <Group id="backGroup" translation="[0,0]">
-                    <Rectangle id="backBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="backFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="backBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="backFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Label width="64" height="48" horizAlign="center" vertAlign="center" text="←" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                     </Label>
                 </Group>
                 <Group id="chatGroup" translation="[76,0]">
-                    <Rectangle id="chatBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="chatFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="chatBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="chatFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster id="messagesButton" uri="pkg:/images/messages.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
                 <Group id="playPauseGroup" translation="[152,0]">
-                    <Rectangle id="playPauseBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="playPauseFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="playPauseBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="playPauseFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster id="controlButton" uri="pkg:/images/pause.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
                 <Group id="qualityGroup" translation="[228,0]">
-                    <Rectangle id="qualityBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="qualityFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="qualityBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="qualityFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster id="qualitySelectButton" uri="pkg:/images/icons/sliders.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
             </Group>

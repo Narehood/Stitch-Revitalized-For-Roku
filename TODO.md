@@ -16,7 +16,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P2 | Reduce remaining simulator dependency advisories | Inspect compatible fixes; avoid overrides breaking CommonJS consumers |
 | P2 | Make tagged channel releases validate their exact source | Release currently relies on main CI; gate tag artifacts on lint/audit/tests/package checks |
 | P2 | Expand production resolver and container reproducibility coverage | Add create_app resolver-wiring regression; consider digest-pinned Python base image |
-| P2 | Measure native UI rendering and per-instance regex caching | Actual TV typography/contrast/overscan, older-device scrolling and before/after card recycle timing; simulator gaps remain unproven |
+| P2 | Measure native UI rendering and per-instance regex caching | Twitch-inspired header/card/Search/Settings captures and real navigation pass on G204X; check first-column lift clipping, native keyboard hint/header overlap, TV typography/overscan, older-device scrolling and before/after card recycle timing. Captured frames do not establish couch-distance readability |
 | P2 | Review Spanish/Portuguese interface strings and native long-string fit | All new copy is covered; phase-two translations remain flagged for native-speaker review |
 | P2 | Verify own-channel navigation and live playback on Roku | Account emits LIVE content by login; actual handler/Back regressions pass, native playback remains pending |
 | P2 | Verify delayed sign-in failure focus on Roku | Minimal focus guard and tracked late-failure/menu/return/Retry/disposal regressions pass; confirm native focus |
@@ -33,3 +33,4 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 | P3 | Assess a future FHD-native interface | Keep current HD layout until broad hardware/focus validation |
 | P3 | Track the simulator's ButtonGroup role-font boundary | Font role nodes become focusable children in brs-engine; tests/probes remove those nodes explicitly. Keep production fonts and verify native rendering |
 | P3 | Recheck menu callback timing on native hardware | One recovery probe printed a menu callback before its single Following build, with no visible failure; the probe does not establish a production defect |
+| P3 | Decide whether to remove the unused ChannelMenu module | Unreferenced legacy module still names missing heart.png/heart-0.png assets; verify callers before deprecation, without affecting the redesigned menu |

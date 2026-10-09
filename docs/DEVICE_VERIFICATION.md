@@ -71,7 +71,7 @@ A fresh 48-second private scene used the production ChatJob and Chat renderer by
 
 The same TV creates `roWebSocket` but opening it returns native error 29, "WebSockets are not allowed." A certificate-verified HTTPS request to the same Twitch host completes with HTTP 400; that result does not establish WebSocket permission. The working anonymous TCP fallback preserves the device baseline. Secure WebSocket chat still requires separate device acceptance.
 
-The regression executes 23 assertions against current transport/receive functions with explicit socket/time boundaries and the real IRC parser. Both historical connection-gate and empty-buffer mutations fail the fixture despite normal interpreter exit. All nine offline suites and 49 Node tests pass, along with formatting/check, lint, packaging and Rooibos compilation. These modeled regressions supplement the native run; they do not replace it.
+The regression executes 23 assertions against current transport/receive functions with explicit socket/time boundaries and the real IRC parser. Both historical connection-gate and empty-buffer mutations fail the fixture despite normal interpreter exit. All nine offline suites and 49 Node tests pass, along with formatting/check, lint, packaging and Rooibos compilation. These modeled regressions supplement the native run; they do not replace it. The chat correction at `b642532` also passes Windows/Linux and service CI.
 
 | Check | Expected behavior | Result / evidence |
 |---|---|---|
@@ -82,13 +82,21 @@ The regression executes 23 assertions against current transport/receive function
 | VOD/clip chat button | Unavailable-chat notice; no recorded playback joined to live chat | Pending |
 | Login pending / denied / expired / network error | Useful retry/browse options; no endless poll | Pending |
 | Validation interruption and sign-out | Temporary failure preserves account; sign-out preserves preferences | Pending |
-| All pages and recent rail | Visible D-pad focus, reliable Back and focus restoration | Pending |
-| Settings, proxy entry, dialogs and player overlays | No trapped focus, clipped text or inaccessible actions | Pending |
+| All pages and recent rail | Visible D-pad focus, reliable Back and focus restoration | Following/Browse/Search/Settings navigation and Back verified in the native visual check below; other pages, rail navigation and repeated transitions pending |
+| Settings, proxy entry, dialogs and player overlays | No trapped focus, clipped text or inaccessible actions | Settings current values and focused row captured on Roku; proxy entry, dialogs, actions and player overlays pending |
 | Child quality dialog Up/Down/OK/Back, then player Back | Correct option/index, Cancel and exit behavior; simulator key routing diverges | Pending |
 | Recorded seek tap/hold/apply/cancel while playing and paused | One tap is ten seconds; held press accelerates after initial delay; prior play state restored | Pending |
 | Account own-channel/Back and delayed sign-in failure | Correct live channel route; retained page/focus; late failure preserves menu focus | Pending |
 | Archivo text, long strings, chat contrast and overscan | Readable at couch distance on lowest available device; no clipped targets or scrolling regression | Pending |
 | Repeated permanent and back-stack transitions | Permanent scenes clean up; retained scenes remain reusable | Pending |
+
+## Twitch-inspired visual redesign
+
+The additional visual assignment is implemented and locally verified. It adds a Stitch wordmark, horizontal navigation pills, purple card focus, live/count badges, channel avatars, detail headers, rounded panels and clearer Settings focus. The playback, splitter, chat transport, authentication, settings schema, OS baseline and existing tests are unchanged. All existing XML interfaces and node IDs remain; the card adds Roku's documented focus fields. Mandatory formatting/check, lint, packaging, Rooibos compilation, nine offline suites and 55 Node tests pass. Six new tests include 30 actual component assertions and a focus mutation that must fail. Fifteen fresh simulator scenarios pass 206 artifact checks, with representative screenshots inspected separately; simulated pixels and mocked playback do not establish hardware acceptance.
+
+A fresh finite full-app visual package ran on G204X / OS 15.3.4. Actual menu and target-item focus were checked before each Select, and the resulting page type was checked afterward. Following, Browse, Search and Settings were reached with real remote keys; eight screenshots were captured, and root inspected the header, card focus and all three target pages. The captures show horizontal English tab pills, the wordmark and normal-size icons, the purple card focus bar, native purple keyboard focus and current-value Settings rows. The app exited normally through Back, without a runtime error, playback activation, account action or saved-setting change. The regular package was restored. An earlier script used Up instead of Back and missed its target pages; those later captures are excluded from acceptance and retained as failed navigation evidence.
+
+The first-column card's left lift is clipped by the RowList viewport, while its bottom focus bar remains visible. The native mobile-keyboard hint overlays the right header while Search has keyboard focus; this pass does not change Search geometry. These captures do not verify TV overscan, couch-distance readability, animation feel, all child-dialog/player keys, older-device scrolling or 4K scaling. The wordmark at logical x32 is visible in the captured frame; actual TV cropping remains untested. Complete native UI and Spanish/Portuguese speaker acceptance remain open.
 
 ## Low-latency comparison
 

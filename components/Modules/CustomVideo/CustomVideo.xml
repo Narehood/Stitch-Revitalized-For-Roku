@@ -40,7 +40,7 @@
             <Group id="infoRow" translation="[48,66]">
                 <CirclePoster id="avatar" width="48" height="48" translation="[0,0]" />
                 <Group id="liveIndicator" translation="[64,3]" visible="false">
-                    <Rectangle id="liveBadge" color="0xEB0400FF" width="56" height="26" />
+                    <Poster id="liveBadge" uri="pkg:/images/twitch-redesign/round4.9.png" blendColor="0xEB0400FF" width="56" height="26" />
                     <Label id="liveLabel" color="0xFFFFFFFF" width="56" height="26" horizAlign="center" vertAlign="center">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
                     </Label>
@@ -72,7 +72,7 @@
 
             <!-- Focus caption: names the focused button above it. -->
             <Group id="caption" visible="false" translation="[0,178]">
-                <Rectangle id="captionPlate" width="160" height="30" color="0x1F1F23FF" />
+                <Poster id="captionPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="160" height="30" />
                 <Label id="captionLabel" width="160" height="30" horizAlign="center" vertAlign="center" color="0xEFEFF1FF">
                     <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="18" />
                 </Label>
@@ -81,39 +81,39 @@
             <!-- Back · Jump to time · −10 · Play/Pause · +10 · Chat -->
             <Group id="controls" translation="[418,214]">
                 <Group id="backGroup" translation="[0,0]">
-                    <Rectangle id="backBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="backFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="backBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="backFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Label width="64" height="48" horizAlign="center" vertAlign="center" text="←" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                     </Label>
                 </Group>
                 <Group id="timeTravelGroup" translation="[76,0]">
-                    <Rectangle id="timeTravelBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="timeTravelFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="timeTravelBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="timeTravelFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster uri="pkg:/images/TimeTravel.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
                 <Group id="rewindGroup" translation="[152,0]">
-                    <Rectangle id="rewindBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="rewindFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="rewindBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="rewindFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Label width="64" height="48" horizAlign="center" vertAlign="center" text="−10" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
                     </Label>
                 </Group>
                 <Group id="playPauseGroup" translation="[228,0]">
-                    <Rectangle id="playPauseBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="playPauseFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="playPauseBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="playPauseFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster id="controlButton" uri="pkg:/images/pause.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
                 <Group id="fastForwardGroup" translation="[304,0]">
-                    <Rectangle id="fastForwardBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="fastForwardFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="fastForwardBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="fastForwardFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Label width="64" height="48" horizAlign="center" vertAlign="center" text="+10" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
                     </Label>
                 </Group>
                 <Group id="chatGroup" translation="[380,0]">
-                    <Rectangle id="chatBg" color="0x26262CFF" width="64" height="48" />
-                    <Rectangle id="chatFocus" color="0x9147FFFF" width="64" height="48" visible="false" />
+                    <Poster id="chatBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="chatFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster uri="pkg:/images/messages.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
                 </Group>
             </Group>
@@ -122,7 +122,7 @@
         <!-- Jump to time, drawn after the controls so they never cover it.
              Text is set from BRS so it is localized. -->
         <Group id="timeTravelDialog" visible="false" translation="[340,168]">
-            <Rectangle id="timeTravelPlate" color="0x1F1F23FF" width="600" height="384" />
+            <Poster id="timeTravelPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="600" height="384" />
             <Label id="timeTravelTitle" translation="[32,28]" width="536" height="36" color="0xEFEFF1FF">
                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
             </Label>
@@ -140,15 +140,15 @@
                     </Label>
                     <Group id="hoursInputGroup" translation="[0,30]">
                         <Group id="hour0Group" translation="[0,0]">
-                            <Rectangle id="hour0Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="hour0" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="hour0Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="hour0" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="hour0Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
                         </Group>
                         <Group id="hour1Group" translation="[60,0]">
-                            <Rectangle id="hour1Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="hour1" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="hour1Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="hour1" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="hour1Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
@@ -166,15 +166,15 @@
                     </Label>
                     <Group id="minutesInputGroup" translation="[0,30]">
                         <Group id="minute0Group" translation="[0,0]">
-                            <Rectangle id="minute0Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="minute0" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="minute0Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="minute0" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="minute0Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
                         </Group>
                         <Group id="minute1Group" translation="[60,0]">
-                            <Rectangle id="minute1Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="minute1" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="minute1Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="minute1" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="minute1Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
@@ -192,15 +192,15 @@
                     </Label>
                     <Group id="secondsInputGroup" translation="[0,30]">
                         <Group id="second0Group" translation="[0,0]">
-                            <Rectangle id="second0Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="second0" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="second0Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="second0" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="second0Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
                         </Group>
                         <Group id="second1Group" translation="[60,0]">
-                            <Rectangle id="second1Bg" color="0x26262CFF" width="50" height="60" />
-                            <Rectangle id="second1" color="0x9147FFFF" width="50" height="60" visible="false" />
+                            <Poster id="second1Bg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="50" height="60" />
+                            <Poster id="second1" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="50" height="60" visible="false" />
                             <Label id="second1Text" width="50" height="60" horizAlign="center" vertAlign="center" text="0" color="0xFFFFFFFF">
                                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
                             </Label>
@@ -215,15 +215,15 @@
 
             <Group id="actionButtonsContainer" translation="[32,308]">
                 <Group id="cancelButtonGroup" translation="[0,0]">
-                    <Rectangle id="cancelButton" color="0x26262CFF" width="140" height="52" />
-                    <Rectangle id="cancelButtonFocus" color="0x9147FFFF" width="140" height="52" visible="false" />
+                    <Poster id="cancelButton" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="140" height="52" />
+                    <Poster id="cancelButtonFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="140" height="52" visible="false" />
                     <Label id="cancelButtonLabel" width="140" height="52" horizAlign="center" vertAlign="center" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
                     </Label>
                 </Group>
                 <Group id="acceptButtonGroup" translation="[156,0]">
-                    <Rectangle id="acceptButton" color="0x26262CFF" width="140" height="52" />
-                    <Rectangle id="acceptButtonFocus" color="0x9147FFFF" width="140" height="52" visible="false" />
+                    <Poster id="acceptButton" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="140" height="52" />
+                    <Poster id="acceptButtonFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="140" height="52" visible="false" />
                     <Label id="acceptButtonLabel" width="140" height="52" horizAlign="center" vertAlign="center" color="0xFFFFFFFF">
                         <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
                     </Label>
@@ -233,7 +233,7 @@
 
         <!-- Seek preview frame, floating above the controls at the knob. -->
         <Group id="thumbnailPreview" translation="[48,303]" visible="false">
-            <Rectangle id="thumbnailPlate" color="0x1F1F23FF" width="248" height="177" />
+            <Poster id="thumbnailPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="248" height="177" />
             <Group id="thumbnails" translation="[4,4]">
                 <Poster id="thumbnailImage" />
             </Group>

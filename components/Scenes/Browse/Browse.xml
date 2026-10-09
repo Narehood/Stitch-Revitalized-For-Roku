@@ -22,7 +22,7 @@
             itemSize="[1280,295]"
             itemSpacing="[0,40]"
             showRowLabel="[true]"
-            focusBitmapUri="pkg:/images/focusindicator.9.png"
+            focusBitmapUri="pkg:/images/transparent.9.png"
             vertFocusAnimationStyle="fixedFocus"
             rowFocusAnimationStyle="fixedFocus">
             <Font role="rowLabelFont" uri="pkg:/fonts/Archivo-Bold.otf" size="24" />

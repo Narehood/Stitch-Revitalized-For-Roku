@@ -5,13 +5,32 @@ sub init()
     m.timestampRect = m.top.findNode("timestampRect")
     m.timestampLabel = m.top.findNode("timestampLabel")
     m.itemposter = m.top.findNode("itemPoster")
+    m.posterBase = m.top.findNode("posterBase")
     m.circlePoster = m.top.findNode("circlePoster")
+    m.circleRing = m.top.findNode("circleRing")
     m.liveicon = m.top.findNode("liveIcon")
     m.itemSubtitle = m.top.findNode("itemSubtitle")
     m.itemViewers = m.top.findNode("itemViewers")
     m.viewsRect = m.top.findNode("viewsRect")
     m.runtimeRect = m.top.findNode("runtimeRect")
     m.runtimeLabel = m.top.findNode("runtimeLabel")
+    m.avatarGroup = m.top.findNode("avatarGroup")
+    m.avatar = m.top.findNode("avatar")
+    m.lift = m.top.findNode("lift")
+    m.liftSlab = m.top.findNode("liftSlab")
+    m.liftTop = m.top.findNode("liftTop")
+    m.liftBottom = m.top.findNode("liftBottom")
+    m.liftSize = 8
+    m.avatarSize = 40
+    layout = m.global?.constants?.ui?.layout
+    if layout <> invalid
+        if layout.cardLift <> invalid then m.liftSize = layout.cardLift
+        if layout.cardAvatar <> invalid then m.avatarSize = layout.cardAvatar
+    end if
+    m.isCircle = false
+    m.posterWidth = 0
+    m.posterHeight = 0
+    m.sawFocusPercent = false
     initLiveBadge()
     initTitleFonts()
 end sub
@@ -25,7 +44,7 @@ sub initTitleFonts()
     m.titleFont = m.itemlabel.font
     m.gameTitleFont = CreateObject("roSGNode", "Font")
     m.gameTitleFont.uri = m.titleFont.uri
-    m.gameTitleFont.size = 20
+    m.gameTitleFont.size = 18
 end sub
 
 sub setTitleFont(font as dynamic)
@@ -43,7 +62,7 @@ sub initLiveBadge()
     ' Width 0 lets the label size to its text for measuring.
     label.width = 0
     label.text = tr("LIVE")
-    width = 52
+    width = 48
     try
         textWidth = label.localBoundingRect().width
         if textWidth + 16 > width then width = textWidth + 16
@@ -51,6 +70,29 @@ sub initLiveBadge()
     end try
     badge.width = width
     label.width = width
+end sub
+
+' Sizes a stat pill to its text: 8 px padding each side on a 24 px plate.
+sub fitPill(label as dynamic, plate as dynamic, text as dynamic)
+    if label = invalid or plate = invalid then return
+    if text = invalid then text = ""
+    label.width = 0
+    label.text = text
+    width = 0
+    try
+        ' Round up: a label narrower than its text by a fraction ellipsizes.
+        width = Int(label.localBoundingRect().width + 0.999) + 1
+    catch e
+    end try
+    if width <= 1 then width = len(text) * 9
+    plate.width = width + 16
+    plate.height = 24
+    label.translation = [plate.translation[0] + 8, plate.translation[1]]
+    label.width = width
+    label.height = 24
+    ' An empty stat (no viewer count yet) shows no plate at all.
+    plate.visible = text <> ""
+    label.visible = plate.visible
 end sub
 
 ' Restores the LIVE/VOD/CLIP card geometry. RowList recycles item components
@@ -61,8 +103,21 @@ sub resetLayout()
     m.itemposter.loadwidth = 320
     m.itemposter.loadheight = 180
     m.itemlabel.maxwidth = 320
-    m.itemlabel.translation = [0, 192]
-    m.itemSubtitle.translation = [0, 222]
+    ' The title's 28 px line (EmojiLabel y is its centre) starts 6 px below the
+    ' focus slab, which reaches 8 px under the thumbnail.
+    m.itemlabel.translation = [0, 208]
+    m.itemSubtitle.width = 320
+    m.itemSubtitle.translation = [0, 226]
+    setPosterBase(320, 180)
+end sub
+
+sub setPosterBase(width as integer, height as integer)
+    m.posterWidth = width
+    m.posterHeight = height
+    if m.posterBase = invalid then return
+    m.posterBase.width = width
+    m.posterBase.height = height
+    m.posterBase.visible = true
 end sub
 
 ' Joins card subtitle parts with a middle dot, skipping empty parts.
@@ -80,11 +135,14 @@ end function
 sub resetVisibility()
     if m.itemposter = invalid then return
     m.itemposter.visible = true
+    m.isCircle = false
     if m.circlePoster <> invalid then m.circlePoster.visible = false
+    if m.circleRing <> invalid then m.circleRing.visible = false
+    if m.avatarGroup <> invalid then m.avatarGroup.visible = false
     if m.liveicon <> invalid then m.liveicon.visible = true
     if m.itemViewers <> invalid then m.itemViewers.visible = true
     if m.viewsRect <> invalid then m.viewsRect.visible = true
-    ' No content type populates the runtime badge; an empty 9-patch would
+    ' No content type populates the runtime badge; an empty plate would
     ' otherwise draw as a stray square under the LIVE badge.
     if m.runtimeRect <> invalid then m.runtimeRect.visible = false
     if m.runtimeLabel <> invalid then m.runtimeLabel.visible = false
@@ -111,6 +169,7 @@ sub showcontent()
     else if m.top.itemContent.contentType = "USER"
         UserSettings()
     end if
+    onFocusChange()
 end sub
 
 sub GlobalSettings()
@@ -131,9 +190,12 @@ sub GameSettings()
     m.itemposter.height = 250
     m.itemposter.loadwidth = 188
     m.itemposter.loadheight = 250
+    setPosterBase(188, 250)
+    ' Text starts below the focus slab, which reaches 8 px under the box art.
     m.itemlabel.maxwidth = 188
-    m.itemlabel.translation = [0, 258]
-    m.itemSubtitle.translation = [0, 284]
+    m.itemlabel.translation = [0, 276]
+    m.itemSubtitle.width = 188
+    m.itemSubtitle.translation = [0, 290]
     m.liveicon.visible = false
     m.itemViewers.visible = false
     m.viewsRect.visible = false
@@ -144,22 +206,32 @@ sub GameSettings()
     m.itemlabel.text = m.top.itemContent.contentTitle
 end sub
 
+' Live cards follow Twitch's card: avatar, then title over channel · category.
+sub setAvatar(uri as dynamic)
+    if m.avatarGroup = invalid or m.avatar = invalid then return
+    hasAvatar = GetInterface(uri, "ifString") <> invalid and uri <> ""
+    m.avatarGroup.visible = hasAvatar
+    if not hasAvatar then return
+    m.avatar.uri = uri
+    textX = m.avatarSize + 12
+    m.itemlabel.maxwidth = 320 - textX
+    m.itemlabel.translation = [textX, 208]
+    m.itemSubtitle.width = 320 - textX
+    m.itemSubtitle.translation = [textX, 226]
+end sub
+
 sub LiveSettings()
     if m.itemposter = invalid then return
     if m.itemViewers = invalid or m.viewsRect = invalid then return
     if m.itemSubtitle = invalid then return
     if m.timestampLabel = invalid or m.timestampRect = invalid then return
-    m.itemViewers.text = m.top.itemContent.viewersDisplay
-    try
-        m.viewsRect.height = m.itemViewers.boundingRect().height
-        m.viewsRect.width = m.itemViewers.boundingRect().width + 6
-    catch e
-    end try
+    fitPill(m.itemViewers, m.viewsRect, m.top.itemContent.viewersDisplay)
     m.itemposter.uri = m.top.itemContent.previewImageURL
     m.itemSubtitle.text = joinSubtitle(m.top.itemContent.streamerDisplayName, m.top.itemContent.gameDisplayName)
     m.itemlabel.text = m.top.itemContent.contentTitle
     m.timestampLabel.visible = false
     m.timestampRect.visible = false
+    setAvatar(m.top.itemContent.streamerProfileImageUrl)
 end sub
 
 sub VodSettings()
@@ -169,15 +241,10 @@ sub VodSettings()
     if m.itemSubtitle = invalid then return
     if m.timestampLabel = invalid or m.timestampRect = invalid then return
     m.liveicon.visible = false
-    m.itemViewers.text = m.top.itemContent.viewersDisplay
-    try
-        m.viewsRect.height = m.itemViewers.boundingRect().height
-        m.viewsRect.width = m.itemViewers.boundingRect().width + 6
-        m.timestampLabel.text = m.top.itemContent.relativePublishDate
-        m.timestampRect.height = m.timestampLabel.boundingRect().height
-        m.timestampRect.width = m.timestampLabel.boundingRect().width + 6
-    catch e
-    end try
+    fitPill(m.itemViewers, m.viewsRect, m.top.itemContent.viewersDisplay)
+    fitPill(m.timestampLabel, m.timestampRect, m.top.itemContent.relativePublishDate)
+    m.timestampRect.visible = m.timestampLabel.text <> ""
+    m.timestampLabel.visible = m.timestampRect.visible
     m.itemposter.uri = m.top.itemContent.previewImageURL
     m.itemSubtitle.text = joinSubtitle(m.top.itemContent.streamerDisplayName, m.top.itemContent.gameDisplayName)
     m.itemlabel.text = m.top.itemContent.contentTitle
@@ -190,15 +257,10 @@ sub ClipSettings()
     if m.itemSubtitle = invalid then return
     if m.timestampLabel = invalid or m.timestampRect = invalid then return
     m.liveicon.visible = false
-    m.itemViewers.text = m.top.itemContent.viewersDisplay
-    try
-        m.viewsRect.height = m.itemViewers.boundingRect().height
-        m.viewsRect.width = m.itemViewers.boundingRect().width + 6
-        m.timestampLabel.text = m.top.itemContent.relativePublishDate
-        m.timestampRect.height = m.timestampLabel.boundingRect().height
-        m.timestampRect.width = m.timestampLabel.boundingRect().width + 6
-    catch e
-    end try
+    fitPill(m.itemViewers, m.viewsRect, m.top.itemContent.viewersDisplay)
+    fitPill(m.timestampLabel, m.timestampRect, m.top.itemContent.relativePublishDate)
+    m.timestampRect.visible = m.timestampLabel.text <> ""
+    m.timestampLabel.visible = m.timestampRect.visible
     m.itemposter.uri = m.top.itemContent.previewImageURL
     m.itemSubtitle.text = joinSubtitle(m.top.itemContent.streamerDisplayName, m.top.itemContent.gameDisplayName)
     m.itemlabel.text = m.top.itemContent.contentTitle
@@ -214,11 +276,15 @@ sub UserSettings()
     m.runtimeRect.visible = false
     m.runtimeLabel.visible = false
     m.itemposter.visible = false
+    if m.posterBase <> invalid then m.posterBase.visible = false
+    m.isCircle = true
     m.circlePoster.uri = m.top.itemContent.streamerProfileImageUrl
     m.circlePoster.visible = true
+    ' Text starts below the focus ring, which reaches 10 px under the circle.
     m.itemlabel.maxwidth = 150
-    m.itemlabel.translation = [0, 160]
-    m.itemSubtitle.translation = [0, 188]
+    m.itemlabel.translation = [0, 180]
+    m.itemSubtitle.width = 150
+    m.itemSubtitle.translation = [0, 196]
     m.liveicon.visible = false
     m.itemViewers.visible = false
     m.viewsRect.visible = false
@@ -237,6 +303,51 @@ sub onGetFocus()
     else
         m.itemLabel.repeatCount = 0
     end if
+    onFocusChange()
+end sub
+
+' Focus follows the RowList's own focus animation, so the lift grows and
+' shrinks only as the remote moves focus. Nothing shows while the menu or
+' rail holds focus.
+sub onFocusChange()
+    if m.disposed or m.lift = invalid then return
+    amount = 0.0
+    if m.top.focusPercent > 0 then m.sawFocusPercent = true
+    if m.top.rowListHasFocus = true
+        amount = m.top.focusPercent
+        ' A runtime that never animates focusPercent still reports the item.
+        if not m.sawFocusPercent and m.top.itemHasFocus = true then amount = 1.0
+    end if
+    if amount > 1 then amount = 1.0
+    if m.isCircle
+        m.lift.visible = false
+        if m.circleRing <> invalid then m.circleRing.visible = amount >= 0.5
+        return
+    end if
+    if m.circleRing <> invalid then m.circleRing.visible = false
+    applyLift(amount)
+end sub
+
+' The slab sits offset down-left by up to cardLift px; the bevels close the
+' gaps at its top-left and bottom-right corners.
+sub applyLift(amount as float)
+    size = Int(m.liftSize * amount + 0.5)
+    if size < 1 or m.posterWidth <= 0
+        m.lift.visible = false
+        return
+    end if
+    width = m.posterWidth
+    height = m.posterHeight
+    m.liftSlab.width = width
+    m.liftSlab.height = height
+    m.liftSlab.translation = [0 - size, size]
+    m.liftTop.width = size
+    m.liftTop.height = size
+    m.liftTop.translation = [0 - size, 0]
+    m.liftBottom.width = size
+    m.liftBottom.height = size
+    m.liftBottom.translation = [width - size, height]
+    m.lift.visible = true
 end sub
 
 sub showrowfocus()

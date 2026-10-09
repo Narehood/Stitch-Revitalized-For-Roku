@@ -76,17 +76,17 @@
 
         <message>
             <source>Viewers</source>
-            <translation>Viewers</translation>
+            <translation>viewers</translation>
             <context>displayed after the count of current viewership of a stream</context>
         </message>
         <message>
             <source>Views</source>
-            <translation>Views</translation>
+            <translation>views</translation>
             <context>The count of users that have watched a VOD/CLIP</context>
         </message>
         <message>
             <source>Followers</source>
-            <translation>Followers</translation>
+            <translation>followers</translation>
             <context>Count of users currently following a user on Twitch</context>
         </message>
         <message>
