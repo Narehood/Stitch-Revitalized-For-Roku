@@ -9,6 +9,7 @@
         testCancelledStartAndDisposal()
         testDirectSwitch()
         testRepeatedRetainedQualityChoices()
+        testCombinedQualityWithoutDescriptor()
         testQualityRecoveryLadder()
         testMixedAutomaticRecoveryChoice()
         testFailedRetryAndRecovery()
@@ -639,6 +640,33 @@ function qualityFlagEvent(port as object) as dynamic
     end while
     return invalid
 end function
+
+' A Roku start must not let a later combined rendition without a
+' descriptor reach the Video node directly.
+sub testCombinedQualityWithoutDescriptor()
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    combined = content("combined", "720p60")
+    metadata = [content("roku-demux", "1080p60").getFields(), combined.getFields()]
+    deliver(player, content("roku-demux", "1080p60"), metadata)
+    chooseRoku(player)
+    ready(session, player.callFunc("fixtureRead").sessionId)
+    video = player.callFunc("fixtureRead").video
+    video.qualityChangeRequest = 1
+    player.callFunc("fixtureQualityEvent")
+    settle(60)
+    session.busy = false
+    settle(60)
+    dialog = m.scene.dialog
+    check(dialog <> invalid and dialog.buttons.count() = 1 and dialog.buttons[0] = "Back", "combined rendition without a descriptor shows the Back-only audio-service dialog after a Roku start")
+    state = player.callFunc("fixtureRead")
+    played = false
+    if state.video <> invalid
+        if state.video.content <> invalid then played = state.video.content.url = combined.url and state.video.control = "play"
+    end if
+    check(not played and calls(session, "start").count() = 1, "combined rendition without a descriptor is never played directly")
+    closePlayer(player)
+end sub
 
 sub testRepeatedRetainedQualityChoices()
     player = openPlayer("LIVE")

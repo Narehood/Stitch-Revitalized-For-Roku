@@ -1010,22 +1010,6 @@
             <translation type="unfinished">Esta transmisión no pudo continuar en Roku. Inténtalo de nuevo, elige otra calidad o configura el servicio de audio opcional.</translation>
         </message>
         <message>
-            <source>Play on this Roku</source>
-            <translation type="unfinished">Reproducir en este Roku</translation>
-        </message>
-        <message>
-            <source>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</source>
-            <translation type="unfinished">Esta transmisión combina audio y video. Stitch puede intentar separar las pistas en este Roku, sin una computadora ni un contenedor.</translation>
-        </message>
-        <message>
-            <source>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</source>
-            <translation type="unfinished">Este modo experimental usa una calidad fija y puede detenerse si cambia el formato de la transmisión. También puedes configurar el servicio de audio opcional en Ajustes.</translation>
-        </message>
-        <message>
-            <source>Try on Roku</source>
-            <translation type="unfinished">Probar en Roku</translation>
-        </message>
-        <message>
             <source>Ad</source>
             <translation>Anuncio</translation>
         </message>

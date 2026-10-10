@@ -145,10 +145,14 @@ sub onQualityChangeRequested(event = invalid as dynamic)
     m.top.content = new_content ' Update the main content node for VideoPlayer
     m.allowBreak = false
     if m.rokuSessionId = "" then exitPlayer() ' The session owner stops a local Video before replacement.
-    if new_content.isTransmux and not new_content.isProxied and not m.rokuChosen and not chooseRokuPlayback()
-        showTransmuxWarning()
-    else
+    ' A combined rendition without a Roku descriptor cannot play directly, even
+    ' after another rendition started on this Roku.
+    playable = not new_content.isTransmux or new_content.isProxied
+    if not playable then playable = chooseRokuPlayback()
+    if playable
         playContent()
+    else
+        showTransmuxWarning()
     end if
     m.allowBreak = true
 end sub
@@ -1036,9 +1040,11 @@ sub onLiveReconnectResponse()
             end for
         end if
     end if
-    if refreshedContent.isTransmux and not (refreshedContent.playbackTransport = "roku-demux" and m.rokuChosen) and not chooseRokuPlayback()
-        showTransmuxWarning()
-        return
+    if refreshedContent.isTransmux
+        if not chooseRokuPlayback()
+            showTransmuxWarning()
+            return
+        end if
     end if
 
     ' Reset stall tracking
