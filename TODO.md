@@ -4,6 +4,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
+| P1 | Verify live ad countdown with an actual Twitch ad | Normal Task and LIVE Session projection are implemented; a controlled native cue showed five countdown values, pause/resume mapping and safe teardown. Verify a real ad occurrence and TV readability before treating synthetic coverage as provider acceptance; unknown timing remains hidden |
 | P1 | Complete hardware playback, audio, chat and latency validation | [Verification record](docs/DEVICE_VERIFICATION.md); no hardware claims from simulator output |
 | P1 | Complete native live chat coverage | Anonymous Alpha 1 full-player messages/readability and live picture/audio user-confirmed on OS 15.3.4; module hide/show/disposal verified separately. Full-player replacement/Exit, secure/signed-in, emotes and sustained reconnect remain open |
 | P1 | Complete recorded playback acceptance | Alpha 1 public YourRAGE VOD has user-confirmed picture and clear audio; likely sync/possible intro delay is under manual observation. Seek/bookmark/recorded-chat notice, clips and bundled-CMAF VOD coverage remain open |

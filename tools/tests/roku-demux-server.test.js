@@ -14,7 +14,8 @@ const fixture = path.join(__dirname, 'fixtures/roku-demux-server');
 const prefix = 'stitch-roku-demux-server-';
 const helpers = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch', 'rokuDemuxCommon',
     'rokuDemuxProtocol', 'rokuDemuxInitMetadata', 'rokuDemuxServerPolicy', 'rokuDemuxInitGate',
-    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls'].map(name => `source/utils/${name}.brs`);
+    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls',
+    'twitchAdCountdown', 'twitchAdClock', 'twitchAdProtocol'].map(name => `source/utils/${name}.brs`);
 const server = 'components/Tasks/RokuDemuxServer/RokuDemuxServer.brs';
 
 function exactFunction(source, name) {
@@ -144,6 +145,7 @@ test('actual guarded server handlers preserve IO bounds, init gate, failure and 
         await add('main.brs', main.replace('__RUN_MARKER__', marker));
         for (const file of ['adapter.brs', 'init-corpus.json']) await add(file, await fs.readFile(path.join(fixture, file)));
         const files = ['source/utils/rokuDemuxCommon.brs', 'source/utils/rokuDemuxProtocol.brs',
+            'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs', 'source/utils/twitchAdProtocol.brs',
             'source/utils/playbackHls.brs', 'source/utils/rokuDemuxDescriptor.brs',
             'source/utils/rokuDemuxBulk.brs', 'source/utils/rokuDemuxInitMetadata.brs',
             'source/utils/rokuDemuxInitGate.brs', 'source/utils/rokuDemuxServerPolicy.brs',

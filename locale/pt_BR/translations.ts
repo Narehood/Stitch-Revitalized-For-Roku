@@ -1023,5 +1023,13 @@
             <source>Try on Roku</source>
             <translation type="unfinished">Tentar no Roku</translation>
         </message>
+        <message>
+            <source>Ad</source>
+            <translation>Anúncio</translation>
+        </message>
+        <message>
+            <source>Ad {0} of {1}</source>
+            <translation>Anúncio {0} de {1}</translation>
+        </message>
     </context>
 </TS>

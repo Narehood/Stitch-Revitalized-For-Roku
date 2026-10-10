@@ -1,5 +1,11 @@
 sub init()
     m.disposed = false
+    initAdCountdown()
+    if m.adBadge <> invalid
+        m.adBadge.adLabel = tr("Ad")
+        m.adBadge.numberedAdLabel = tr("Ad {0} of {1}")
+    end if
+    m.top.observeField("content", "onAdContentChanged")
     ' Initialize UI elements
     m.top.enableUI = false
     m.top.enableTrickPlay = false
@@ -166,6 +172,7 @@ function videoAreaWidth() as integer
 end function
 
 sub layoutOverlay()
+    if m.adBadge <> invalid then m.adBadge.videoAreaWidth = videoAreaWidth()
     width = videoAreaWidth()
     m.scrim.width = width
     m.scrimFadeFill.width = width
@@ -310,6 +317,7 @@ end sub
 
 sub onVideoStateChange()
     if m.disposed then return
+    updateAdPresented()
     if m.top.state = "playing"
         m.controlButton.uri = "pkg:/images/pause.png"
         hideLoadingOverlay()
@@ -1087,6 +1095,8 @@ end function
 sub onDestroy()
     if m.disposed then return
     m.disposed = true
+    destroyAdCountdown()
+    m.top.unobserveField("content")
     m.bookmarkTask = destroyTask(m.bookmarkTask, "response")
     if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
@@ -1110,4 +1120,8 @@ sub onDestroy()
     if m.loadingSpinner <> invalid then m.loadingSpinner.control = "stop"
     if m.timeTravelDialog <> invalid then m.timeTravelDialog.visible = false
     m.top.control = "stop"
+end sub
+
+sub onAdContentChanged()
+    ignored = clearAdCountdown(m.adOwner)
 end sub

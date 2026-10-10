@@ -49,11 +49,12 @@ async function fixture(name) {
 async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, 'manifest', 'title=Roku Player Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/analytics.brs', 'source/utils/uiContrast.brs']) await copyFile(dir, file);
+        'source/utils/analytics.brs', 'source/utils/uiContrast.brs',
+        'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster',
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
-        'components/Modules/CustomVideo']) await copyTree(dir, folder);
+        'components/Modules/CustomVideo', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
     for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Actual EmojiLabel rendering code; pattern construction is an explicit
     // existing engine boundary. Transport/bookmarks/registry never start.

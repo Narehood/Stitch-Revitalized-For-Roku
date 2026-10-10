@@ -16,7 +16,8 @@ const prefix = 'stitch-roku-map-rotation-';
 const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const sourceFiles = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch', 'rokuDemuxCommon',
     'rokuDemuxProtocol', 'rokuDemuxInitMetadata', 'rokuDemuxInitGate', 'rokuDemuxServerPolicy',
-    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls'].map(name => `source/utils/${name}.brs`);
+    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls',
+    'twitchAdCountdown', 'twitchAdClock', 'twitchAdProtocol'].map(name => `source/utils/${name}.brs`);
 const server = 'components/Tasks/RokuDemuxServer/RokuDemuxServer';
 const sha = data => createHash('sha256').update(data).digest('hex');
 const cases = ['equivalent-map-pending-gate-media-and-held-lease', 'binary-refusal-same-length-valid',

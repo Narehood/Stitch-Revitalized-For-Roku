@@ -212,6 +212,9 @@ function nativeLiveHandleUrlEvent(state as object, event as object, nowMs as dyn
             nlCheck(nativeLiveInputCleanup(), "completed input cleanup failed")
             state.ownInputFile = false
             rokuDemuxFeedInput(state, op.kind, payload, nowMs)
+            if twitchAdClockBoolean(state.adClockEnabled) and state.adClockEnabled = true
+                twitchAdClockCapture(state, op.kind, payload, op.url)
+            end if
         end if
     catch e
         clean = nlCancelInput(state)

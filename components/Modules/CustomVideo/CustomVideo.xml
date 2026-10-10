@@ -7,6 +7,9 @@
         <function name="onDestroy" />
         <function name="showMessage" />
         <function name="hideMessage" />
+        <function name="beginAdCountdown" />
+        <function name="setAdMetadata" />
+        <function name="clearAdCountdown" />
         <field id="thumbnailInfo" type="assocarray" />
         <field id="videoBookmarks" type="assocarray" />
         <field id="back" type="bool" value="false" />
@@ -28,7 +31,10 @@
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/twitchAdCountdown.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/twitchAdClock.brs" />
     <children>
+        <AdCountdown id="adCountdown" />
         <!-- VOD/clip controls. Widths and x positions follow the video area
              and are set in layoutOverlay(). -->
         <Group id="controlOverlay" translation="[0,422]">

@@ -8,6 +8,15 @@ Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph.
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
+## Follow-up development
+
+The active drafts extend the preview without changing its published ZIP:
+
+- [Container-free VOD playback](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/123) adds **Try on Roku** for eligible completed recordings with bundled clear AVC/AAC tracks. The Roku fetches and splits the media locally, with bounded caching and preserved seek, pause, resume and cleanup. Unsupported recordings retain the optional service fallback.
+- [Ad countdown](https://github.com/Narehood/Stitch-Revitalized-For-Roku/pull/124) adds a corner timer and ad position/count when Twitch supplies reliable timing. Unknown timing stays hidden. The feature does not skip ads or guess an entire ad pod's duration.
+
+These drafts still need final checks and acceptance. They are separate from the Alpha 1 download above.
+
 ## What's new in 3.0.0 Alpha 1
 
 - **Twitch-inspired native interface:** dark surfaces, purple focus indicators, redesigned navigation and content cards, clearer connection/loading/error states, current-value Settings, and updated player controls. Existing browsing, account, bookmarks, quality, chat and emote features are retained.

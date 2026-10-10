@@ -59,8 +59,9 @@ async function addComponent(dir, folder, name, probe = '', replacements = []) {
 async function addCommon(dir, title, marker, main) {
     await addFile(dir, 'manifest', `title=${title}\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n`);
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/lifecycle.brs', 'source/utils/analytics.brs']) await copyFile(dir, file);
-    for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster']) await copyTree(dir, folder);
+        'source/utils/lifecycle.brs', 'source/utils/analytics.brs',
+        'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
+    for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
     // Explicit I/O boundaries: in-memory registry and an inert Task-shaped node.
     await addFile(dir, 'source/utils/config.brs', await fixture('config.brs'));
     await addFile(dir, 'components/TwitchApiTask.xml', await fixture('TwitchApiTask.xml'));

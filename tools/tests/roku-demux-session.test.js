@@ -121,7 +121,7 @@ end sub
         }
         await add('components/SessionWorkerBoundary.xml', `<component name="SessionWorkerBoundary" extends="Group"><interface>
           <field id="sessionId" type="string" /><field id="inputDescriptor" type="assocarray" />
-          <field id="experimentalMode" type="boolean" value="false" /><field id="cacheBudgetBytes" type="integer" value="16777216" />
+          <field id="experimentalMode" type="boolean" value="false" /><field id="enableAdMetadata" type="boolean" value="false" /><field id="cacheBudgetBytes" type="integer" value="16777216" />
           <field id="listenPort" type="integer" value="0" /><field id="functionName" type="string" />
           <field id="control" type="string" onChange="onControl" /><field id="state" type="string" value="init" alwaysNotify="true" />
           <field id="ready" type="assocarray" alwaysNotify="true" /><field id="result" type="assocarray" alwaysNotify="true" />

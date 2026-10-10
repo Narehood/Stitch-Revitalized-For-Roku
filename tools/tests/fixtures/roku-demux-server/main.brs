@@ -176,6 +176,7 @@ sub htReset(raw as string)
     m.monotonicClock = nativeLiveClockCreate(0)
     m.lastNowMs = 0&
     m.steadyMode = true
+    m.adMetadataEnabled = false
     m.sessionId = "0123456789abcdef0123456789abcdef"
     m.listenPort = 49371
     m.cacheBudgetBytes = 16777216
