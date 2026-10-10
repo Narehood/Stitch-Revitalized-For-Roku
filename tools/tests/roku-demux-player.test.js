@@ -149,17 +149,7 @@ async function buildPackage(dir, marker, mode = 'normal') {
         await addFile(dir, playerPath, script.replace(guard, ''));
     }
     let main = await fixture('main.brs');
-    if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog'].includes(mode)) {
-        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
-        assert.ok(start?.includes('    testLiveManualQualityIntent()'));
-        const setup = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)).join('\n');
-        main = main.replace(start, setup.replace('    try', '    try\n        testRepeatedDialogDispatch()'));
-        if (mode === 'fixed-dialog-wait') {
-            const wait = /    dispatch = createObject\("roTimespan"\)\r?\n    while player\.callFunc\("fixtureRead"\)\.transmuxDialog <> invalid and dispatch\.totalMilliseconds\(\) < 2000\r?\n        pump\(20\)\r?\n    end while/;
-            assert.equal([...main.matchAll(new RegExp(wait.source, 'g'))].length, 1, 'one actual bounded dialog dispatch wait required');
-            main = main.replace(wait, '    settle(160)');
-        }
-    } else if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+    if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testFailedRetryAndRecovery()'));
         const retryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testFailedRetryAndRecovery()').join('\n');
@@ -273,7 +263,7 @@ async function runFixture(mode = 'normal') {
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
         let driver = keyDriver;
-        if (['repeated-dialog', 'fixed-dialog-wait', 'dropped-dialog', 'repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+        if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
             let script = await fs.readFile(keyDriver, 'utf8');
             const gap = 'const repeatGapMs = 250;';
             assert.equal(script.split(gap).length, 2);
@@ -281,7 +271,7 @@ async function runFixture(mode = 'normal') {
             const schedule = 'nextFree = start + hold;';
             assert.equal(script.split(schedule).length, 2);
             script = script.replace(schedule, 'if (key === lastKey && start === nextFree + repeatGapMs) process.stderr.write("FIXTURE_REPEAT_QUEUED\\n");\n    ' + schedule);
-            if (mode === 'dropped-dialog' || mode === 'dropped-retry') {
+            if (mode === 'dropped-retry') {
                 const emit = "process.stdin.emit('keypress', '', { name, ctrl: false, meta: false, shift: false, sequence: '' });";
                 assert.equal(script.split(emit).length, 2);
                 script = script.replace('function emit(name) {', 'let emittedKeys = 0;\nfunction emit(name) {')
@@ -301,7 +291,7 @@ async function runFixture(mode = 'normal') {
     }
 }
 
-test('actual player callbacks gate Roku opt-in, session ready, retry, quality switch, Back and disposal', { timeout: 90000 }, async t => {
+test('actual player callbacks start eligible Roku playback, session ready, retry, quality switch, Back and disposal', { timeout: 90000 }, async t => {
     const { result, marker } = await runFixture();
     const count = acceptResult(result, marker);
     t.diagnostic(`${count} actual SceneGraph assertions; Session and network are explicit inert IO boundaries; no decoder/hardware proof`);
@@ -315,21 +305,6 @@ test('manual LIVE quality intent survives a missing recovery rung and rejects ge
     assert.match(lost.result.output, /STITCH_UI_FAIL:restored ladder returns to explicit manual quality/);
     assert.throws(() => acceptResult(lost.result, lost.marker));
     t.diagnostic('actual remembered manual-quality matching removal fails normally and is rejected');
-});
-
-test('actual repeated OK dispatch waits for its dialog and a missed deadline exits safely', { timeout: 180000 }, async t => {
-    const actual = await runFixture('repeated-dialog');
-    assert.match(actual.result.output, /FIXTURE_REPEAT_QUEUED/);
-    t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual assertions after the nextFree + repeatGapMs branch queues repeated OK`);
-    for (const mode of ['fixed-dialog-wait', 'dropped-dialog']) {
-        const failed = await runFixture(mode);
-        assertNormalExit(failed.result, mode);
-        assert.match(failed.result.output, /FIXTURE_REPEAT_QUEUED/);
-        assert.match(failed.result.output, /STITCH_UI_FAIL:the actual remote choice closes its owned combined-format dialog/);
-        assert.match(failed.result.output, /STITCH_UI_FAIL:\s*1 failures;\s*[1-9]\d* assertions/);
-        assert.throws(() => acceptResult(failed.result, failed.marker));
-        t.diagnostic(`${mode}: one real dispatch failure closes normally without continuing into a missing Video`);
-    }
 });
 
 test('a genuine failed BrightScript assertion and a stale success marker are rejected', { timeout: 180000 }, async () => {
