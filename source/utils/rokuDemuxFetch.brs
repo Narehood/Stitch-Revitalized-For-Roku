@@ -134,7 +134,9 @@ sub nlStart(state as object, intent as object, phase as string, port as object, 
     if phase = "get" then headers.Range = "bytes=0-" + (intent.limit - 1).ToStr()
     nlCheck(transfer.SetHeaders(headers), "request headers unavailable")
     transfer.SetUrl(intent.url)
-    op = { transfer: transfer, identity: transfer.GetIdentity(), kind: intent.kind, url: intent.url, limit: intent.limit, phase: phase, deadline: nowMs + 5000& }
+    ' A freshly stitched ad's first segment can miss the CDN cache; the player
+    ' holds a ten-second cushion, so allow one transfer that long.
+    op = { transfer: transfer, identity: transfer.GetIdentity(), kind: intent.kind, url: intent.url, limit: intent.limit, phase: phase, deadline: nowMs + 10000& }
     state.op = op ' Retain exactly one native object before starting it.
     nlUseWork(state, "transfer", nowMs)
     if phase = "head"

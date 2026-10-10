@@ -316,6 +316,9 @@ sub playContent(isRecovery = false as boolean)
             ' The opt-in startup seek is separate and needs hardware measurements.
             ' https://developer.roku.com/dev/docs/specs/media (live edge spec)
             contentNodeToPlay.PlayStart = 2147483647
+            ' The on-Roku splitter publishes ~14 s windows in bursts. Starting
+            ' at the default edge leaves a 6 s cushion that runs dry ~20 s in.
+            if m.rokuSessionId <> "" then contentNodeToPlay.PlayStart = 4
         else if isClipContent
             contentNodeToPlay.ignoreStreamErrors = false
             contentNodeToPlay.switchingStrategy = "no-adaptation"

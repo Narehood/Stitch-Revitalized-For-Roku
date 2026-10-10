@@ -33,7 +33,6 @@
         </ButtonGroup>
         <DynamicMiniKeyboard
             id="keyboard"
-            buttonheight="30"
             translation="[100,120]" />
         <Label
             id="searchStatus"

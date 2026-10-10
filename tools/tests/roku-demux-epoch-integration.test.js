@@ -158,7 +158,7 @@ test('actual integrated master/decoder/advertisement/approval-order mutations fa
                 '    nativeLiveFeed(state, kind, payload, nowMs)\n    if kind = "init"\n        \' Reject changed bytes before the gate can replace the approved metadata.',
                 'native-live: actual init owner or phase invalid'],
             [gate, 'nlCheck(liveInitMasterCompatible(actual, timing), "actual init master incompatible")',
-                "' Deliberately removed immutable master compatibility", 'epoch-integration-fixture: incompatible or stopped init is refused before real Core staging profile'],
+                "' Deliberately removed immutable master compatibility", 'epoch-integration-fixture: incompatible or stopped init is refused before real Core staging entry'],
             [gate, 'nlCheck(allowed, "actual init decoder rejected")',
                 "' Deliberately removed native decoder refusal", 'epoch-integration-fixture: incompatible or stopped init is refused before real Core staging decoder'],
             [server, 'if asset.id = id', 'if asset.id = id and (id = entry.publication.initVideoId or id = entry.publication.initAudioId or liveAssetRole(entry.publication,id) = "media")',

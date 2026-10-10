@@ -285,8 +285,11 @@ function nativeLiveParsePlaylist(text as string, baseUrl as string, approvedOrig
     return { mapUrl: mapUrl, mediaSequence: sequence, targetDuration: target, segments: segments, ended: ended }
 end function
 
-function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean, sourceTransitions = false as boolean) as object
+' windowUs above the six-second minimum gives the player a startup cushion;
+' the steady server opts into a longer window (see serveBoundedLive).
+function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean, sourceTransitions = false as boolean, windowUs = 6000000& as longinteger) as object
     nlCheck(not playlist.ended or delayUs = 0&, "historical ENDLIST unsupported")
+    nlCheck(windowUs >= 6000000& and windowUs <= 16000000&, "window length bound")
     segments = playlist.segments
     finish = segments.Count() - 1
     behind = 0&
@@ -298,7 +301,7 @@ function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = f
     start = finish
     total = 0&
     count = 0
-    while start >= 0 and (total < 6000000& or count < 3)
+    while start >= 0 and (total < 6000000& or count < 3 or (total < windowUs and count < 8))
         total += segments[start].durationUs
         count += 1
         start -= 1
@@ -582,10 +585,12 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         parsed = nativeLiveParsePlaylist(payload, state.sourceUrl, state.approvedOrigins)
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
         waitForStartup = state.steadyMode and not state.started and state.publishedLast < 0& and state.initIds.Count() = 0 and not parsed.ended
+        windowUs = 6000000&
+        if state.DoesExist("windowUs") then windowUs = state.windowUs
         if state.sourceTransitions and state.started
-            window = nlWindow(parsed, state.delayUs, false, true)
+            window = nlWindow(parsed, state.delayUs, false, true, windowUs)
         else
-            window = nlWindow(parsed, state.delayUs, waitForStartup)
+            window = nlWindow(parsed, state.delayUs, waitForStartup, false, windowUs)
         end if
         if window = invalid
             ' Wait on this normal mixed window; never select an older timeline.

@@ -52,13 +52,13 @@ function liveInitTransitionContextValid() as boolean
     end try
 end function
 
+' Each later init already passed the native decoder check above. Ads and
+' encoder restarts legitimately change profile, level, resolution and AAC
+' configuration across a discontinuity, so only the sample-entry family must
+' stay the same as the first init.
 function liveInitMasterCompatible(actual as object, timing as object) as boolean
     master = m.initMasterMetadata
-    for each key in ["videoEntry", "videoCodec", "nalLengthSize", "audioEntry", "audioCodec", "audioObjectType", "audioSampleRate", "audioChannels"]
-        if actual[key] <> master[key] then return false
-    end for
-    if timing.audioConfigDigest <> m.initMasterTiming.audioConfigDigest then return false
-    return actual.width <= master.width and actual.height <= master.height
+    return actual.videoEntry = master.videoEntry and actual.audioEntry = master.audioEntry
 end function
 
 ' Read bounded actual mdhd/ASC configuration; Bulk's track map is only ID/kind.
