@@ -975,7 +975,9 @@ sub beginLiveReconnect(reason as string)
     m.reconnectTimer.duration = delaySec
     m.reconnectTimer.repeat = false
     m.reconnectTimer.observeField("fire", "doLiveReconnect")
-    if reason = "source_transition" then m.sourceTransitionCharges++
+    ' Roku-only stalls at ad boundaries recur every break; refund them after
+    ' healthy playback like transitions so long sessions keep their budget.
+    if reason = "source_transition" or (reason = "buffer_timeout" and m.rokuSessionId <> "") then m.sourceTransitionCharges++
     m.reconnectTimer.control = "start"
 end sub
 

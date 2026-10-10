@@ -16,6 +16,7 @@
         testSourceTransitionRecovery()
         testLiveManualQualityIntent()
         testLiveRecoveryHealth()
+        testRokuStallRefundableCharge()
         testRefusalAndBlockedOwner()
         testDialogBackAndAttachRefusal()
         testCleanupFailureWhileWaiting()
@@ -182,6 +183,33 @@ sub healthProgress(player as object, startSec as integer, startPosition as float
     for offset = 0 to seconds step 2
         healthSample(player, startSec + offset, startPosition + offset * rate)
     end for
+end sub
+
+' Every ad break stalls the native player twice; those reconnects must be
+' refundable so a long Roku-only session does not exhaust its budget.
+sub testRokuStallRefundableCharge()
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    deliver(player, content("roku-demux"))
+    chooseRoku(player)
+    ready(session, player.callFunc("fixtureRead").sessionId)
+    video = player.callFunc("fixtureRead").video
+    video.state = "buffering"
+    settle(20)
+    player.callFunc("fixtureBufferTimeout")
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer <> invalid and state.reconnect = 1 and state.recovery = 1 and state.transitionCharges = 1, "Roku-only stall reconnect is a refundable charge")
+    closePlayer(player)
+
+    player = openPlayer("LIVE")
+    deliver(player, content())
+    video = player.callFunc("fixtureRead").video
+    video.state = "buffering"
+    settle(20)
+    player.callFunc("fixtureBufferTimeout")
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer <> invalid and state.reconnect = 1 and state.transitionCharges = 0, "ordinary live stall reconnect keeps a permanent charge")
+    closePlayer(player)
 end sub
 
 sub testLiveRecoveryHealth()
