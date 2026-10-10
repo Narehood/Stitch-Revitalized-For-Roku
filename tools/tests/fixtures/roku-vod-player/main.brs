@@ -304,7 +304,7 @@ sub testDisabledPlayer()
     task.response = vodContent()
     settle(40)
     dialog = player.callFunc("fixtureRead").transmuxDialog
-    check(dialog <> invalid and dialog.buttons.Count() = 1 and dialog.buttons[0] = "Back", "normal gatefalse offers no futile Try on Roku choice for v2 input")
+    check(dialog <> invalid and dialog.buttons.Count() = 1 and dialog.buttons[0] = "Back", "normal gatefalse offers no futile Roku-only playback for v2 input")
     check(manager.callFunc("fixtureRead").worker = invalid, "caller-supplied v2 descriptor cannot bypass normal compiled capability")
     player.callFunc("onDestroy")
     m.scene.removeChild(player)
@@ -327,17 +327,11 @@ sub testPlayer()
     original = vodContent()
     task.response = original
     settle(40)
-    check(player.callFunc("fixtureRead").video = invalid and manager.callFunc("fixtureRead").worker = invalid, "descriptor alone does not start VOD without consent")
-    dialog = player.callFunc("fixtureRead").transmuxDialog
-    check(dialog <> invalid and dialog.buttons[0] = "Try on Roku", "eligible recorded choice uses existing truthful experimental consent")
-    if dialog = invalid then throw "eligible VOD consent missing"
-    dialog.buttonSelected = 0
-    player.callFunc("fixtureChoiceAgain")
-    settle(20)
+    check(player.callFunc("fixtureRead").video = invalid and player.callFunc("fixtureRead").transmuxDialog = invalid, "eligible recorded content waits for its session without a prompt")
     id = player.callFunc("fixtureRead").sessionId
     worker = manager.callFunc("fixtureRead").worker
-    check(id <> "" and worker <> invalid and worker.subtype() = "RokuVodDemuxServer", "actual player consent reaches actual VOD session owner")
-    if worker = invalid then throw "VOD worker missing after consent"
+    check(id <> "" and worker <> invalid and worker.subtype() = "RokuVodDemuxServer", "eligible recorded content reaches actual VOD session owner")
+    if worker = invalid then throw "VOD worker missing after automatic start"
     stale = vodReady("00000000000000000000000000000000", vodDescriptor())
     worker.ready = stale
     check(player.callFunc("fixtureRead").video = invalid, "stale VOD Ready never changes active playback")

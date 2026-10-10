@@ -1,5 +1,5 @@
 ' The scene owns the cooperative session beyond this player's lifetime.
-' Only the explicit Try on Roku action opts into the experimental path.
+' Eligible combined-track content without a configured service uses it.
 sub initRokuPlayback()
     m.rokuSession = invalid
     m.rokuSessionId = ""
@@ -40,6 +40,16 @@ function canTryRokuPlayback() as boolean
     if not hasRokuDescriptor() then return false
     if m.rokuSession.cleanupBlocked then return false
     return not m.disposed and not m.rokuExitPending
+end function
+
+' Eligible combined audio/video content plays through the on-Roku splitter
+' without a prompt; the playback notice names the fixed quality it uses.
+function chooseRokuPlayback() as boolean
+    if not m.rokuChosen
+        if not canTryRokuPlayback() then return false
+        m.rokuChosen = true
+    end if
+    return hasRokuDescriptor()
 end function
 
 ' True means the ordinary play path must wait. Metadata retains the original

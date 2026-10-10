@@ -27,47 +27,6 @@ sub main()
         finishMain(screen)
         return
     end if
-    if "__DIALOG_WAIT_CONTROL__" = "yes"
-        player = openPlayer(true)
-        if player = invalid
-            finishMain(screen)
-            return
-        end if
-        finishMain(screen)
-        return
-    end if
-    if "__REPEAT_DIALOG_CONTROL__" = "yes"
-        player = openPlayer(true, false)
-        if player = invalid
-            finishMain(screen)
-            return
-        end if
-        dialogFocus = m.scene
-        for depth = 1 to 16
-            child = dialogFocus.focusedChild
-            if child = invalid then exit for
-            if child.IsSameNode(dialogFocus) then exit for
-            dialogFocus = child
-        end for
-        primer = CreateObject("roSGNode", "RootKeyBoundary")
-        m.scene.AppendChild(primer)
-        primer.SetFocus(true)
-        press("ok")
-        firstKey = CreateObject("roTimespan")
-        while primer.pressCount = 0 and firstKey.TotalMilliseconds() < 2000
-            settle(10)
-        end while
-        check(primer.pressCount = 1 and player.CallFunc("fixturePlayer").sessionId = "", "stock driver delivers the first OK to the inert focus boundary")
-        if primer.pressCount <> 1
-            finishMain(screen)
-            return
-        end if
-        dialogFocus.SetFocus(true)
-        ignored = chooseLocalPlayer(player)
-        finishMain(screen)
-        return
-    end if
-
     ' Actual live overlay Exit reaches the same typed cooperative Player action.
     player = openPlayer(true)
     if player = invalid
@@ -294,7 +253,7 @@ sub main()
         check(owned.worker.IsSameNode(worker) and owned.video.IsSameNode(video) and owned.currentId = id and worker.control = "run", "terminal unsafe manager retains actual worker Video and namespace without factory stop")
         dialog = m.scene.dialog
         check(dialog <> invalid and dialog.buttons.Count() = 1 and dialog.buttons[0] = "Back", "actual failed cleanup dialog has only Back")
-        check(manager.CallFunc("startSession", descriptor()) = "", "terminal unsafe session refuses a new Try on Roku owner")
+        check(manager.CallFunc("startSession", descriptor()) = "", "terminal unsafe session refuses a new Roku-only owner")
         press("ok")
         settle(350)
         check(hero().active.id = "Following" and player.GetParent() = invalid and not m.exitRequested, "actual failure dialog Back leaves the acknowledged stopped unsafe owner")
@@ -306,7 +265,7 @@ sub main()
             finishMain(screen)
             return
         end if
-        check(not m.lastDescriptorEnabled and m.scene.dialog.buttons[0] = "Back", "new Player refuses Try on Roku after unsafe owner stop")
+        check(not m.lastDescriptorEnabled and m.scene.dialog.buttons[0] = "Back", "new Player refuses Roku-only playback after unsafe owner stop")
         press("ok")
         settle(350)
         check(hero().active.id = "Following" and manager.CallFunc("fixtureManager").worker.IsSameNode(worker), "blocked unavailable dialog returns without releasing retained owner")
@@ -469,19 +428,10 @@ function openPlayer(local as boolean, choose = true as boolean) as object
     return player
 end function
 
+' Eligible combined content starts on this Roku without a prompt.
 function chooseLocalPlayer(player as object) as boolean
-    eligible = m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try on Roku"
-    check(eligible, "actual eligible dialog offers explicit choice")
-    if not eligible then return false
-    press("ok")
-    ' The key driver may defer a repeated OK by at least 250 ms. Wait for
-    ' actual dispatch, without changing the production cleanup deadlines.
-    dispatch = CreateObject("roTimespan")
-    while player.CallFunc("fixturePlayer").sessionId = "" and dispatch.TotalMilliseconds() < 2000
-        settle(10)
-    end while
-    started = player.CallFunc("fixturePlayer").sessionId <> "" and m.scene.localPlaybackSession.busy
-    check(started, "real dialog dispatch starts one actual manager")
+    started = m.scene.dialog = invalid and player.CallFunc("fixturePlayer").sessionId <> "" and m.scene.localPlaybackSession.busy
+    check(started, "eligible content starts one actual manager without a prompt")
     return started
 end function
 
