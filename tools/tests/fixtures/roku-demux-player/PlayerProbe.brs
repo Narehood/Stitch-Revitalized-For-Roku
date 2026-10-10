@@ -54,3 +54,6 @@ end sub
 function fixtureErrorStatistics() as object
     return m.errorHandler.callFunc("getErrorStatistics")
 end function
+sub fixtureBufferTimeout()
+    onBufferTimeout()
+end sub
