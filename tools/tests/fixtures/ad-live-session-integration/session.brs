@@ -32,7 +32,7 @@ sub runTests()
         check((type(worker.enableAdMetadata) = "Boolean" or type(worker.enableAdMetadata) = "roBoolean"), "XML option is strictly Boolean")
         expected = valid
         check(worker.enableAdMetadata = expected, "observational ad option only LIVE v1")
-        check(worker.experimentalMode and worker.cacheBudgetBytes = 16777216 and worker.listenPort = 0, "consent and existing resource options unchanged")
+        check(worker.experimentalMode and worker.cacheBudgetBytes = 25165824 and worker.listenPort = 0, "consent and existing resource options unchanged")
         if expected
             m.snapshot = {version:worker.inputDescriptor["version"],enableAdMetadata:worker.enableAdMetadata,
                 experimentalMode:worker.experimentalMode,cacheBudgetBytes:worker.cacheBudgetBytes,listenPort:worker.listenPort}

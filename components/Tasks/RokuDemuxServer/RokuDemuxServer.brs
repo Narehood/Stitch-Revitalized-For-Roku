@@ -152,6 +152,9 @@ sub serveBoundedLive()
     end if
     m.liveState = nativeLiveCreate(m.config.trustedMediaUrl, liveServerNow(), m.config.sourceDelaySeconds, m.config.approvedOrigins, true, m.cacheBudgetBytes, options)
     m.liveState.adClockEnabled = m.adMetadataEnabled
+    ' Fourteen seconds lets the player start with a ten-second cushion
+    ' (VideoPlayer PlayStart); six seconds ran dry about 20 s in.
+    m.liveState.windowUs = 14000000&
     m.result["experimentalUnknownFramingTransport"] = true
     ' Drop the signed private input from the harness's config immediately.
     m.config.Delete("trustedMediaUrl")

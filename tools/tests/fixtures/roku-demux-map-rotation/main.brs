@@ -236,13 +236,15 @@ sub mrStructural()
 end sub
 
 sub mrTransport()
-    for each mode in ["deadline", "work-quota", "cancel-failure", "healthy-pending"]
+    for each mode in ["deadline-retry", "deadline", "work-quota", "cancel-failure", "healthy-pending"]
         state = mrPrepared()
         mrPending(state)
         previous = FormatJson(nativeLivePublication(state))
         calls = [0]
         transfer = { "calls": calls, "succeeds": mode <> "cancel-failure", "AsyncCancel": mrCancel }
-        state.op = { "transfer": transfer, "kind": "init", "phase": "get", "limit": 2097152, "deadline": 7000& }
+        state.op = { "transfer": transfer, "kind": "init", "url": "https://cdn.example.invalid/init.mp4", "phase": "get", "limit": 2097152, "deadline": 7000& }
+        ' A second timeout on the same URL is fatal; the first one retries.
+        if mode = "deadline" or mode = "cancel-failure" then state.timedOutUrl = state.op.url
         nowMs = 7000&
         if mode = "work-quota"
             state.quotaSteps = 12000
@@ -251,7 +253,9 @@ sub mrTransport()
             nowMs = 6999&
         end if
         status = nativeLiveTick(state, invalid, nowMs)
-        if mode = "healthy-pending"
+        if mode = "deadline-retry"
+            mrCheck(status.phase = "init-rotation" and status.error = "" and state.op = invalid and calls[0] = 1 and state.timedOutUrl = "https://cdn.example.invalid/init.mp4", "first hung transfer is cancelled for one fresh retry")
+        else if mode = "healthy-pending"
             mrCheck(status.phase = "init-rotation" and calls[0] = 0 and state.op <> invalid, "within deadline pending request retains sole transfer")
         else
             reason = "native-live: upstream operation deadline"

@@ -67,7 +67,7 @@ function positive(result, marker, snapshot = false) {
     assert.ok(Number.isSafeInteger(counts.assertions) && counts.assertions > 0);
     assert.equal(counts.failures, 0);
     if (snapshot) {
-        assert.deepEqual(counts.snapshot, {version:1,enableAdMetadata:true,experimentalMode:true,cacheBudgetBytes:16777216,listenPort:0});
+        assert.deepEqual(counts.snapshot, {version:1,enableAdMetadata:true,experimentalMode:true,cacheBudgetBytes:25165824,listenPort:0});
     }
     return counts;
 }

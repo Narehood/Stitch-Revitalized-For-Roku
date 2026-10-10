@@ -462,6 +462,31 @@ sub testSourceTransitionRecovery()
     check(state.video.control = "play" and state.video.selectedQuality = "1080p60" and state.recovery = 1 and state.reconnect = 0, "one existing error retry resumes selected playback without resetting spent recovery")
     closePlayer(player)
 
+    ' The stopped Roku-only server can also fail the Video after the transition
+    ' armed its reconnect; that error must neither cancel nor repeat recovery.
+    for each errorText in ["fixture network failure", "buffer:loop:demux fixture"]
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        deliver(player, content("roku-demux"))
+        chooseRoku(player)
+        first = player.callFunc("fixtureRead").sessionId
+        ready(session, first)
+        video = player.callFunc("fixtureRead").video
+        session.event = { id: first, status: "failed", reason: "source_transition" }
+        settle(40)
+        timer = player.callFunc("fixtureRead").reconnectTimer
+        video.errorCode = -1
+        video.errorStr = errorText
+        video.state = "error"
+        settle(40)
+        state = player.callFunc("fixtureRead")
+        kept = timer <> invalid and state.reconnectTimer <> invalid
+        if kept then kept = state.reconnectTimer.isSameNode(timer)
+        check(kept and state.retryTimer = invalid and state.reconnect = 1 and state.recovery = 1, "Video error after a scheduled transition keeps one reconnect and one charge: " + errorText)
+        check(state.errorDialog = invalid and m.scene.dialog = invalid, "Video error after a scheduled transition opens no dialog: " + errorText)
+        closePlayer(player)
+    end for
+
     for each mode in ["startup", "stale", "other", "malformed", "blocked", "exit", "deferred", "disposed", "manual", "budget"]
         player = openPlayer("LIVE")
         session = sessionOf(player)
@@ -872,6 +897,14 @@ sub testLateBindingAndOrdinaryPaths()
         if kind = "LIVE" then expected = "StitchVideo"
         check(video.subtype() = expected and video.content.url = direct.url, "ordinary LIVE/VOD/CLIP retains wrapper and original URL")
         check(calls(session, "start").count() = 0 and calls(session, "attach").count() = 0, "ordinary paths never start or attach a local session")
+        if kind = "LIVE"
+            video.state = "buffering"
+            settle(20)
+            timer = player.callFunc("fixtureRead").bufferTimer
+            check(timer <> invalid and timer.duration = 25, "ordinary live keeps the 25 s buffering allowance")
+            video.state = "playing"
+            settle(20)
+        end if
         closePlayer(player)
         check(calls(session, "stop").count() = 0, "ordinary destruction never stops an empty session ID")
     end for
@@ -916,6 +949,12 @@ sub testChoiceReadyAndBack()
     check(not player.content.isTransmux and not player.content.isProxied and not player.content.ForwardQueryStringParams, "local route disables external proxy/transmux/query-forwarding flags")
     check(video.suppressStartupSeek, "local playback suppresses the experimental live-edge seek even when its preference is enabled")
     check(player.content.playbackNotice.instr("1080p60") >= 0, "local playback notice includes its fixed quality")
+    video.state = "buffering"
+    settle(20)
+    timer = player.callFunc("fixtureRead").bufferTimer
+    check(timer <> invalid and timer.duration = 10, "Roku-only live treats a ten-second stall as stuck")
+    video.state = "playing"
+    settle(20)
     player.callFunc("fixtureEventAgain")
     ready(session, id)
     check(calls(session, "attach").count() = 1 and player.callFunc("fixtureRead").video.isSameNode(video), "duplicate ready events never create or attach another wrapper")

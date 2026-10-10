@@ -25,12 +25,12 @@ function nlNatural(text as string, maximum as longinteger) as longinteger
     return value
 end function
 
+' Per-character Mid() scans cost ~57 us per character on a G204X (about
+' 1.3 s per 16 KB playlist poll, far more during ads), so match natively.
+' Chr(92) avoids source backslashes, which engines read differently.
 sub nlUrlText(text as string)
     nlCheck(text.Len() >= 1 and text.Len() <= 8192, "URL length bound")
-    for i = 0 to text.Len() - 1
-        code = Asc(text.Mid(i, 1))
-        nlCheck(code > 32 and code < 127 and code <> 92 and code <> 35, "URL character unsupported")
-    end for
+    nlCheck(not CreateObject("roRegex", "[^!-~]|[#" + Chr(92) + Chr(92) + "]", "").IsMatch(text), "URL character unsupported")
 end sub
 
 function nlHttps(url as string) as object
@@ -193,10 +193,7 @@ function nativeLiveParsePlaylist(text as string, baseUrl as string, approvedOrig
     base = nlHttps(baseUrl)
     origins = nlOrigins(base.origin, approvedOrigins)
     nlCheck(text.Len() > 0 and text.Len() <= 262144, "playlist string bound")
-    for i = 0 to text.Len() - 1
-        code = Asc(text.Mid(i, 1))
-        nlCheck((code >= 32 and code <= 126) or code = 10 or code = 13, "playlist character unsupported")
-    end for
+    nlCheck(not CreateObject("roRegex", "[^ -~" + Chr(10) + Chr(13) + "]", "").IsMatch(text), "playlist character unsupported")
     lines = text.Split(Chr(10))
     nlCheck(lines.Count() <= 1024, "playlist line work bound")
     nlCheck(lines[0].Trim() = "#EXTM3U", "media playlist header required")
@@ -285,8 +282,11 @@ function nativeLiveParsePlaylist(text as string, baseUrl as string, approvedOrig
     return { mapUrl: mapUrl, mediaSequence: sequence, targetDuration: target, segments: segments, ended: ended }
 end function
 
-function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean, sourceTransitions = false as boolean) as object
+' windowUs above the six-second minimum gives the player a startup cushion;
+' the steady server opts into a longer window (see serveBoundedLive).
+function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean, sourceTransitions = false as boolean, windowUs = 6000000& as longinteger) as object
     nlCheck(not playlist.ended or delayUs = 0&, "historical ENDLIST unsupported")
+    nlCheck(windowUs >= 6000000& and windowUs <= 16000000&, "window length bound")
     segments = playlist.segments
     finish = segments.Count() - 1
     behind = 0&
@@ -298,7 +298,7 @@ function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = f
     start = finish
     total = 0&
     count = 0
-    while start >= 0 and (total < 6000000& or count < 3)
+    while start >= 0 and (total < 6000000& or count < 3 or (total < windowUs and count < 8))
         total += segments[start].durationUs
         count += 1
         start -= 1
@@ -582,10 +582,12 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         parsed = nativeLiveParsePlaylist(payload, state.sourceUrl, state.approvedOrigins)
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
         waitForStartup = state.steadyMode and not state.started and state.publishedLast < 0& and state.initIds.Count() = 0 and not parsed.ended
+        windowUs = 6000000&
+        if state.DoesExist("windowUs") then windowUs = state.windowUs
         if state.sourceTransitions and state.started
-            window = nlWindow(parsed, state.delayUs, false, true)
+            window = nlWindow(parsed, state.delayUs, false, true, windowUs)
         else
-            window = nlWindow(parsed, state.delayUs, waitForStartup)
+            window = nlWindow(parsed, state.delayUs, waitForStartup, false, windowUs)
         end if
         if window = invalid
             ' Wait on this normal mixed window; never select an older timeline.
@@ -595,13 +597,16 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             if state.steadyMode then state.lastUpstreamProgress = nowMs
             return
         end if
+        if state.sourceTransitions and state.started
+            window = nlContinuityWindow(parsed, window, state.publishedLast, true)
+        end if
+        ' Check after continuity: prepended older segments are published too.
         if state.sourceTransitions
             for each segment in window.segments
                 nlCheck(segment.durationUs < 2500000& and segment.durationUs <= window.targetDuration * 1000000& + 499999&, "epoch source duration unsupported")
             end for
         end if
         if state.sourceTransitions and state.started
-            window = nlContinuityWindow(parsed, window, state.publishedLast, true)
             nlEpochAcceptWindow(state, parsed, window)
             state.lastUpstreamProgress = nowMs
             return

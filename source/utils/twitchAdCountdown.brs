@@ -87,57 +87,33 @@ function tadUtcUs(text as string) as dynamic
 end function
 
 ' Unknown attribute values are scanned, never copied into retained state.
+' Native matching replaces per-character Mid() scans that took 1.6-3.2 s per
+' ad playlist poll on a G204X, stalling the worker while ads started. The
+' grammar is unchanged: keys [A-Z0-9-]{1,64}; non-empty quoted values of
+' printable ASCII without quotes; non-empty unquoted values without quotes
+' or commas; comma separators; at most 128 unique keys.
 function tadAttributes(line as string) as dynamic
     if line.Len() < 18 or line.Len() > 32768 or line.Left(17) <> "#EXT-X-DATERANGE:" then return invalid
+    q = Chr(34)
+    value = "(?:" + q + "[ !#-~]+" + q + "|[ !#-+.-~-]+)"
+    if not CreateObject("roRegex", "^#EXT-X-DATERANGE:[A-Z0-9-]{1,64}=" + value + "(?:,[A-Z0-9-]{1,64}=" + value + ")*$", "").IsMatch(line) then return invalid
+    matches = CreateObject("roRegex", "([A-Z0-9-]+)=(?:" + q + "[^" + q + "]*" + q + "|[^," + q + "]*)", "").MatchAll(line.Mid(17))
+    if matches.Count() < 1 or matches.Count() > 128 then return invalid
     known = ["CLASS", "START-DATE", "DURATION", "X-TV-TWITCH-AD-POD-LENGTH", "X-TV-TWITCH-AD-POD-POSITION"]
     seen = {}
     attributes = {}
-    at = 17
-    count = 0
-    while at < line.Len()
-        start = at
-        while at < line.Len() and line.Mid(at, 1) <> "="
-            character = Asc(line.Mid(at, 1))
-            if (character < 65 or character > 90) and (character < 48 or character > 57) and character <> 45 then return invalid
-            at += 1
-            if at - start > 64 then return invalid
-        end while
-        if at = start or at >= line.Len() then return invalid
-        key = line.Mid(start, at - start)
+    for each match in matches
+        key = match[1]
         if seen.DoesExist(key) then return invalid
         seen[key] = true
-        count += 1
-        if count > 128 then return invalid
-        at += 1
-        if at >= line.Len() then return invalid
-        quoted = line.Mid(at, 1) = Chr(34)
-        if quoted then at += 1
-        start = at
-        while at < line.Len()
-            character = Asc(line.Mid(at, 1))
-            if quoted
-                if character = 34 then exit while
-            else if character = 44
-                exit while
-            end if
-            if character < 32 or character > 126 or character = 34 then return invalid
-            at += 1
-        end while
-        length = at - start
-        if length < 1 then return invalid
-        if quoted
-            if at >= line.Len() then return invalid
-            at += 1
-        end if
+        ' Read the value from the whole match: engines number unmatched
+        ' alternation groups differently.
+        text = match[0].Mid(key.Len() + 1)
+        if text.Left(1) = q then text = text.Mid(1, text.Len() - 2)
         for each allowed in known
-            if key = allowed then attributes[key] = line.Mid(start, length)
+            if key = allowed then attributes[key] = text
         end for
-        if at < line.Len()
-            if line.Mid(at, 1) <> "," then return invalid
-            at += 1
-            if at >= line.Len() then return invalid
-        end if
-    end while
+    end for
     return attributes
 end function
 

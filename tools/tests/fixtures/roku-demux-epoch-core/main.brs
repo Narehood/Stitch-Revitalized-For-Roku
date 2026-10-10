@@ -428,6 +428,15 @@ sub identityEC()
         checkEC(feedErrorEC(state, "playlist", text, 0&) = item.expected, "fixed target2 never loosens source rounded or local duration bound")
         closeEC(state)
     end for
+    ' Continuity prepends older segments after a stall; they meet the same bound.
+    for each item in [{ duration: "2.499999", expected: "" }, { duration: "2.600000", expected: "native-live: epoch source duration unsupported" }]
+        state = preparedEC()
+        text = playlistEC(13, 6).Replace("#EXTINF:2.002000," + Chr(10) + "segment-14.m4s", "#EXTINF:" + item.duration + "," + Chr(10) + "segment-14.m4s")
+        checkEC(feedErrorEC(state, "playlist", text, 3000&) = item.expected, "continuity-prepended segment duration is checked at feed " + item.duration)
+        if item.expected = "" then checkEC(state.window.segments[0].sequence = 13 and state.window.segments[1].durationUs = 2499999&, "continuity keeps the prepended unpublished segment")
+        nlAbort(state, "native-live: test-stop")
+        closeEC(state)
+    end for
 end sub
 
 sub admissionEC()

@@ -215,7 +215,7 @@ test('actual startup wait guards and finite polling mutations cannot pass', { ti
         const core = sources.get('source/utils/rokuDemuxCore.brs').toString();
         const startupHarness = harness.replace(/^        (?:bulkCore|publicationDurationCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
         await fs.writeFile(path.join(dir, 'main.brs'), startupHarness);
-        const windowCall = 'window = nlWindow(parsed, state.delayUs, waitForStartup)';
+        const windowCall = 'window = nlWindow(parsed, state.delayUs, waitForStartup, false, windowUs)';
         const pollGate = '        if nowMs < state.nextPoll then return invalid';
         const waitPoll = '            state.nextPoll = nowMs + parsed.targetDuration * 500&';
         const windowEquality = /        if waitForStartup and not playlist\.ended\r?\n            if segment\.mapUrl <> selectedMap or segment\.epoch <> selectedEpoch then return invalid\r?\n        end if\r?\n        nlCheck\(segment\.mapUrl = selectedMap and segment\.epoch = selectedEpoch, "selected window crosses map or discontinuity"\)/;
@@ -224,7 +224,7 @@ test('actual startup wait guards and finite polling mutations cannot pass', { ti
         assert.equal(core.split(waitPoll).length, 2);
         assert.ok(core.match(windowEquality));
         for (const control of [
-            { source: core.replace(windowCall, 'window = nlWindow(parsed, state.delayUs, false)'), expected: 'validated mixed startup waits for coherent tail' },
+            { source: core.replace(windowCall, 'window = nlWindow(parsed, state.delayUs, false, false, windowUs)'), expected: 'validated mixed startup waits for coherent tail' },
             { source: core.replace(windowEquality, "        ' Deliberately accept incompatible startup media"), expected: 'mixed startup waits without assigning a window or publication' },
             { source: core.replace(pollGate, ''), expected: 'startup wait suppresses early playlist intent' },
             { source: core.replace(waitPoll, waitPoll + '\n            state.deadline = nowMs + 45000&'), expected: 'startup wait keeps absolute deadline' }

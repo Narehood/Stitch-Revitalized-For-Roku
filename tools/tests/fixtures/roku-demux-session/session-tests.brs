@@ -64,7 +64,7 @@ sub runTests(control as string)
     check(manager.busy and worker.state = "run", "one worker actually entered run boundary")
     check(worker.inputDescriptor["qualityId"] = "720p60" and worker.sessionId = first, "typed input and identity")
     check(sessionIdentifier(first) and worker.functionName = "runServer", "lowercase hex session namespace and exact worker entry")
-    check(worker.experimentalMode and worker.cacheBudgetBytes = 16777216 and worker.listenPort = 0 and not worker.stopRequested, "explicit experimental opt-in and bounded worker options")
+    check(worker.experimentalMode and worker.cacheBudgetBytes = 25165824 and worker.listenPort = 0 and not worker.stopRequested, "explicit experimental opt-in and bounded worker options")
     check((type(worker.enableAdMetadata) = "Boolean" or type(worker.enableAdMetadata) = "roBoolean") and worker.enableAdMetadata, "actual running LIVE v1 worker enables observational cue metadata")
     worker.ready = readyFor("00000000000000000000000000000000")
     check(manager.event.status = "starting", "stale ready ignored")
@@ -128,7 +128,7 @@ sub runTests(control as string)
     check(state.currentId = queued and state.worker.state = "run" and not state.worker.stopRequested, "timer completer leaves replacement running")
     check(not state.stopping and state.cleanupClock = invalid and state.pending = invalid, "replacement has no inherited cleanup timer state")
     check(state.worker.inputDescriptor["sourceUrl"].InStr("/queued-timer.m3u8") > 0, "queued descriptor is an immutable primitive snapshot")
-    check(state.worker.experimentalMode and state.worker.cacheBudgetBytes = 16777216 and state.worker.listenPort = 0, "queued replacement keeps bounded worker options")
+    check(state.worker.experimentalMode and state.worker.cacheBudgetBytes = 25165824 and state.worker.listenPort = 0, "queued replacement keeps bounded worker options")
     manager.callFunc("stopSession", id)
     check(not state.worker.stopRequested, "old stopped identity cannot stop running replacement")
     finishManager(manager)
@@ -430,7 +430,12 @@ sub testSourceTransitionClassification()
         { ready: true, reason: {}, helper: "native-live: continuity window crosses map or discontinuity", expected: "worker_finished" }
         { ready: true, reason: {}, helper: "native-live: selected window crosses map or discontinuity", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-live: selected map initialization changed", expected: "worker_finished" }
-        { ready: true, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "source_transition", label: "upstream operation deadline" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: upstream progress deadline", expected: "source_transition", label: "upstream progress deadline" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity window segment bound", expected: "source_transition", label: "continuity span" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity history unavailable", expected: "source_transition", label: "continuity history" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: source sequence gap", expected: "source_transition", label: "sequence gap" }
+        { ready: false, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-demux: selected discontinuity change unsupported", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-demux: continuity window crosses map or discontinuity", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-demux: selected window crosses map or discontinuity", expected: "worker_finished" }

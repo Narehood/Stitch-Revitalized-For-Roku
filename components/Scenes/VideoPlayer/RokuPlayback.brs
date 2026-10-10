@@ -110,6 +110,8 @@ sub onRokuSessionEvent()
             if not rokuVodRuntimeAvailable() or not rokuVodPlaybackReadyValid(event, m.rokuSessionId, original.localPlaybackDescriptor) then return
         end if
         fields = original.getFields()
+        fields.Delete("change")
+        fields.Delete("focusedChild")
         fields.url = event.url
         fields.StreamUrls = [event.url]
         streams = []

@@ -352,7 +352,7 @@ end sub
 
 sub refusalEI()
     caseEI("incompatible-init-and-native-decision-before-feed")
-    for each mode in ["profile","decoder","stop"]
+    for each mode in ["entry","decoder","stop"]
         state=preparedEI()
         oldMaster=FormatJson(m.config.metadata)
         oldPublication=FormatJson(m.currentPublication)
@@ -362,7 +362,8 @@ sub refusalEI()
         oldPairs=state.initPairCount
         m.liveState=state
         input=bytesEI(m.corpus.inits.ad.input)
-        if mode="profile" then input.FromHexString(m.corpus.incompatibleProfile)
+        ' Profile/level changes are allowed; a sample-entry family change is not.
+        if mode="entry" then input.FromHexString(m.corpus.inits.ad.input.hex.Replace("61766331","61766333"))
         if mode="decoder" then m.decoderAllowed=false
         if mode="stop" then m.stopDuringDecode=true
         refused=false
@@ -372,7 +373,7 @@ sub refusalEI()
             if mode="stop" then refused=not accepted
         catch error
             reason=error.message
-            if mode="profile" then refused=reason="native-live: actual init master incompatible"
+            if mode="entry" then refused=reason="native-live: actual init master incompatible"
             if mode="decoder" then refused=reason="native-live: actual init decoder rejected"
         end try
         checkEI(refused,"incompatible or stopped init is refused before real Core staging "+mode)
@@ -380,6 +381,18 @@ sub refusalEI()
         checkEI(FormatJson(m.config.metadata)=oldMaster and FormatJson(m.currentPublication)=oldPublication,"refused gate preserves immutable master and Server publication "+mode)
         closeEI(state)
     end for
+    ' Ads and encoder restarts change profile/level; the decoder-approved
+    ' init is staged instead of stopping playback.
+    state=preparedEI()
+    oldMaster=FormatJson(m.config.metadata)
+    feedEI(state,"playlist",playlistEI(10,4),3000&)
+    input=CreateObject("roByteArray")
+    input.FromHexString(m.corpus.incompatibleProfile)
+    m.liveState=state
+    checkEI(rokuDemuxFeedInput(state,"init",input,3000&),"decoder-approved changed-profile init is accepted")
+    checkEI(state.phase="init-video" and state.pendingWindow<>invalid,"changed-profile init is staged for the new epoch")
+    checkEI(FormatJson(m.config.metadata)=oldMaster,"accepted later init leaves the advertised master unchanged")
+    closeEI(state)
 end sub
 
 sub policyEI()
