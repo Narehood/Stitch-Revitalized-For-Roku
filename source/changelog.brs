@@ -3,6 +3,13 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.2": [
+            "3.0.0: Combined-audio live streams and eligible recordings now play on this Roku automatically, with no extra computer or prompt",
+            "Fixed: Roku-only playback no longer stops when an ad break starts or ends",
+            "Fixed: No more freeze about 20 seconds after a stream starts",
+            "Improved: Much faster stream processing on the Roku, and automatic recovery from network hiccups",
+            "Ad breaks can still briefly pause and reconnect on Roku-only streams; delay behind live is longer than direct playback"
+        ],
         "3.0.1": [
             "3.0.0 Alpha 2: Eligible recorded videos can now offer Try on Roku without a container",
             "New: A corner ad countdown uses reliable Twitch cues and actual playback timing",
