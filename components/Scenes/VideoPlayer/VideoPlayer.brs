@@ -76,9 +76,10 @@ sub onResponse()
     applyPreferredQuality()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
 
-    ' Warn before playing Enhanced Broadcasting (transmux) streams
+    ' Enhanced Broadcasting (combined-track) streams play through the optional
+    ' service or this Roku; the dialog only explains a stream neither can play.
     if m.top.content <> invalid and m.top.content.isTransmux = true
-        if m.top.content.isProxied = true or (m.top.content.playbackTransport = "roku-demux" and m.rokuChosen)
+        if m.top.content.isProxied = true or chooseRokuPlayback()
             playContent()
         else
             showTransmuxWarning()
@@ -144,10 +145,14 @@ sub onQualityChangeRequested(event = invalid as dynamic)
     m.top.content = new_content ' Update the main content node for VideoPlayer
     m.allowBreak = false
     if m.rokuSessionId = "" then exitPlayer() ' The session owner stops a local Video before replacement.
-    if new_content.isTransmux and not new_content.isProxied and not m.rokuChosen
-        showTransmuxWarning()
-    else
+    ' A combined rendition without a Roku descriptor cannot play directly, even
+    ' after another rendition started on this Roku.
+    playable = not new_content.isTransmux or new_content.isProxied
+    if not playable then playable = chooseRokuPlayback()
+    if playable
         playContent()
+    else
+        showTransmuxWarning()
     end if
     m.allowBreak = true
 end sub
@@ -1035,9 +1040,11 @@ sub onLiveReconnectResponse()
             end for
         end if
     end if
-    if refreshedContent.isTransmux and not (refreshedContent.playbackTransport = "roku-demux" and m.rokuChosen)
-        showTransmuxWarning()
-        return
+    if refreshedContent.isTransmux
+        if not chooseRokuPlayback()
+            showTransmuxWarning()
+            return
+        end if
     end if
 
     ' Reset stall tracking
@@ -1264,17 +1271,9 @@ sub showTransmuxWarning()
     stopPlaybackForDialog()
     closeTransmuxDialog()
     dialog = createObject("roSGNode", "StandardMessageDialog")
-    if canTryRokuPlayback()
-        dialog.title = tr("Play on this Roku")
-        dialog.message = [tr("This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container."), tr("This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.")]
-        dialog.buttons = [tr("Try on Roku"), tr("Back")]
-        m.transmuxDialogActions = ["roku", "back"]
-    else
-        dialog.title = tr("Audio service needed")
-        dialog.message = [tr("This stream combines audio and video in CMAF segments. Roku needs separate tracks."), tr("Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream."), tr("The service runs directly in Python or in Docker; it does not re-encode your video.")]
-        dialog.buttons = [tr("Back")]
-        m.transmuxDialogActions = ["back"]
-    end if
+    dialog.title = tr("Audio service needed")
+    dialog.message = [tr("This stream combines audio and video in CMAF segments. Roku needs separate tracks."), tr("Configure the optional demux service URL in Settings, or return to Browse and choose a compatible stream."), tr("The service runs directly in Python or in Docker; it does not re-encode your video.")]
+    dialog.buttons = [tr("Back")]
     applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "onTransmuxDialogButton")
     dialog.observeField("wasClosed", "onTransmuxDialogClosed")
@@ -1287,16 +1286,8 @@ end sub
 
 sub onTransmuxDialogButton()
     if m.disposed or m.transmuxDialog = invalid then return
-    index = m.transmuxDialog.buttonSelected
-    action = "back"
-    if index >= 0 and index < m.transmuxDialogActions.count() then action = m.transmuxDialogActions[index]
     closeTransmuxDialog()
-    if action = "roku" and canTryRokuPlayback()
-        m.rokuChosen = true
-        playContent()
-    else
-        exitPlayer()
-    end if
+    exitPlayer()
 end sub
 
 sub onTransmuxDialogClosed()

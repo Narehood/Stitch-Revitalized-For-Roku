@@ -9,6 +9,7 @@
         testCancelledStartAndDisposal()
         testDirectSwitch()
         testRepeatedRetainedQualityChoices()
+        testCombinedQualityWithoutDescriptor()
         testQualityRecoveryLadder()
         testMixedAutomaticRecoveryChoice()
         testFailedRetryAndRecovery()
@@ -26,33 +27,6 @@
         fail(error.message)
     end try
     fixtureEnd()
-end sub
-
-sub testRepeatedDialogDispatch()
-    player = openPlayer("LIVE")
-    deliver(player, content("roku-demux", "720p60"))
-    dialogFocus = m.scene
-    for depth = 1 to 16
-        child = dialogFocus.focusedChild
-        if child = invalid then exit for
-        if child.isSameNode(dialogFocus) then exit for
-        dialogFocus = child
-    end for
-    primer = createObject("roSGNode", "DialogKeyBoundary")
-    m.scene.appendChild(primer)
-    primer.setFocus(true)
-    press("ok")
-    dispatch = createObject("roTimespan")
-    while primer.pressCount = 0 and dispatch.totalMilliseconds() < 2000
-        pump(20)
-    end while
-    check(primer.pressCount = 1 and player.callFunc("fixtureRead").transmuxDialog <> invalid, "first actual OK reaches the inert focus boundary without choosing playback")
-    if primer.pressCount <> 1 then throw "first actual OK did not reach the inert focus boundary"
-    dialogFocus.setFocus(true)
-    chooseRoku(player)
-    check(calls(sessionOf(player), "start").count() = 1, "queued repeated OK starts exactly one actual session")
-    closePlayer(player)
-    m.scene.removeChild(primer)
 end sub
 
 function manualIntentAutomatic(identity as string) as object
@@ -552,10 +526,10 @@ sub testMixedAutomaticRecoveryChoice()
         end if
         settle(40)
         check(player.content.QualityID = "480p30" and player.content.localPlaybackDescriptor.qualityId = "480p30", mode + " mixed-Automatic recovery retains the exact lower local descriptor")
-        check(not player.callFunc("fixtureRead").chosen and calls(session, "start").count() = 0 and original.control = "stop", mode + " recovery waits for explicit Roku opt-in before starting local playback")
+        check(original.control = "stop", mode + " recovery stops the failed direct wrapper")
         chooseRoku(player)
         started = calls(session, "start")
-        check(started.count() = 1 and started[0].descriptor.qualityId = "480p30", mode + " actual Try on Roku choice starts only the selected lower descriptor")
+        check(started.count() = 1 and started[0].descriptor.qualityId = "480p30", mode + " recovery starts only the selected lower local descriptor")
         ready(session, player.callFunc("fixtureRead").sessionId)
         video = player.callFunc("fixtureRead").video
         check(video.control = "play" and video.selectedQuality = "480p30" and video.content.localPlaybackDescriptor.qualityId = "480p30", mode + " opted-in mixed recovery plays the preserved lower selection")
@@ -667,6 +641,33 @@ function qualityFlagEvent(port as object) as dynamic
     return invalid
 end function
 
+' A Roku start must not let a later combined rendition without a
+' descriptor reach the Video node directly.
+sub testCombinedQualityWithoutDescriptor()
+    player = openPlayer("LIVE")
+    session = sessionOf(player)
+    combined = content("combined", "720p60")
+    metadata = [content("roku-demux", "1080p60").getFields(), combined.getFields()]
+    deliver(player, content("roku-demux", "1080p60"), metadata)
+    chooseRoku(player)
+    ready(session, player.callFunc("fixtureRead").sessionId)
+    video = player.callFunc("fixtureRead").video
+    video.qualityChangeRequest = 1
+    player.callFunc("fixtureQualityEvent")
+    settle(60)
+    session.busy = false
+    settle(60)
+    dialog = m.scene.dialog
+    check(dialog <> invalid and dialog.buttons.count() = 1 and dialog.buttons[0] = "Back", "combined rendition without a descriptor shows the Back-only audio-service dialog after a Roku start")
+    state = player.callFunc("fixtureRead")
+    played = false
+    if state.video <> invalid
+        if state.video.content <> invalid then played = state.video.content.url = combined.url and state.video.control = "play"
+    end if
+    check(not played and calls(session, "start").count() = 1, "combined rendition without a descriptor is never played directly")
+    closePlayer(player)
+end sub
+
 sub testRepeatedRetainedQualityChoices()
     player = openPlayer("LIVE")
     session = sessionOf(player)
@@ -774,8 +775,7 @@ end sub
 sub testDialogBackAndAttachRefusal()
     player = openPlayer("LIVE")
     session = sessionOf(player)
-    deliver(player, content("roku-demux"))
-    press("down")
+    deliver(player, content("combined"))
     press("ok")
     settle(180)
     check(player.backPressed and player.state = "done" and m.scene.dialog = invalid, "the combined-format dialog's actual Back button leaves the player")
@@ -862,20 +862,12 @@ function calls(session as object, action as string) as object
     return result
 end function
 
+' Eligible combined streams start on this Roku without a prompt.
 sub chooseRoku(player as object)
-    dialog = m.scene.dialog
-    eligible = dialog <> invalid and dialog.buttons.count() = 2 and dialog.buttons[0] = "Try on Roku" and dialog.buttons[1] = "Back"
-    check(eligible, "eligible combined stream offers Try on Roku and Back")
-    if not eligible then throw "combined-format dialog is not eligible for the remote choice"
-    press("ok")
-    ' Repeated OK is queued by the driver; wait for its actual callback.
-    dispatch = createObject("roTimespan")
-    while player.callFunc("fixtureRead").transmuxDialog <> invalid and dispatch.totalMilliseconds() < 2000
-        pump(20)
-    end while
-    closed = player.callFunc("fixtureRead").transmuxDialog = invalid
-    if not closed then throw "the actual remote choice closes its owned combined-format dialog"
-    check(closed, "the actual remote choice closes its owned combined-format dialog")
+    state = player.callFunc("fixtureRead")
+    started = state.transmuxDialog = invalid and state.chosen and state.sessionId <> ""
+    check(started, "eligible combined stream starts on Roku without a prompt")
+    if not started then throw "eligible combined stream did not start on Roku automatically"
 end sub
 
 sub ready(session as object, id as string)
@@ -926,10 +918,10 @@ sub testChoiceReadyAndBack()
     session = sessionOf(player)
     original = content("roku-demux")
     deliver(player, original)
-    check(player.callFunc("fixtureRead").video = invalid and calls(session, "start").count() = 0, "descriptor alone never starts experimental playback")
+    check(player.callFunc("fixtureRead").video = invalid, "a descriptor waits for its session before creating a wrapper")
     chooseRoku(player)
     started = calls(session, "start")
-    check(started.count() = 1 and started[0].descriptor.fixtureIdentity = "original-descriptor", "explicit choice starts exactly one session with the retained descriptor")
+    check(started.count() = 1 and started[0].descriptor.fixtureIdentity = "original-descriptor", "eligible content starts exactly one session with the retained descriptor")
     id = started[0].id
     player.callFunc("fixtureChoiceAgain")
     player.control = "play"
@@ -1075,6 +1067,26 @@ sub testFailedRetryAndRecovery()
     settle(60)
     check(m.scene.dialog <> invalid and m.scene.dialog.buttons[0] = "Try again", "matching session failure opens an actionable retry dialog")
     before = m.global.fixtureContentTasks
+    ' A first OK on an inert target lets the key driver queue the retry OK
+    ' as a repeated press; the handler must wait for its actual dispatch.
+    dialogFocus = m.scene
+    for depth = 1 to 16
+        child = dialogFocus.focusedChild
+        if child = invalid then exit for
+        if child.isSameNode(dialogFocus) then exit for
+        dialogFocus = child
+    end for
+    primer = createObject("roSGNode", "DialogKeyBoundary")
+    m.scene.appendChild(primer)
+    primer.setFocus(true)
+    press("ok")
+    dispatch = createObject("roTimespan")
+    while primer.pressCount = 0 and dispatch.totalMilliseconds() < 2000
+        pump(20)
+    end while
+    m.scene.removeChild(primer)
+    if primer.pressCount <> 1 then throw "first actual OK did not reach the inert focus boundary"
+    dialogFocus.setFocus(true)
     press("ok")
     dispatch = createObject("roTimespan")
     while player.callFunc("fixtureRead").task = invalid and dispatch.totalMilliseconds() < 2000
@@ -1111,7 +1123,7 @@ sub testRefusalAndBlockedOwner()
     session = sessionOf(player)
     session.refuseStart = true
     deliver(player, content("roku-demux"))
-    chooseRoku(player)
+    check(player.callFunc("fixtureRead").chosen and calls(session, "start").count() = 1, "eligible content attempts exactly one session start")
     check(player.callFunc("fixtureRead").sessionId = "" and player.callFunc("fixtureRead").video = invalid and m.scene.dialog <> invalid, "synchronous empty start refusal creates no wrapper and presents retry")
     closePlayer(player)
     check(calls(session, "stop").count() = 0, "start refusal never sends empty-ID stop")

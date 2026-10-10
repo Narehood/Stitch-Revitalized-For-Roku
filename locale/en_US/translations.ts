@@ -998,22 +998,6 @@
             <translation>This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service.</translation>
         </message>
         <message>
-            <source>Play on this Roku</source>
-            <translation>Play on this Roku</translation>
-        </message>
-        <message>
-            <source>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</source>
-            <translation>This stream combines audio and video. Stitch can try separating the tracks on this Roku, without a computer or container.</translation>
-        </message>
-        <message>
-            <source>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</source>
-            <translation>This experimental mode uses a fixed quality and may stop when the stream format changes. You can also configure the optional audio service in Settings.</translation>
-        </message>
-        <message>
-            <source>Try on Roku</source>
-            <translation>Try on Roku</translation>
-        </message>
-        <message>
             <source>Ad</source>
             <translation>Ad</translation>
         </message>

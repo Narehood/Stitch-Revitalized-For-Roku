@@ -60,7 +60,7 @@ function normal(result) {
     return detail;
 }
 
-function positive(result, marker, minimum = 119) {
+function positive(result, marker, minimum = 109) {
     const detail = normal(result);
     assert.doesNotMatch(result.output, /ROOT_BACK_ASSERT_FAIL:|ROOT_BACK_FAIL_SUMMARY:/, detail);
     const lines = result.output.split(/\r?\n/).filter(line => line.startsWith(`${marker}:`));
@@ -129,8 +129,6 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
           <field id="ready" type="assocarray" alwaysNotify="true" /><field id="result" type="assocarray" alwaysNotify="true" />
           <field id="stopRequested" type="boolean" /></interface><script uri="RootWorkerBoundary.brs" /></component>`);
         await add('components/RootWorkerBoundary.brs', 'sub onControl()\n    if m.top.control = "run" then m.top.state = "run"\n    if m.top.control = "stop" then m.top.state = "stop"\nend sub\n');
-        await add('components/RootKeyBoundary.xml', '<component name="RootKeyBoundary" extends="Group"><interface><field id="pressCount" type="integer" /></interface><script uri="RootKeyBoundary.brs" /></component>');
-        await add('components/RootKeyBoundary.brs', 'function onKeyEvent(key as string, press as boolean) as boolean\n    if LCase(key) = "ok" and press then m.top.pressCount++\n    return true\nend function\n');
         await add('source/utils/config.brs', await fs.readFile(path.join(startupFixtures, 'config.brs')));
         await add('source/utils/recentlyWatched.brs', await fs.readFile(path.join(startupFixtures, 'recentlyWatched.brs')));
         for (const file of ['TwitchApiTask.xml', 'RW_AddTask.xml', 'GetTwitchContent.xml', 'GetTwitchContentBoundary.brs',
@@ -147,17 +145,6 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             .replace('<Font role="focusedTextFont" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />', ''));
         await add('manifest', 'title=Offline Root Back Composition\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         const main = await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8');
-        const dispatchWait = /    dispatch = CreateObject\("roTimespan"\)\r?\n    while player\.CallFunc\("fixturePlayer"\)\.sessionId = "" and dispatch\.TotalMilliseconds\(\) < 2000\r?\n        settle\(10\)\r?\n    end while/;
-        assert.equal(main.match(dispatchWait)?.length, 1);
-        const keyDriver = await fs.readFile(path.join(playerFixtures, 'key-driver.js'), 'utf8');
-        const schedulingAnchor = 'Date.now() + 20';
-        assert.equal(keyDriver.split(schedulingAnchor).length, 2);
-        const delayedDriver = path.join(dir, 'delayed-key-driver.js');
-        await fs.writeFile(delayedDriver, keyDriver.replace(schedulingAnchor, 'Date.now() + 250'));
-        const emitAnchor = "process.stdin.emit('keypress', '', { name, ctrl: false, meta: false, shift: false, sequence: '' });";
-        assert.equal(keyDriver.split(emitAnchor).length, 2);
-        const droppedDriver = path.join(dir, 'dropped-key-driver.js');
-        await fs.writeFile(droppedDriver, keyDriver.replace(emitAnchor, 'void name;'));
         const heroPath = 'components/heroScene.brs';
         const actualHero = await fs.readFile(path.join(root, heroPath), 'utf8');
         const wrapperPath = 'components/Modules/StitchVideo/StitchVideo.brs';
@@ -176,7 +163,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         assert.equal(actualHero.match(signInAnchor)?.length, 2);
         const guard = /        if m\.activeNode <> invalid\r?\n            if m\.activeNode\.isSubtype\("VideoPlayer"\)\r?\n                ignored = m\.activeNode\.callFunc\("requestBack"\)\r?\n                return true\r?\n            end if\r?\n        end if/;
         assert.equal(actualHero.match(guard)?.length, 1);
-        for (const mode of ['repeated-dialog', 'fixed-repeated-wait', 'dropped-dialog', 'positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration', 'onscreen-immediate-pop', 'disposed-key-removal', 'disposed-action-removal', 'delayed-dialog', 'fixed-dialog-wait']) {
+        for (const mode of ['positive', 'assertion', 'guard-removal', 'deferred-guard-removal', 'signin-restoration', 'onscreen-immediate-pop', 'disposed-key-removal', 'disposed-action-removal']) {
             let heroSource = mode === 'guard-removal' ? actualHero.replace(guard, '') : actualHero;
             if (mode === 'signin-restoration') heroSource = heroSource.replace(signInAnchor, '$1    if m.top.localPlaybackSession <> invalid then m.top.localPlaybackSession.callFunc("onDestroy")\n');
             await add(heroPath, heroSource);
@@ -187,29 +174,17 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             if (mode === 'disposed-key-removal') wrapperSource = wrapperSource.replace(disposedKey, '$1');
             if (mode === 'disposed-action-removal') wrapperSource = wrapperSource.replace(disposedAction, '$1');
             await add(wrapperPath, wrapperSource);
-            const dialogOnly = mode === 'delayed-dialog' || mode === 'fixed-dialog-wait';
-            const repeatedDialog = mode === 'repeated-dialog' || mode === 'fixed-repeated-wait';
-            const oldWait = mode === 'fixed-dialog-wait' || mode === 'fixed-repeated-wait';
-            const mainSource = oldWait ? main.replace(dispatchWait, '    settle(120)') : main;
-            await add('source/main.brs', mainSource.replace('__PASS_MARKER__', marker)
+            await add('source/main.brs', main.replace('__PASS_MARKER__', marker)
                 .replace('__NEGATIVE_CONTROL__', mode === 'assertion' ? 'yes' : 'no')
                 .replace('__SIGNIN_CONTROL__', mode === 'signin-restoration' ? 'yes' : 'no')
                 .replace('__ROOT_GUARD_CONTROL__', mode === 'guard-removal' ? 'yes' : 'no')
                 .replace('__ONSCREEN_CONTROL__', mode === 'onscreen-immediate-pop' ? 'yes' : 'no')
                 .replace('__DISPOSED_KEY_CONTROL__', mode === 'disposed-key-removal' ? 'yes' : 'no')
-                .replace('__DISPOSED_ACTION_CONTROL__', mode === 'disposed-action-removal' ? 'yes' : 'no')
-                .replace('__DIALOG_WAIT_CONTROL__', dialogOnly ? 'yes' : 'no')
-                .replace('__REPEAT_DIALOG_CONTROL__', repeatedDialog ? 'yes' : 'no'));
+                .replace('__DISPOSED_ACTION_CONTROL__', mode === 'disposed-action-removal' ? 'yes' : 'no'));
             const zip = path.join(dir, `${mode}.zip`);
             await zipFolder(packageDir, zip);
-            const result = await run(zip, dir, mode === 'dropped-dialog' ? droppedDriver : dialogOnly ? delayedDriver : undefined);
-            if (mode === 'delayed-dialog') {
-                assert.equal(positive(result, marker, 4), 4);
-                t.diagnostic('actual terminal OK delayed 250 ms still starts the manager before asserting; no handler bypass');
-            } else if (mode === 'repeated-dialog') {
-                assert.equal(positive(result, marker, 5), 5);
-                t.diagnostic('unchanged driver dispatches two actual OK presses; the first is acknowledged at an inert focus boundary and the second starts the manager');
-            } else if (mode === 'positive') {
+            const result = await run(zip, dir);
+            if (mode === 'positive') {
                 const count = positive(result, marker);
                 t.diagnostic(`${count} actual composed Hero/Player/manager assertions with real key focus dispatch; inert worker and media state`);
                 assert.throws(() => positive(result, 'STALE_MARKER'), /expected one fresh root Back summary/);
@@ -217,12 +192,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             } else {
                 normal(result);
                 const failures = result.output.split(/\r?\n/).filter(line => line.startsWith('ROOT_BACK_ASSERT_FAIL:'));
-                if (['fixed-dialog-wait', 'fixed-repeated-wait', 'dropped-dialog'].includes(mode)) {
-                    assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: real dialog dispatch starts one actual manager']);
-                    assert.match(result.output, /^ROOT_BACK_FAIL_SUMMARY:\s*1\s*$/m);
-                    if (mode === 'dropped-dialog') t.diagnostic('dropped terminal OK reaches the two-second deadline and ends the full fixture with one assertion failure, normal exit and no worker dereference');
-                }
-                else if (mode === 'assertion') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: deliberate reversed assertion']);
+                if (mode === 'assertion') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: deliberate reversed assertion']);
                 else if (mode === 'signin-restoration') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: ordinary sign-in preserves the same usable permanent manager']);
                 else if (mode === 'onscreen-immediate-pop') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: actual on-screen Exit retains busy Player until strict cleanup acknowledgment']);
                 else if (mode === 'disposed-key-removal') assert.deepEqual(failures, ['ROOT_BACK_ASSERT_FAIL: remote Play after disposed Exit cannot replace stop or restart fade timer']);
