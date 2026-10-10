@@ -168,6 +168,7 @@ end function
 ' change) leave isRecovery=false so they get the low-latency seek.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    stopAdMetadata()
     resetLiveRecoveryHealth()
     if prepareRokuPlayback(isRecovery) then return
     ' Reset reconnect/watchdog state on every (re)start so stale values
@@ -352,6 +353,7 @@ sub playContent(isRecovery = false as boolean)
             end if
         end if
         m.video.content = contentNodeToPlay
+        startAdMetadata(contentNodeToPlay)
 
         if contentNodeToPlay.streamerProfileImageUrl <> invalid
             m.video.channelAvatar = contentNodeToPlay.streamerProfileImageUrl
@@ -374,6 +376,7 @@ sub playContent(isRecovery = false as boolean)
 end sub
 
 sub exitPlayer()
+    stopAdMetadata()
     resetLiveRecoveryHealth()
     ' If allowBreak is true, this is a real user/back exit. During internal
     ' reconnects we set allowBreak=false before calling exitPlayer().
@@ -564,6 +567,7 @@ end sub
 
 sub onVideoStateChange()
     if m.video = invalid or m.isExiting then return
+    if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
     if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
     if m.video.state = "playing" and not m.compatibilityNoticeShown
@@ -1376,6 +1380,7 @@ sub dismissChatNotice()
 end sub
 
 sub onDestroy()
+    stopAdMetadata()
     if m.disposed then return
     m.disposed = true
     m.isExiting = true

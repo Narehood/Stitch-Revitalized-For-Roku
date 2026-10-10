@@ -21,7 +21,8 @@ const taskPath = 'components/Tasks/GetTwitchContent/GetTwitchContent.brs';
 const runtimePath = 'source/utils/rokuVodRuntime.brs';
 const dependencies = ['source/utils/taskFactory.brs', 'source/utils/rokuDemuxDescriptor.brs',
     'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', runtimePath,
-    'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs'];
+    'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
+    'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs'];
 const snapshotPaths = [managerPath, managerXml, playerPath, playerXml, taskPath,
     'components/Tasks/GetTwitchContent/GetTwitchContent.xml',
     'components/Scenes/VideoPlayer/RokuPlayback.brs', ...dependencies];
@@ -68,7 +69,11 @@ async function build(dir, marker, capability, mutation) {
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster',
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
-        'components/Modules/CustomVideo']) await tree(dir, folder);
+        'components/Modules/CustomVideo', 'components/Modules/AdCountdown',
+        'components/Modules/AdMetadataOwner']) await tree(dir, folder);
+    for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs']) {
+        await add(dir, `components/${file}`, await fs.readFile(path.join(root, 'tools/tests/fixtures/ad-countdown-player', file)));
+    }
     for (const file of ['Chat.xml', 'Chat.brs']) await copy(dir, `components/Modules/Chat/${file}`);
     for (const file of ['EmojiLabel.xml', 'EmojiLabel.brs', 'EmojiLabelUtil.brs']) await copy(dir, `components/Modules/EmojiLabel/${file}`);
     for (const file of ['RokuPlayerHost.xml', 'GetTwitchContent.xml', 'GetTwitchContentBoundary.brs',
@@ -107,7 +112,8 @@ async function build(dir, marker, capability, mutation) {
       <field id="result" type="assocarray" alwaysNotify="true" /><field id="functionName" type="string" />
       <field id="control" type="string" onChange="onControl" /><field id="state" type="string" value="init" alwaysNotify="true" />`;
     for (const name of ['RokuDemuxServer', 'RokuVodDemuxServer']) {
-        await add(dir, `components/${name}.xml`, `<component name="${name}" extends="Group"><interface>${workerFields}</interface><script uri="WorkerBoundary.brs" /></component>`);
+        const optionalFields = name === 'RokuDemuxServer' ? '<field id="enableAdMetadata" type="boolean" value="false" />' : '';
+        await add(dir, `components/${name}.xml`, `<component name="${name}" extends="Group"><interface>${workerFields}${optionalFields}</interface><script uri="WorkerBoundary.brs" /></component>`);
     }
     await add(dir, 'components/WorkerBoundary.brs', 'sub onControl()\n    if m.top.control = "run" then m.top.state = "run"\n    if m.top.control = "stop" then m.top.state = "stop"\nend sub\n');
     await add(dir, 'components/VodVideoBoundary.xml', '<component name="VodVideoBoundary" extends="Group"><interface><field id="control" type="string" /><field id="state" type="string" alwaysNotify="true" /></interface></component>');

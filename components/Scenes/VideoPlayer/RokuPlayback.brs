@@ -222,3 +222,41 @@ sub closeTransmuxDialog()
         if scene.dialog.isSameNode(dialog) then scene.dialog = invalid
     end if
 end sub
+
+' Scene-retained metadata ownership survives wrapper replacements. Its stop
+' never blocks or retries playback, and untrusted/Automatic sources hide ads.
+sub startAdMetadata(content as object)
+    if m.disposed or m.video = invalid or content = invalid then return
+    if not m.video.hasField("positionInfo") then return
+    kind = "direct"
+    if m.rokuSessionId <> ""
+        if m.rokuPreparedContent = invalid then return
+        if not m.rokuPreparedContent.isSameNode(content) then return
+        if rokuVodDescriptorValid(content.localPlaybackDescriptor) then return
+        kind = "loopback"
+    else
+        if content.isProxied then return
+        if type(content.Streams) <> "roArray" then return
+        if content.Streams.Count() <> 1 then return
+        if content.Streams[0].url <> content.url then return
+    end if
+    scene = m.top.getScene()
+    if scene = invalid then return
+    owner = scene.findNode("stitchAdMetadataOwner")
+    if owner = invalid
+        owner = CreateObject("roSGNode", "AdMetadataOwner")
+        if owner = invalid then return
+        owner.id = "stitchAdMetadataOwner"
+        scene.appendChild(owner)
+    end if
+    if owner.subtype() <> "AdMetadataOwner" then return
+    m.adMetadataOwner = owner
+    m.adContentOwner = owner.callFunc("beginContent", m.video, content.url, kind)
+end sub
+
+sub stopAdMetadata()
+    if m.adMetadataOwner = invalid then return
+    if tadString(m.adContentOwner) and m.adContentOwner <> "" then m.adMetadataOwner.callFunc("endContent", m.adContentOwner)
+    m.adContentOwner = ""
+    m.adMetadataOwner = invalid
+end sub

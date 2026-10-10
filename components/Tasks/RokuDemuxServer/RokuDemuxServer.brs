@@ -24,6 +24,7 @@ sub runServer()
     m.config = invalid
     m.currentPublication = invalid
     m.currentGeneration = 0&
+    m.adMetadataEnabled = twitchAdClockBoolean(m.top.enableAdMetadata) and m.top.enableAdMetadata = true
     m.publications = {}
     m.activeBody = invalid
     m.activeLease = ""
@@ -150,6 +151,7 @@ sub serveBoundedLive()
         return
     end if
     m.liveState = nativeLiveCreate(m.config.trustedMediaUrl, liveServerNow(), m.config.sourceDelaySeconds, m.config.approvedOrigins, true, m.cacheBudgetBytes, options)
+    m.liveState.adClockEnabled = m.adMetadataEnabled
     m.result["experimentalUnknownFramingTransport"] = true
     ' Drop the signed private input from the harness's config immediately.
     m.config.Delete("trustedMediaUrl")
@@ -422,6 +424,12 @@ function pumpLiveServer(delayMs as integer) as boolean
         newGeneration = not m.publications.DoesExist(key)
         if not m.publications.DoesExist(key)
             m.publications[key] = { "publication": publication, "holdUntilMs": 0&, "activeRequests": 0&, "delivered": false }
+            if m.adMetadataEnabled
+                entry = m.publications[key]
+                entry.adProjection = twitchAdClockPublication(m.liveState, publication)
+                entry.adProjectionSeal = FormatJson(entry.adProjection)
+                m.publications[key] = entry
+            end if
             liveIncrement("publicationsObserved", 1 + 0&)
         end if
         if m.steadyMode
@@ -736,6 +744,10 @@ function prepareLiveResponse(request as object) as dynamic
             m.activeGeneration = publication.generation
         end if
         bytes = loopbackManifest(request.track, publication)
+        if m.adMetadataEnabled and request.track <> "master"
+            projection = entry.adProjection
+            if FormatJson(projection) = entry.adProjectionSeal then bytes = twitchAdClockManifest(request.track, publication, projection)
+        end if
         if bytes = invalid
             m.result.reason = "invalid_manifest_response"
             return invalid

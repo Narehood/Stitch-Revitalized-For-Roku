@@ -12,7 +12,8 @@ const bsc = require('brighterscript');
 const root = path.resolve(__dirname, '../..');
 const fixtures = path.join(__dirname, 'fixtures/roku-demux-epoch-core');
 const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
-const names = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxCommon', 'rokuDemuxProtocol', 'rokuDemuxInitMetadata', 'rokuDemuxFetch'];
+const names = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxCommon', 'rokuDemuxProtocol', 'rokuDemuxInitMetadata', 'rokuDemuxFetch',
+    'twitchAdCountdown', 'twitchAdClock', 'twitchAdProtocol'];
 const cases = ['content-ad-content-with-held-leases', 'several-short-mixed-boundaries-and-source-delay',
     'explicit-opt-in-and-legacy-startup-policy', 'byte-alias-distinct-from-genuine-stage-and-gate-refusal',
     'shared-source-identity-gap-epoch-and-track-refusals', 'atomic-pair-slot-pressure-and-old-lease-cleanup',

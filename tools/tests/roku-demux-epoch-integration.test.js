@@ -18,7 +18,7 @@ const gate = 'source/utils/rokuDemuxInitGate.brs';
 const fetch = 'source/utils/rokuDemuxFetch.brs';
 const helpers = ['rokuDemuxCommon', 'rokuDemuxProtocol', 'rokuDemuxBulk', 'rokuDemuxInitMetadata',
     'rokuDemuxInitGate', 'rokuDemuxDescriptor', 'rokuDemuxServerPolicy', 'playbackHls', 'deviceCapabilities',
-    'rokuDemuxCore', 'rokuDemuxFetch'].map(name => `source/utils/${name}.brs`);
+    'rokuDemuxCore', 'rokuDemuxFetch', 'twitchAdCountdown', 'twitchAdClock', 'twitchAdProtocol'].map(name => `source/utils/${name}.brs`);
 
 function exactFunction(source, name) {
     const matches = source.match(new RegExp(`^(?:function|sub) ${name}\\b[^]*?^end (?:function|sub)\\r?$`, 'gmi'));

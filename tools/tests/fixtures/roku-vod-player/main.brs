@@ -76,6 +76,7 @@ sub testCapabilityAndLive()
     id = manager.callFunc("startSession", vodDescriptor())
     if m.enabled
         check(id <> "" and manager.callFunc("fixtureRead").worker.subtype() = "RokuVodDemuxServer", "actual owner chooses the VOD Task class")
+        check(not manager.callFunc("fixtureRead").worker.hasField("enableAdMetadata"), "VOD worker does not expose or receive the LIVE ad option")
     else
         check(id = "" and not manager.busy and manager.callFunc("fixtureRead").worker = invalid, "normal capability gate refuses VOD before worker or user flow")
     end if
@@ -84,6 +85,7 @@ sub testCapabilityAndLive()
     id = manager.callFunc("startSession", liveDescriptor())
     worker = manager.callFunc("fixtureRead").worker
     check(id <> "" and worker.subtype() = "RokuDemuxServer", "v1 LIVE still selects the original worker")
+    check(worker.hasField("enableAdMetadata") and (type(worker.enableAdMetadata) = "Boolean" or type(worker.enableAdMetadata) = "roBoolean") and worker.enableAdMetadata, "LIVE worker retains typed observational ad metadata")
     check(worker.cacheBudgetBytes = 33554432 and worker.experimentalMode, "existing HD LIVE budget and consent remain")
     worker.ready = { sessionId: id, boundPort: 49371, boundAddressText: "127.0.0.1", decoderApproved: true, actualInitValidated: true, metadata: { width: 1920, height: 1080 } }
     check(manager.event.status = "ready" and manager.event.url = "http://127.0.0.1:49371/master.m3u8", "legacy LIVE readiness stays accepted without new VOD fields")
@@ -356,6 +358,7 @@ sub testPlayer()
     check(video <> invalid and video.subtype() = "CustomVideo", "recorded local playback retains actual CustomVideo wrapper")
     if video = invalid then throw "valid recorded Ready failed to create wrapper"
     check(video.control = "play" and video.content.url = "http://127.0.0.1:49371/vod/" + id + "/master.m3u8", "valid VOD Ready plays exact session-bound local URL")
+    check(m.scene.findNode("stitchAdMetadataOwner") = invalid, "VOD playback does not create an unsupported LIVE ad sidecar")
     check(manager.callFunc("fixtureRead").video.isSameNode(video), "actual Session owns the exact playing wrapper")
     check(not player.content.isSameNode(original) and original.url = vodDescriptor().sourceUrl, "local playable ContentNode is cloned; original source stays unchanged")
     check(player.content.localPlaybackDescriptor.sourceUrl = original.localPlaybackDescriptor.sourceUrl and player.content.QualityID = original.QualityID, "signed source descriptor and selected quality survive clone")

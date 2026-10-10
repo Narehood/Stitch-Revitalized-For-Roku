@@ -74,6 +74,9 @@ sub beginSession(sessionId as string, descriptor as object)
     m.worker.inputDescriptor = descriptor
     ' The player calls startSession only after its explicit experimental opt-in.
     m.worker.experimentalMode = true
+    if rokuDemuxInteger(descriptor["version"]) and descriptor["version"] = 1
+        m.worker.enableAdMetadata = true
+    end if
     m.worker.cacheBudgetBytes = 16777216
     if descriptor.version = 2 then m.worker.cacheBudgetBytes = 25165824
     if descriptor.version = 1 and descriptor["metadata"]["height"] > 720 then m.worker.cacheBudgetBytes = 33554432

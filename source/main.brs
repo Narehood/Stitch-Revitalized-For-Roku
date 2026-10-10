@@ -68,13 +68,18 @@ end sub
 sub finishMainScene(screen as object, scene as object, port as object, screenClosed as boolean)
     if screenClosed then return
     session = scene.GetField("localPlaybackSession")
+    metadataOwner = scene.findNode("stitchAdMetadataOwner")
     scene.unobserveField("exitApp")
     ' callFunc synchronizes with render; keep it alive for cooperative cleanup.
     scene.callFunc("onDestroy")
     clock = CreateObject("roTimeSpan")
     clock.Mark()
-    while session <> invalid
-        if not session.busy then exit while
+    while session <> invalid or metadataOwner <> invalid
+        sessionBusy = false
+        metadataBusy = false
+        if session <> invalid then sessionBusy = session.busy
+        if metadataOwner <> invalid then metadataBusy = metadataOwner.busy
+        if not sessionBusy and not metadataBusy then exit while
         remaining = 15000 - clock.TotalMilliseconds()
         if remaining <= 0 then exit while
         timeout = 100
