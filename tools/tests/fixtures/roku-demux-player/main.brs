@@ -897,6 +897,14 @@ sub testLateBindingAndOrdinaryPaths()
         if kind = "LIVE" then expected = "StitchVideo"
         check(video.subtype() = expected and video.content.url = direct.url, "ordinary LIVE/VOD/CLIP retains wrapper and original URL")
         check(calls(session, "start").count() = 0 and calls(session, "attach").count() = 0, "ordinary paths never start or attach a local session")
+        if kind = "LIVE"
+            video.state = "buffering"
+            settle(20)
+            timer = player.callFunc("fixtureRead").bufferTimer
+            check(timer <> invalid and timer.duration = 25, "ordinary live keeps the 25 s buffering allowance")
+            video.state = "playing"
+            settle(20)
+        end if
         closePlayer(player)
         check(calls(session, "stop").count() = 0, "ordinary destruction never stops an empty session ID")
     end for
@@ -941,6 +949,12 @@ sub testChoiceReadyAndBack()
     check(not player.content.isTransmux and not player.content.isProxied and not player.content.ForwardQueryStringParams, "local route disables external proxy/transmux/query-forwarding flags")
     check(video.suppressStartupSeek, "local playback suppresses the experimental live-edge seek even when its preference is enabled")
     check(player.content.playbackNotice.instr("1080p60") >= 0, "local playback notice includes its fixed quality")
+    video.state = "buffering"
+    settle(20)
+    timer = player.callFunc("fixtureRead").bufferTimer
+    check(timer <> invalid and timer.duration = 10, "Roku-only live treats a ten-second stall as stuck")
+    video.state = "playing"
+    settle(20)
     player.callFunc("fixtureEventAgain")
     ready(session, id)
     check(calls(session, "attach").count() = 1 and player.callFunc("fixtureRead").video.isSameNode(video), "duplicate ready events never create or attach another wrapper")

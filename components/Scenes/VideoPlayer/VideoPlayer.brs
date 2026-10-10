@@ -763,6 +763,12 @@ sub handleBufferingState()
     if m.bufferCheckTimer = invalid
         m.bufferCheckTimer = CreateObject("roSGNode", "Timer")
         m.bufferCheckTimer.duration = 25
+        ' Roku-only live keeps a ten-second local cushion, so a longer stall
+        ' means the native player is stuck (seen at ad discontinuities, where
+        ' one separate track stops loading); reconnect instead of waiting.
+        if m.rokuSessionId <> "" and m.top.contentRequested <> invalid
+            if m.top.contentRequested.contentType = "LIVE" then m.bufferCheckTimer.duration = 10
+        end if
         m.bufferCheckTimer.repeat = false
         m.bufferCheckTimer.observeField("fire", "onBufferTimeout")
         m.bufferCheckTimer.control = "start"
