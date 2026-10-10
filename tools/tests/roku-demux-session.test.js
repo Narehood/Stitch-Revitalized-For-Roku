@@ -113,7 +113,8 @@ end sub
         xml = xml.replace('</interface>', '<function name="fixtureRead" /><function name="fixtureDiagnostic" /><function name="fixtureTimeout" /><function name="fixtureArmResult" /><function name="fixtureTick" /></interface>');
         await add(managerXmlPath, xml);
         const dependencies = ['source/utils/taskFactory.brs', 'source/utils/rokuDemuxDescriptor.brs',
-            'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs'];
+            'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
+            'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs'];
         for (const file of dependencies) {
             const bytes = await fs.readFile(path.join(root, file));
             await add(file, bytes);

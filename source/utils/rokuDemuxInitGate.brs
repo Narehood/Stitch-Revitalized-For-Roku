@@ -2,7 +2,7 @@
 sub validateLiveInitOutput(payload as object)
     if m.top.stopRequested then return
     actual = nativeLiveInspectInitMetadata(payload)
-    frameRate = m.config.metadata.frameRate
+    frameRate = m.config["metadata"]["frameRate"]
     bandwidth = m.config.metadata.bandwidth
     variant = nativeLiveInitMetadataVariant(actual, frameRate, bandwidth)
     nlCheck(variant <> invalid, "actual init metadata invalid")

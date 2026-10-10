@@ -9,6 +9,7 @@ const {randomUUID, createHash} = require('node:crypto');
 const {spawn} = require('node:child_process');
 const bsc = require('brighterscript');
 const {corpus, inspect} = require('./fixtures/roku-vod-chunks/corpus');
+const {workerProof} = require('./fixtures/roku-vod-large/runner');
 
 const root = path.resolve(__dirname, '../..');
 const fixture = path.join(__dirname, 'fixtures/roku-vod-chunks');
@@ -44,6 +45,7 @@ function execution(result) {
     assert.equal(result.exceeded, false, `bounded child output\n${detail}`);
     assert.equal(result.code, 0, `child exit\n${detail}`);
     assert.doesNotMatch(result.output, /BRIGHTSCRIPT:\s*ERROR:|EXIT_BRIGHTSCRIPT_CRASH|runtime error|BrightScript Debugger|Syntax Error|unhandled exception/i, detail);
+    workerProof(result, true);
     return detail;
 }
 
@@ -103,9 +105,11 @@ async function withFixture(run) {
         const execute = async (mode = 'goldens') => {
             const runMarker = randomUUID();
             await fs.writeFile(path.join(dir, 'main.brs'), harness.replace('__MODE__', mode).replaceAll('__MARKER__', runMarker));
-            const result = await child([path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), '--no-sg', '--root', dir,
+            const largeWork = mode === 'work';
+            const entry = largeWork ? path.join(fixture,'../roku-vod-large/engine.js') : path.join(root,'node_modules/brs-node/bin/brs.cli.js');
+            const result = await child([entry, '--no-sg', '--root', dir, ...(largeWork ? ['--worker-marker',runMarker] : []),
                 ...sourceNames.map(name => `${name}.brs`), 'main.brs'], dir);
-            return {...result, marker: runMarker};
+            return {...result, marker: runMarker, workerAdapter:largeWork};
         };
         await run({dir, source, expected, marker, execute});
         for (const [name, bytes] of source) assert.deepEqual(await fs.readFile(path.join(root, `source/utils/${name}.brs`)), bytes, `owned/frozen ${name} unchanged during execution`);
@@ -136,7 +140,7 @@ test('metadata, absolute timing, pair cap and aggregate-output mutations cannot 
             ['rokuDemuxBulk', 'if keep = "video" then nbRaw(plan, atom.offset, atom.size)', 'if false then nbRaw(plan, atom.offset, atom.size)', 'video golden', 'goldens'],
             ['rokuVodChunks', 'target.Append(converted)', 'rewriteVodChunksTime(converted)\n        target.Append(converted)', 'video golden', 'goldens'],
             ['rokuVodChunks', 'rvdcCheck(rootPairs <= 128)', 'rvdcCheck(rootPairs <= 129)', 'whole-input refusal too-many-pairs', 'refusals'],
-            ['rokuVodChunks', 'if target.Count() + converted.Count() > 4194304', 'if false', 'aggregate track output bound', 'states']
+            ['rokuVodChunks', 'if target.Count() + converted.Count() > 16777216', 'if false', 'aggregate track output bound', 'states']
         ];
         for (const [name, needle, replacement, expectedFailure, mode] of mutations) {
             for (const [resetName, bytes] of source) await fs.writeFile(path.join(dir, `${resetName}.brs`), bytes);
@@ -162,4 +166,28 @@ test('recorded chunk runner rejects stale/zero/duplicate/runtime/nonzero/timeout
         {output: `STITCH_VOD_CHUNKS_PASS: ${marker} cases=6 assertions=150\nSTITCH_VOD_CHUNKS_PASS: ${marker} cases=6 assertions=150`}]) {
         assert.throws(() => positive({...base, ...change}, marker, {}));
     }
+});
+
+
+test('same large work-mode actual indivisible byte and sample guard mutants fail normally', {timeout:180000}, async t => {
+    await withFixture(async ({dir,source,expected,execute}) => {
+        const sourceBody=source.get('rokuVodChunks').toString();
+        for(const [label,seams] of [
+            ['one-pair-sample-work',[
+                ['rvdcCheck(samples + count <= 8192&)','rvdcCheck(samples + count <= 8193&)'],
+                ['rvdcCheck(atom.finish - chunkStart <= 4194304 and pairSamples <= 8192)','rvdcCheck(atom.finish - chunkStart <= 4194304 and pairSamples <= 8194)']]],
+            ['one-pair-byte-work',[
+                ['rvdcCheck(atom.finish - chunkStart <= 4194304 and pairSamples <= 8192)','rvdcCheck(atom.finish - chunkStart <= 12582912 and pairSamples <= 8192)'],
+                ['rvdcCheck(data.Count() - chunkStart <= 4194304 and spans.Count() < 128)','rvdcCheck(data.Count() - chunkStart <= 12582912 and spans.Count() < 128)']]]
+        ]) {
+            let mutated=sourceBody;
+            for(const [before,after] of seams) {assert.equal(mutated.split(before).length,2);mutated=mutated.replace(before,after);}
+            await fs.writeFile(path.join(dir,'rokuVodChunks.brs'),mutated);
+            const result=await execute('work');
+            execution(result);
+            assert.ok(result.output.includes(`whole-input refusal ${label}`),result.output.slice(-6000));
+            assert.throws(()=>positive(result,result.marker,expected,'work'));
+            t.diagnostic(`${label}: actual normal-exit same-work-mode mutation rejected`);
+        }
+    });
 });

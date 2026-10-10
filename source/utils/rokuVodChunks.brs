@@ -270,7 +270,7 @@ end function
 
 function rokuVodChunkPlan(data as dynamic, tracks as dynamic, timing as dynamic) as dynamic
     try
-        rvdcCheck(Type(data) = "roByteArray" and data.Count() >= 16 and data.Count() <= 4194304)
+        rvdcCheck(Type(data) = "roByteArray" and data.Count() >= 16 and data.Count() <= 12582912)
         snapshot = rvdcTimingSnapshot(tracks, timing)
         ctx = nbContext()
         roots = rvdcBoxes(data, 0, data.Count(), ctx)
@@ -363,14 +363,14 @@ function rokuVodChunkPlan(data as dynamic, tracks as dynamic, timing as dynamic)
                 end for
                 ' Include every root byte exactly once. Metadata between pairs
                 ' belongs to the next chunk; trailing metadata stays in the last.
-                if chunkPairs > 0 and (chunkPairs = 20 or atom.finish - chunkStart > 524288 or chunkSamples + pairSamples > 8192)
-                    rvdcCheck(spans.Count() < 6)
+                if chunkPairs > 0 and (chunkPairs = 20 or atom.finish - chunkStart > 4194304 or chunkSamples + pairSamples > 8192)
+                    rvdcCheck(spans.Count() < 127)
                     spans.Push({ start: chunkStart, length: chunkFinish - chunkStart, pairs: chunkPairs, samples: chunkSamples })
                     chunkStart = chunkFinish
                     chunkPairs = 0
                     chunkSamples = 0
                 end if
-                rvdcCheck(atom.finish - chunkStart <= 524288 and pairSamples <= 8192)
+                rvdcCheck(atom.finish - chunkStart <= 4194304 and pairSamples <= 8192)
                 chunkPairs += 1
                 chunkSamples += pairSamples
                 chunkFinish = atom.finish
@@ -378,7 +378,7 @@ function rokuVodChunkPlan(data as dynamic, tracks as dynamic, timing as dynamic)
             end if
         end for
         rvdcCheck(pending = invalid and pairs = rootPairs and pairs > 0 and chunkPairs > 0)
-        rvdcCheck(data.Count() - chunkStart <= 524288 and spans.Count() < 7)
+        rvdcCheck(data.Count() - chunkStart <= 4194304 and spans.Count() < 128)
         spans.Push({ start: chunkStart, length: data.Count() - chunkStart, pairs: chunkPairs, samples: chunkSamples })
         trackCopy = []
         for each item in tracks
@@ -404,14 +404,14 @@ sub rvdcPlanShape(plan as dynamic)
     for each key in ["version", "bytes", "pairs", "samples", "events"]
         rvdcCheck(rvdcInteger(plan[key]))
     end for
-    rvdcCheck(plan.version = 1 and plan.bytes >= 16 and plan.bytes <= 4194304)
+    rvdcCheck(plan.version = 1 and plan.bytes >= 16 and plan.bytes <= 12582912)
     rvdcCheck(plan.pairs >= 1 and plan.pairs <= 128 and plan.samples >= 1 and plan.samples <= 65536 and plan.events >= 0 and plan.events <= 16)
     rvdcCheck(Type(plan.digest) = "String" or Type(plan.digest) = "roString")
     rvdcCheck(plan.digest.Len() = 64)
     for i = 0 to 63
         rvdcCheck("0123456789abcdef".InStr(plan.digest.Mid(i, 1)) >= 0)
     end for
-    rvdcCheck(Type(plan.spans) = "roArray" and plan.spans.Count() >= 1 and plan.spans.Count() <= 7)
+    rvdcCheck(Type(plan.spans) = "roArray" and plan.spans.Count() >= 1 and plan.spans.Count() <= 128)
     rvdcCheck(Type(plan.tracks) = "roArray" and plan.tracks.Count() = 2)
     nbTrackMapValid(plan.tracks, "video")
     nbTrackMapValid(plan.tracks, "audio")
@@ -423,7 +423,7 @@ sub rvdcPlanShape(plan as dynamic)
         for each key in ["start", "length", "pairs", "samples"]
             rvdcCheck(rvdcInteger(span[key]))
         end for
-        rvdcCheck(span.start = cursor and span.length >= 16 and span.length <= 524288)
+        rvdcCheck(span.start = cursor and span.length >= 16 and span.length <= 4194304)
         rvdcCheck(span.length <= plan.bytes - cursor and span.pairs >= 1 and span.pairs <= 20 and span.samples >= 1 and span.samples <= 8192)
         cursor += span.length
         pairs += span.pairs
@@ -473,16 +473,16 @@ function rokuVodChunkStep(state as object, stopRequested as boolean) as object
         ' Reserve unchanged bulk's independent output/copy bounds in addition
         ' to actual caller-owned buffers. This is not a native heap guarantee.
         workingBytes = state.input.Count() + state.chunk.Count() + state.video.Count() + state.audio.Count() + 8388608&
-        rvdcCheck(workingBytes <= 20971520&)
+        rvdcCheck(workingBytes <= 50331648&)
         converted = nativeDemuxBulkFragment(state.chunk, state.tracks, state.track)
         rvdcCheck(Type(converted, 3) = "roByteArray" and converted.Count() > 0 and converted.Count() <= 4194304)
         target = state.video
         if state.track = "audio" then target = state.audio
-        if target.Count() + converted.Count() > 4194304
+        if target.Count() + converted.Count() > 16777216
             state.reason = "output_limit"
             throw "vod-chunks: output limit"
         end if
-        rvdcCheck(workingBytes + converted.Count() <= 20971520&)
+        rvdcCheck(workingBytes + converted.Count() <= 50331648&)
         expected = target.Count() + converted.Count()
         target.Append(converted)
         rvdcCheck(target.Count() = expected)
@@ -495,7 +495,7 @@ function rokuVodChunkStep(state as object, stopRequested as boolean) as object
             state.chunk = invalid
             state.index += 1
         end if
-        rvdcCheck(state.video.Count() + state.audio.Count() <= 8388608)
+        rvdcCheck(state.video.Count() + state.audio.Count() <= 16777216)
         if state.index = state.plan.spans.Count()
             state.phase = "complete"
             result.pair = { video: state.video, audio: state.audio }

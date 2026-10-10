@@ -71,8 +71,9 @@ async function buildHeroPackage(dir, marker) {
     await addCommon(dir, 'Offline Startup Navigation Fixture', marker, 'hero-main.brs');
     // The cooperative owner is idle here: no local playback Task is started.
     await copyTree(dir, 'components/Modules/RokuDemuxSession');
-    for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs',
-        'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
+    for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
+        'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
+        'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
     for (const file of ['source/changelog.brs', 'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs'])
         await copyFile(dir, file);
     for (const folder of ['components/SceneManager/Scene', 'components/SceneManager/Group',

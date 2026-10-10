@@ -162,7 +162,7 @@ function rokuVodMasterManifest(metadata as dynamic, sessionId as dynamic) as dyn
         prefix = "/vod/" + sessionId + "/"
         text = "#EXTM3U" + nl + "#EXT-X-VERSION:7" + nl
         text += "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=" + Chr(34) + "audio" + Chr(34) + ",NAME=" + Chr(34) + "Audio" + Chr(34) + ",DEFAULT=YES,AUTOSELECT=YES,URI=" + Chr(34) + prefix + "audio.m3u8" + Chr(34) + nl
-        text += "#EXT-X-STREAM-INF:BANDWIDTH=" + metadata.bandwidth.ToStr() + ",RESOLUTION=" + metadata.width.ToStr() + "x" + metadata.height.ToStr() + ",FRAME-RATE=" + metadata.frameRate + ",CODECS=" + Chr(34) + metadata.videoCodec + "," + metadata.audioCodec + Chr(34) + ",AUDIO=" + Chr(34) + "audio" + Chr(34) + nl + prefix + "video.m3u8" + nl
+        text += "#EXT-X-STREAM-INF:BANDWIDTH=" + metadata.bandwidth.ToStr() + ",RESOLUTION=" + metadata.width.ToStr() + "x" + metadata.height.ToStr() + ",FRAME-RATE=" + metadata["frameRate"] + ",CODECS=" + Chr(34) + metadata["videoCodec"] + "," + metadata["audioCodec"] + Chr(34) + ",AUDIO=" + Chr(34) + "audio" + Chr(34) + nl + prefix + "video.m3u8" + nl
         return loopbackAsciiBuffer(text)
     catch error
         return invalid
@@ -219,7 +219,7 @@ function rokuVodRequest(header as dynamic, sessionId as dynamic, entryCount as d
             seen[name] = value
             if name = "content-length" or name = "transfer-encoding" or name = "expect" then return invalid
             if name = "range"
-                if rokuVodRange(value, 4194304) = invalid then return invalid
+                if rokuVodRange(value, 16777216) = invalid then return invalid
                 range = value
             end if
         end for
@@ -230,12 +230,40 @@ function rokuVodRequest(header as dynamic, sessionId as dynamic, entryCount as d
     end try
 end function
 
+' VOD-only copy of shared range semantics with the recorded media bound.
+function rvdpMediaRange(value as string, size as integer) as object
+    bad = { "ok": false, "status": 416, "start": 0, "length": 0, "range": false }
+    if size < 1 or size > 16777216 then return bad
+    if value = "" then return { "ok": true, "status": 200, "start": 0, "length": size, "range": false }
+    if value.Len() > 48 or value.Left(6) <> "bytes=" then return bad
+    span = value.Right(value.Len() - 6)
+    dash = span.InStr("-")
+    if dash < 0 then return bad
+    first = span.Left(dash)
+    last = span.Right(span.Len() - dash - 1)
+    if first = ""
+        suffix = loopbackUnsigned(last, 16777216)
+        if suffix <= 0 then return bad
+        if suffix > size then suffix = size
+        return { "ok": true, "status": 206, "start": size - suffix, "length": suffix, "range": true }
+    end if
+    start = loopbackUnsigned(first, 16777216)
+    if start < 0 or start >= size then return bad
+    finish = size - 1
+    if last <> ""
+        finish = loopbackUnsigned(last, 16777216)
+        if finish < start then return bad
+        if finish >= size then finish = size - 1
+    end if
+    return { "ok": true, "status": 206, "start": start, "length": finish - start + 1, "range": true }
+end function
+
 function rokuVodRange(header as dynamic, size as dynamic) as dynamic
     try
-        if not nviInteger(size) or size < 1 or size > 4194304 then return invalid
+        if not nviInteger(size) or size < 1 or size > 16777216 then return invalid
         if not rokuDemuxString(header) or header.Len() > 128 then return invalid
         if header <> "" and not rokuDemuxAscii(header, 1, 128, true) then return invalid
-        range = loopbackRange(header, CInt(size))
+        range = rvdpMediaRange(header, CInt(size))
         if not range.ok then return invalid
         return range
     catch error

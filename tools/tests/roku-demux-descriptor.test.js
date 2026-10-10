@@ -15,6 +15,8 @@ const prefix = 'stitch-roku-demux-descriptor-';
 const fixturePath = path.join(__dirname, 'fixtures/roku-demux-descriptor');
 const productionFiles = ['components/Tasks/GetTwitchContent/GetTwitchContent.brs',
     'source/utils/playbackHls.brs', 'source/utils/rokuDemuxDescriptor.brs',
+    'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs',
+    'source/utils/rokuVodRuntime.brs',
     'components/Modules/TwitchContentNode/TwitchContentNode.xml',
     'components/Modules/TwitchContentNode/TwitchContentNode.brs', 'source/utils/misc.brs'];
 
@@ -116,7 +118,9 @@ test('actual guarded content task preserves fixed identity, existing transports 
         const capabilities = await fs.readFile(path.join(root, 'source/utils/deviceCapabilities.brs'), 'utf8');
         const hex = capabilities.match(/^function playbackHexValue\([^]*?^end function\r?$/m);
         assert.ok(hex, 'codec hex validation must use the unchanged canonical helper');
-        await add('source/canonicalHex.brs', hex[0] + '\n');
+        const format = capabilities.match(/^function twitchVariantVideoFormat\([^]*?^end function\r?$/m);
+        assert.ok(format, 'VOD readiness format validation must use the unchanged canonical helper');
+        await add('source/canonicalHex.brs', hex[0] + '\n' + format[0] + '\n');
         await add('components/boundary.brs', await fs.readFile(path.join(fixturePath, 'boundary.brs')));
         await add('manifest', 'title=Offline Roku Descriptor Contract\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         await add('components/DescriptorHost.xml', `<component name="DescriptorHost" extends="Scene">
@@ -134,6 +138,9 @@ test('actual guarded content task preserves fixed identity, existing transports 
           <script uri="pkg:/components/Tasks/GetTwitchContent/GetTwitchContent.brs" />
           <script uri="pkg:/source/utils/playbackHls.brs" />
           <script uri="pkg:/source/utils/rokuDemuxDescriptor.brs" />
+          <script uri="pkg:/source/utils/rokuVodIndex.brs" />
+          <script uri="pkg:/source/utils/rokuVodDescriptor.brs" />
+          <script uri="pkg:/source/utils/rokuVodRuntime.brs" />
           <script uri="pkg:/source/canonicalHex.brs" />
           <script uri="boundary.brs" />
         </component>`);

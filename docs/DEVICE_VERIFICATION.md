@@ -155,3 +155,9 @@ Keep the experiment off by default. If unreliable on a capability group, adjust 
 ## Release decision
 
 Complete the remaining native acceptance, CI and this record before declaring release readiness. Further Kimi and Grok rounds are deferred at the user's request; preserve completed reviews and explicitly incomplete newer coverage. Record untested device groups and limitations in the PR. Keep the PR draft while required checks are pending; do not merge automatically.
+
+## Container-free VOD development verification
+
+A bounded physical full-app test selected an eligible completed recording through normal Search/channel navigation and accepted the actual Try on Roku prompt. Playback progressed for 45 seconds; real remote controls verified forward seek/apply, reverse seek/cancel, pause/resume, and the recorded-chat notice without starting chat transport. Player Back returned to the channel page. Actual Video/Task stopped state, all five cleanup acknowledgments, disposed player/wrapper/chat, normal Main end and regular-package restoration were confirmed.
+
+The device memory monitor peaked at 19 percent in this bounded whole-app run; wider-device heap/stability coverage remains open. Separate backend runs verified a ten-minute seek, 35-second pause, resume and return seek. Human picture/audio confirmation and notice readability are pending. The current VOD wrapper has no manual quality picker, so this test does not claim that UI check. The development capability is experimental and still requires per-recording consent. Published Alpha 1 is unchanged.

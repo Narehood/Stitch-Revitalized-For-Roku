@@ -12,7 +12,7 @@ const bsc = require('brighterscript');
 const root = path.resolve(__dirname, '../..');
 const prefix = 'stitch-vod-cache-';
 const sourceNames = ['rokuVodIndex', 'rokuDemuxBulk', 'rokuDemuxCommon', 'rokuVodCache'];
-const modes = ['small', 'lru', 'budget', 'integrity'];
+const modes = ['small', 'lru', 'budget', 'integrity', 'large'];
 const fixtureFile = path.join(__dirname, 'fixtures/roku-vod-cache/main.brs');
 
 function child(args, cwd, timeoutMs = 30000, outputLimit = 65536) {
@@ -123,12 +123,14 @@ test('pin, reservation, atomic publication, eager allocation, idle purge and cle
     await withFixture(async ({dir, sources, execute}) => {
         const original = sources.get('rokuVodCache').toString();
         const mutations = [
-            ['not excluded and not item.pinned and not nvcLeased(state, item.entryNo)', 'not excluded and not nvcLeased(state, item.entryNo)', 'budget', 'reserved 24MiB cannot overlap pinned and leased 8MiB cache'],
-            ['if workLimit < byteLimit then byteLimit = workLimit', 'if false then byteLimit = workLimit', 'budget', 'reserved 24MiB cannot overlap pinned and leased 8MiB cache'],
+            ['not excluded and not item.pinned and not nvcLeased(state, item.entryNo)', 'not excluded and not nvcLeased(state, item.entryNo)', 'budget', 'reserved 48MiB and 16MiB pair cannot overlap pinned and leased 10MiB cache'],
+            ['maxPair = 16777216&', 'maxPair = 16777216&\n        if entryNo = 1 then maxPair = 8388608&', 'budget', 'reserved 48MiB and 16MiB pair cannot overlap pinned and leased 10MiB cache'],
             ['updated.Push(item)', 'item.audio = CreateObject("roByteArray")\n        updated.Push(item)', 'small', 'complete valid pair consumes reservation'],
             ['if state.leases.Count() > 0 or state.reservation <> invalid', 'if false', 'small', 'close retains active sends'],
             ['pairs: [], leases: [], reservation: invalid', 'pairs: [{entryNo: 0}], leases: [], reservation: invalid', 'small', 'no eager asset allocation'],
-            ['if not rokuVodCacheAuthorize(state, sessionId, track, entryNo) then return invalid', 'if state.hits = 3& then state.pairs = []\n        if not rokuVodCacheAuthorize(state, sessionId, track, entryNo) then return invalid', 'lru', 'long pause resumes existing paired hit']
+            ['if not rokuVodCacheAuthorize(state, sessionId, track, entryNo) then return invalid', 'if state.hits = 3& then state.pairs = []\n        if not rokuVodCacheAuthorize(state, sessionId, track, entryNo) then return invalid', 'lru', 'long pause resumes existing paired hit'],
+            ['if item.videoBytes + item.audioBytes > 16777216 then return false', 'if false then return false', 'large', 'validator independently rejects combined pair above16MiB'],
+            ['if total > state.cacheBudgetBytes - pending.maxPairBytes then return false', 'if false then return false', 'large', 'pending reservation independently rejects resident above8MiB']
         ];
         for (const [before, after, mode, expected] of mutations) {
             assert.equal(original.split(before).length, 2, 'one actual mutation anchor');

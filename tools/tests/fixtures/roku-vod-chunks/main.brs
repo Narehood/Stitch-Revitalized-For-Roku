@@ -104,7 +104,7 @@ sub main()
         cursor = 0
         for index = 0 to 4
             span = plan.spans[index]
-            checkVodChunks(span.start = cursor and span.length > 0 and span.length <= 524288 and span.samples <= 8192, "contiguous bounded chunk " + index.ToStr())
+            checkVodChunks(span.start = cursor and span.length > 0 and span.length <= 4194304 and span.samples <= 8192, "contiguous bounded chunk " + index.ToStr())
             wanted = 20
             if index = 4 then wanted = 15
             checkVodChunks(span.pairs = wanted, "original pair partition " + index.ToStr())
@@ -140,9 +140,9 @@ sub main()
         end for
         if mode = "refusals"
         oversized = CreateObject("roByteArray")
-        oversized.SetResize(4194305, false)
-        oversized[4194304] = 0
-        checkVodChunks(rokuVodChunkPlan(oversized, tracks, timing) = invalid, "4MiB whole input limit")
+        oversized.SetResize(12582913, false)
+        oversized[12582912] = 0
+        checkVodChunks(rokuVodChunkPlan(oversized, tracks, timing) = invalid, "12MiB whole input limit")
         oversized = invalid
         source = bytesVodChunks(corpus.tail.input.hex)
         checkVodChunks(rokuVodChunkPlan(source, [[7&, "video"], [9&, "audio"]], timing) = invalid, "timing map must match exactly the clear tracks")
@@ -208,8 +208,8 @@ sub main()
         smallPlan = rokuVodChunkPlan(smallSource, tracks, timing)
         state = rokuVodChunkBegin(smallSource, tracks, smallPlan)
         enlarged = CreateObject("roByteArray")
-        enlarged.SetResize(4194304, false)
-        enlarged[4194303] = 0
+        enlarged.SetResize(16777216, false)
+        enlarged[16777215] = 0
         state.video = enlarged
         refused = rokuVodChunkStep(state, false)
         checkVodChunks(refused.phase = "failed" and refused.reason = "output_limit" and refused.pair = invalid, "aggregate track output bound enforced before append")

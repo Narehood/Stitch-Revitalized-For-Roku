@@ -20,4 +20,7 @@
     <script type="text/brightscript" uri="pkg:/source/utils/deviceCapabilities.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/playbackHls.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/rokuDemuxDescriptor.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/rokuVodIndex.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/rokuVodDescriptor.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/rokuVodRuntime.brs" />
 </component>

@@ -62,7 +62,7 @@ function rokuVodCacheCreate(sessionId as dynamic, index as dynamic, scratchBytes
         return {
             version: 1, sessionId: sessionId, authority: nvcRandomId(), index: snapshot,
             rawDigest: nbBulkDigest(snapshot.raw), recordsDigest: nbBulkDigest(snapshot.records), indexIdentity: nvcIndexIdentity(snapshot), indexBytes: indexBytes, scratchBytes: scratchBytes,
-            cacheBudgetBytes: 16777216&, logicalBudgetBytes: 33554432&, workBudgetBytes: 25165824&,
+            cacheBudgetBytes: 25165824&, logicalBudgetBytes: 67108864&, workBudgetBytes: 50331648&,
             pairs: [], leases: [], reservation: invalid, cacheBytes: 0&, peakCacheBytes: 0&, stamp: 0&, serial: 0&,
             hits: 0&, admissions: 0&, evictions: 0&, initialized: false, closed: false, faulted: false, cleanupBlocked: false, reason: ""
         }
@@ -83,7 +83,7 @@ function nvcShape(state as dynamic) as boolean
         kind = type(state[key], 3)
         if kind <> "Boolean" and kind <> "roBoolean" then return false
     end for
-    if state.version <> 1 or state.cacheBudgetBytes <> 16777216& or state.logicalBudgetBytes <> 33554432& or state.workBudgetBytes <> 25165824& then return false
+    if state.version <> 1 or state.cacheBudgetBytes <> 25165824& or state.logicalBudgetBytes <> 67108864& or state.workBudgetBytes <> 50331648& then return false
     if state.indexBytes < 0& or state.indexBytes > 524288& or state.scratchBytes < 32768& or state.scratchBytes > 65536& then return false
     for each key in ["cacheBytes", "peakCacheBytes"]
         if state[key] < 0& or state[key] > state.cacheBudgetBytes then return false
@@ -177,8 +177,9 @@ function nvcValidate(state as object, checkIndex = true as boolean) as boolean
             if seen.DoesExist(item.entryNo.ToStr()) then return false
             seen[item.entryNo.ToStr()] = true
             if type(item.video) <> "roByteArray" or type(item.audio) <> "roByteArray" then return false
-            if item.videoBytes < 1 or item.videoBytes > 4194304 or item.audioBytes < 1 or item.audioBytes > 4194304 then return false
+            if item.videoBytes < 1 or item.videoBytes > 16777216 or item.audioBytes < 1 or item.audioBytes > 16777216 then return false
             if item.video.Count() <> item.videoBytes or item.audio.Count() <> item.audioBytes then return false
+            if item.videoBytes + item.audioBytes > 16777216 then return false
             if not nvcString(item.videoDigest) or not nvcString(item.audioDigest) then return false
             if item.videoDigest.Len() <> 64 or item.audioDigest.Len() <> 64 then return false
             if type(item.pinned, 3) <> "Boolean" and type(item.pinned, 3) <> "roBoolean" then return false
@@ -204,9 +205,10 @@ function nvcValidate(state as object, checkIndex = true as boolean) as boolean
             if not nviInteger(pending.entryNo) or pending.entryNo < -1 or pending.entryNo >= state.index.count then return false
             if not nviInteger(pending.workBytes) or not nviInteger(pending.maxPairBytes) then return false
             if pending.workBytes <> state.workBudgetBytes then return false
-            expected = 8388608&
+            expected = 16777216&
             if pending.entryNo = -1 then expected = 4194304&
             if pending.maxPairBytes <> expected or nvcPairAt(state, pending.entryNo) >= 0 then return false
+            if total > state.cacheBudgetBytes - pending.maxPairBytes then return false
             work = pending.workBytes
         end if
         return total + work + state.indexBytes + state.scratchBytes <= state.logicalBudgetBytes
@@ -253,7 +255,7 @@ function rokuVodReserve(state as dynamic, entryNo as dynamic, sessionId as dynam
             state.reason = "counter_exhausted"
             return invalid
         end if
-        maxPair = 8388608&
+        maxPair = 16777216&
         if entryNo = -1 then maxPair = 4194304&
         byteLimit = state.cacheBudgetBytes - maxPair
         workLimit = state.logicalBudgetBytes - state.workBudgetBytes - state.indexBytes - state.scratchBytes
@@ -328,7 +330,7 @@ function rokuVodStore(state as dynamic, reservationId as dynamic, sessionId as d
         end if
         video = pair.video
         audio = pair.audio
-        limit = 4194304
+        limit = 16777216
         if entryNo = -1 then limit = 2097152
         if video.Count() < 1 or video.Count() > limit or audio.Count() < 1 or audio.Count() > limit then
             state.reason = "invalid_pair"

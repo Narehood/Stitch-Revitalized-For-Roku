@@ -108,13 +108,16 @@ sub loadHlsContent(request as object)
         respondPlaybackError("Video unavailable", message, code)
         return
     end if
-    manifest = parsePlaybackHlsMaster(response.GetString(), usherUrl)
+    rawMaster = response.GetString()
+    manifest = parsePlaybackHlsMaster(rawMaster, usherUrl)
     proxyUrl = get_user_setting("proxy.url", "").Trim()
     while proxyUrl.Right(1) = "/"
         proxyUrl = proxyUrl.Left(proxyUrl.Len() - 1)
     end while
     m.rokuDemuxEnabled = false
-    if m.top.HasField("enableRokuDemux") then m.rokuDemuxEnabled = m.top.enableRokuDemux and request.contentType = "LIVE" and proxyUrl = ""
+    m.rokuVodEnabled = request.contentType = "VOD" and rokuVodRuntimeAvailable()
+    if m.top.HasField("enableRokuDemux") then m.rokuDemuxEnabled = m.top.enableRokuDemux and (request.contentType = "LIVE" or m.rokuVodEnabled) and proxyUrl = ""
+    m.rokuVodEnabled = m.rokuVodEnabled and m.rokuDemuxEnabled
     metadata = []
     nativeMetadata = []
     allowedUrls = []
@@ -125,6 +128,7 @@ sub loadHlsContent(request as object)
     m.playbackProbeCount = 0
     m.playbackProbeCache = {}
     m.playbackProbeOrigins = {}
+    m.playbackProbeVodComplete = {}
     m.playbackProbeFailed = false
     m.playbackProbeClock = CreateObject("roTimeSpan")
     m.playbackProbeClock.Mark()
@@ -176,7 +180,11 @@ sub loadHlsContent(request as object)
         entry = playbackQualityEntry(variant, url, transmux and not proxied, proxied)
         descriptor = invalid
         if m.rokuDemuxEnabled and transmux and not separateAudio
-            descriptor = rokuDemuxPlaybackDescriptor(variant, entry.QualityID, m.playbackProbeOrigins[variant["URL"]])
+            if m.rokuVodEnabled
+                if m.playbackProbeVodComplete[variant["URL"]] = true then descriptor = rokuVodDescriptorFromTrustedMaster(rawMaster, usherUrl, { "sourceUrl": variant["URL"], "qualityId": entry.QualityID }, request.contentId)
+            else
+                descriptor = rokuDemuxPlaybackDescriptor(variant, entry.QualityID, m.playbackProbeOrigins[variant["URL"]])
+            end if
         end if
         entry = rokuDemuxPlaybackEntry(entry, descriptor)
         metadata.Push(entry)
@@ -270,11 +278,22 @@ function isMuxedCmafVariant(variant as object, headers as object) as dynamic
         playlist = response.GetString()
         isMuxed = isMuxedPlaybackCmaf(variant, playlist)
         if m.rokuDemuxEnabled and isMuxed = true
-            origins = rokuDemuxMediaOrigins(playlist, url)
-            if origins <> invalid
-                cache = m.playbackProbeOrigins
-                cache[url] = origins
-                m.playbackProbeOrigins = cache
+            if m.rokuVodEnabled
+                cache = m.playbackProbeVodComplete
+                completed = rokuVodPlaylistCompleted(playlist, url)
+                if m.playbackProbeClock.TotalMilliseconds() >= 15000
+                    m.playbackProbeFailed = true
+                    return invalid
+                end if
+                cache[url] = completed
+                m.playbackProbeVodComplete = cache
+            else
+                origins = rokuDemuxMediaOrigins(playlist, url)
+                if origins <> invalid
+                    cache = m.playbackProbeOrigins
+                    cache[url] = origins
+                    m.playbackProbeOrigins = cache
+                end if
             end if
         end if
     end if

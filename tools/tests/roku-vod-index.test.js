@@ -76,7 +76,7 @@ async function fixture(mode, mutation) {
         await fs.writeFile(path.join(dir, 'manifest'), 'title=Pure Recorded Index Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         const data = { small: corpus.small, crlf: corpus.small.replaceAll('\n', '\r\n'), single: corpus.single,
             defaultSequence: corpus.single.replace('#EXT-X-MEDIA-SEQUENCE:17\n', ''),
-            absolute: corpus.single.replace('0.m4s', `${corpus.origin}/absolute.m4s?x=fixture%2B%25`), bad: corpus.bad };
+            absolute: corpus.single.replace('0.m4s', `${corpus.origin}/absolute.m4s?x=fixture%2B%25`), comments: corpus.comments, bad: corpus.bad };
         await fs.writeFile(path.join(dir, 'corpus.json'), JSON.stringify(data));
         await fs.writeFile(path.join(dir, 'large.bin'), large.text);
         for (const [name, body] of [
@@ -89,6 +89,11 @@ async function fixture(mode, mutation) {
         const existingLines = corpus.single.split('\n').length - 1;
         await fs.writeFile(path.join(dir, 'lines-max.bin'), corpus.single + '\n'.repeat(16448 - existingLines));
         await fs.writeFile(path.join(dir, 'lines-over.bin'), corpus.single + '\n'.repeat(16449 - existingLines));
+        for (const [name, limit] of [['comment-lines-max.bin', 16448], ['comment-lines-over.bin', 16449]]) {
+            const body = corpus.single.replace('#EXT-X-ENDLIST\n', '#c\n'.repeat(limit - existingLines) + '#EXT-X-ENDLIST\n');
+            assert.ok(Buffer.byteLength(body) <= 262144, `${name} isolates ignored-comment line count`);
+            await fs.writeFile(path.join(dir, name), body);
+        }
         const result = await runChild([cli, '--no-sg', '--root', dir, 'rokuVodIndex.brs', 'main.brs'], dir);
         assert.deepEqual(await fs.readFile(sourcePath), original, 'actual source must remain unchanged during execution');
         return { result, marker };
@@ -123,6 +128,19 @@ test('tail-only lookup, inaccurate duration and wrong half-open boundary mutatio
         assert.ok(result.output.includes(`STITCH_VOD_INDEX_FAIL: ${label}`), result.output);
         assert.throws(() => accept(result, marker));
         t.diagnostic(`${label}: actual mutated handler rejected despite normal exit`);
+    }
+});
+
+test('comment acceptance and unknown EXT refusal controls reject actual policy mutations', { timeout: 90000 }, async t => {
+    for (const [before, after, label] of [
+        ['else if line.Left(4) = "#EXT"\n                    if pendingUs <> invalid', 'else\n                    if pendingUs <> invalid', 'comments accept observed comment LF'],
+        ['ended = true\n                    else\n                        return invalid', 'ended = true\n                    else\n                        \'Deliberately ignore unknown EXT tag', 'refuse unknown required tag']
+    ]) {
+        const { result, marker } = await fixture('comments', [before, after]);
+        normalExit(result);
+        assert.ok(result.output.includes(`STITCH_VOD_INDEX_FAIL: ${label}`), result.output.slice(-14000));
+        assert.throws(() => accept(result, marker));
+        t.diagnostic(`${label}: actual policy mutation rejected despite normal exit`);
     }
 });
 

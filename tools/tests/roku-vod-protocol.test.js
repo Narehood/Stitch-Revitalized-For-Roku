@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { fixture, positive, normal } = require('./fixtures/roku-vod-descriptor/support');
-const { header, playlist } = require('./fixtures/roku-vod-index/corpus');
+const { header, playlist, withComments } = require('./fixtures/roku-vod-index/corpus');
 const sessionId = '0123456789abcdef0123456789abcdef';
 const otherSession = '1123456789abcdef0123456789abcdef';
 const metadata = { videoCodec: 'avc1.4D402A', audioCodec: 'mp4a.40.2', width: 1920, height: 1080, frameRate: '60.000', bandwidth: 6000000, isHD: true };
@@ -42,10 +42,17 @@ const ranges = [
     { header: 'bytes=-10', size: 100, ok: true, start: 90, length: 10, status: 206 },
     { header: 'bytes=0-999', size: 100, ok: true, start: 0, length: 100, status: 206 },
     ...['bytes=100-', 'bytes=9-1', 'bytes=-0', 'bytes=0-1,3-4', 'bytes=1e1-20', 'bytes=0-9\r\nX:x', 'Bytes=0-9', 'bytes=4194305-'].map(header => ({ header, size: 100, ok: false })),
-    { header: '', size: 4194305, ok: false }, { header: '', size: 1.5, ok: false }, { header: '', size: 0, ok: false }
+    { header: '', size: 4194305, ok: true, start: 0, length: 4194305, status: 200 },
+    { header: '', size: 16777216, ok: true, start: 0, length: 16777216, status: 200 },
+    { header: 'bytes=4194304-4194313', size: 16777216, ok: true, start: 4194304, length: 10, status: 206 },
+    { header: 'bytes=4194304-', size: 16777216, ok: true, start: 4194304, length: 12582912, status: 206 },
+    { header: 'bytes=-4194305', size: 16777216, ok: true, start: 12582911, length: 4194305, status: 206 },
+    { header: 'bytes=0-16777216', size: 4194305, ok: true, start: 0, length: 4194305, status: 206 },
+    ...['bytes=16777216-', 'bytes=-16777217', 'bytes=0-16777217', 'bytes=4294967296-', 'bytes=9999999999-'].map(header => ({ header, size: 16777216, ok: false })),
+    { header: '', size: 16777217, ok: false }, { header: '', size: 1.5, ok: false }, { header: '', size: 0, ok: false }
 ];
 function inputs() {
-    return { 'large.bin': playlist(7376), 'data.json': JSON.stringify({ sessionId, otherSession, metadata, small, smallGoldens, masterGolden, defaultPlaylist, defaultGolden: golden('video', [10000000n], 0), rangeGolden, fullGoldens,
+    return { 'large.bin': playlist(7376), 'data.json': JSON.stringify({ sessionId, otherSession, metadata, small, commentedSmall: withComments(small), smallGoldens, masterGolden, defaultPlaylist, defaultGolden: golden('video', [10000000n], 0), rangeGolden, fullGoldens,
         largeDigests: Object.fromEntries(Object.entries(largeGoldens).map(([key, value]) => [key, createHash('sha256').update(value).digest('hex')])),
         largeLengths: Object.fromEntries(Object.entries(largeGoldens).map(([key, value]) => [key, value.length])), badPaths, badHeaders, ranges }) };
 }

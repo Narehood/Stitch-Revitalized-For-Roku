@@ -174,7 +174,7 @@ function corpus(seed) {
     }
     const manyRows = Array.from({length: 8193}, (_, n) => ({dts: 62033000n + BigInt(n), duration: 1, flags: 0, composition: 0, bytes: Buffer.from([n & 255])}));
     negatives.push({name: 'one-pair-sample-work', input: identity(pair(0, manyRows, samples(0, 'audio')))});
-    const huge = samples(0, 'video'); huge[0].bytes = Buffer.alloc(524288, 1);
+    const huge = samples(0, 'video'); huge[0].bytes = Buffer.alloc(4194304, 1);
     negatives.push({name: 'one-pair-byte-work', input: identity(pair(0, huge, samples(0, 'audio')))});
     const original = inspect(media.input, {7: 'video', 8: 'audio'});
     for (const kind of ['video', 'audio']) {

@@ -28,7 +28,7 @@ end function
 sub storeCache(state as object, entryNo as integer, videoSize = 12 as integer, audioSize = 7 as integer)
     pending = rokuVodReserve(state, entryNo, m.session)
     checkCache(pending <> invalid, "demand reservation admitted")
-    checkCache(pending.workBytes = 25165824& and state.cacheBytes + pending.workBytes + state.indexBytes + state.scratchBytes <= 33554432&, "full conversion reserved before allocation")
+    checkCache(pending.workBytes = 50331648& and state.cacheBytes + pending.workBytes + state.indexBytes + state.scratchBytes <= 67108864&, "full conversion reserved before allocation")
     pair = {video: cacheBytes(videoSize, 32 + entryNo), audio: cacheBytes(audioSize, 96 + entryNo)}
     checkCache(rokuVodStore(state, pending.id, m.session, entryNo, pair), "atomic complete pair admission")
     checkCache(state.reservation = invalid and nvcValidate(state), "complete valid pair consumes reservation")
@@ -127,18 +127,18 @@ end sub
 sub budgetCache()
     state = newCache()
     storeCache(state, -1, 2097152, 2097152)
-    storeCache(state, 0, 2097152, 2097152)
+    storeCache(state, 0, 3145728, 3145728)
     lease = rokuVodAcquire(state, "audio", 0, m.session)
     beforeBytes = state.cacheBytes
-    checkCache(rokuVodReserve(state, 1, m.session) = invalid and state.reason = "work_budget", "reserved 24MiB cannot overlap pinned and leased 8MiB cache")
+    checkCache(rokuVodReserve(state, 1, m.session) = invalid and state.reason = "work_budget", "reserved 48MiB and 16MiB pair cannot overlap pinned and leased 10MiB cache")
     checkCache(state.pairs.Count() = 2 and state.cacheBytes = beforeBytes and state.reservation = invalid and state.evictions = 0&, "refused reservation commits no partial eviction")
     checkCache(nvcPairAt(state, -1) >= 0, "work admission never evicts pinned init")
     checkCache(rokuVodRelease(state, lease.id, m.session), "budget frees only completed send")
     pending = rokuVodReserve(state, 1, m.session)
     checkCache(pending <> invalid and state.cacheBytes = 4194304& and state.evictions = 1& and nvcPairAt(state, 0) = -1, "entire unleased pair evicted before allocation")
-    checkCache(state.cacheBytes + pending.workBytes + state.indexBytes + state.scratchBytes <= 33554432&, "logical bound includes pinned init index and scratch")
-    oversized = cacheBytes(4194305, 33)
-    checkCache(not rokuVodStore(state, pending.id, m.session, 1, {video: oversized, audio: cacheBytes(1, 97)}), "4MiB per-track output cap enforced")
+    checkCache(state.cacheBytes + pending.workBytes + state.indexBytes + state.scratchBytes <= 67108864&, "logical bound includes pinned init index and scratch")
+    oversized = cacheBytes(16777217, 33)
+    checkCache(not rokuVodStore(state, pending.id, m.session, 1, {video: oversized, audio: cacheBytes(1, 97)}), "16MiB per-track output cap enforced")
     oversized = invalid
     checkCache(not rokuVodCancelReservation(state, pending.id, false, m.session) and state.reservation <> invalid and state.cleanupBlocked, "unreleased conversion blocks cleanup")
     checkCache(not rokuVodCacheClose(state) and state.index <> invalid and state.pairs.Count() = 1, "close retains reserved work and pinned init")
@@ -147,8 +147,8 @@ sub budgetCache()
     fresh = rokuVodReserve(state, 1, m.session)
     checkCache(fresh <> invalid and fresh.id <> pending.id, "superseding conversion gets fresh token")
     checkCache(not rokuVodStore(state, pending.id, m.session, 1, {video: cacheBytes(1, 33), audio: cacheBytes(1, 97)}), "superseded conversion never publishes")
-    checkCache(rokuVodStore(state, fresh.id, m.session, 1, {video: cacheBytes(4194304, 33), audio: cacheBytes(4194304, 97)}), "exact 4MiB outputs and atomic 8MiB pair accepted")
-    checkCache(state.cacheBytes = 12582912& and state.peakCacheBytes = 12582912& and nvcValidate(state), "bounded cache accounts both maximum outputs")
+    checkCache(rokuVodStore(state, fresh.id, m.session, 1, {video: cacheBytes(8388608, 33), audio: cacheBytes(8388608, 97)}), "exact 8MiB outputs and atomic 16MiB pair accepted")
+    checkCache(state.cacheBytes = 20971520& and state.peakCacheBytes = 20971520& and nvcValidate(state), "bounded cache accounts both maximum outputs")
     checkCache(rokuVodCacheClose(state), "maximum pair cleanup complete")
     rollbackState = newCache()
     storeCache(rollbackState, -1, 2097152, 2097152)
@@ -163,6 +163,58 @@ sub budgetCache()
     initPending = rokuVodReserve(initState, -1, m.session)
     checkCache(not rokuVodStore(initState, initPending.id, m.session, -1, {video: cacheBytes(2097153, 31), audio: cacheBytes(1, 95)}), "init output 2MiB cap independently enforced")
     checkCache(rokuVodCancelReservation(initState, initPending.id, true, m.session) and rokuVodCacheClose(initState), "oversized init refusal releases cleanly")
+end sub
+
+sub largeCache()
+    state = newCache()
+    storeCache(state, -1, 2097152, 2097152)
+    storeCache(state, 0, 2097152, 2097152)
+    held = rokuVodAcquire(state, "video", 0, m.session)
+    pending = rokuVodReserve(state, 1, m.session)
+    checkCache(pending <> invalid and pending.maxPairBytes = 16777216& and pending.workBytes = 50331648& and state.cacheBytes = 8388608& and state.evictions = 0&, "exact pinned and leased 8MiB resident boundary admits full work")
+    checkCache(rokuVodStore(state, pending.id, m.session, 1, {video: cacheBytes(8388608, 33), audio: cacheBytes(8388608, 97)}), "large atomic media pair admitted above legacy track limit")
+    checkCache(state.cacheBytes = 25165824& and nvcValidate(state), "exact 24MiB complete cache and 16MiB aggregate pair valid")
+    second = rokuVodAcquire(state, "audio", 1, m.session)
+    checkCache(second <> invalid and second.size = 8388608 and second.data[0] = 97 and second.data[second.size - 1] = 97, "large cached audio lease borrows actual retained bytes")
+    before = state.cacheBytes
+    checkCache(rokuVodReserve(state, 2, m.session) = invalid and state.reason = "work_budget" and state.cacheBytes = before and state.evictions = 0&, "all leased large pairs prevent atomic eviction without state changes")
+    checkCache(rokuVodRelease(state, second.id, m.session), "actual large send completion releases only its lease")
+    nextPending = rokuVodReserve(state, 2, m.session)
+    checkCache(nextPending <> invalid and state.cacheBytes = 8388608& and state.evictions = 1& and nvcPairAt(state, 1) = -1 and nvcPairAt(state, 0) >= 0, "only complete unleased large pair evicted before refetch")
+    checkCache(rokuVodCancelReservation(state, nextPending.id, true, m.session) and rokuVodRelease(state, held.id, m.session) and rokuVodCacheClose(state), "large reservation and all actual leases acknowledge safe cleanup")
+
+    state = newCache()
+    storeCache(state, -1)
+    pending = rokuVodReserve(state, 0, m.session)
+    checkCache(not rokuVodStore(state, pending.id, m.session, 0, {video: cacheBytes(8388609, 32), audio: cacheBytes(8388608, 96)}) and state.reason = "cache_budget" and state.reservation <> invalid and state.pairs.Count() = 1, "combined pair above16MiB refuses before atomic publication")
+    checkCache(rokuVodStore(state, pending.id, m.session, 0, {video: cacheBytes(8388608, 32), audio: cacheBytes(8388608, 96)}), "same reservation admits exact16MiB pair")
+    pairs = state.pairs
+    item = pairs[1]
+    item.video = cacheBytes(8388609, 32)
+    item.videoBytes = 8388609
+    item.videoDigest = nbBulkDigest(item.video)
+    pairs[1] = item
+    state.pairs = pairs
+    state.cacheBytes += 1&
+    state.peakCacheBytes += 1&
+    checkCache(not nvcValidate(state), "validator independently rejects combined pair above16MiB")
+    checkCache(rokuVodCacheClose(state), "idle corrupted aggregate releases actual buffers")
+
+    state = newCache()
+    storeCache(state, -1, 2097152, 2097152)
+    storeCache(state, 0, 2097152, 2097152)
+    pending = rokuVodReserve(state, 1, m.session)
+    pairs = state.pairs
+    item = pairs[1]
+    item.video = cacheBytes(3145728, 32)
+    item.videoBytes = 3145728
+    item.videoDigest = nbBulkDigest(item.video)
+    pairs[1] = item
+    state.pairs = pairs
+    state.cacheBytes += 1048576&
+    state.peakCacheBytes += 1048576&
+    checkCache(not nvcValidate(state), "pending reservation independently rejects resident above8MiB")
+    checkCache(rokuVodCancelReservation(state, pending.id, true, m.session) and rokuVodCacheClose(state), "invalid resident refuses delivery and still releases acknowledged work")
 end sub
 
 sub integrityCache()
@@ -212,14 +264,14 @@ sub integrityCache()
     checkCache(rokuVodAcquire(state, "video", -1, m.session) = invalid and state.reason = "counter_exhausted" and state.leases.Count() = 0, "hit counter cap refuses send without creating lease")
     checkCache(rokuVodCacheClose(state), "exhausted hit counter closes safely")
     state = newCache()
-    state.cacheBytes = 16777217&
+    state.cacheBytes = 25165825&
     checkCache(not rokuVodCacheAuthorize(state, m.session, "video", 0) and not rokuVodCacheClose(state), "over-budget corrupted counters cannot claim safe cleanup")
     state.cacheBytes = 0&
     checkCache(rokuVodCacheClose(state), "exact fixture accounting restoration releases")
     state = newCache()
     pending = rokuVodReserve(state, -1, m.session)
     reservation = state.reservation
-    reservation.workBytes = 25165824.0
+    reservation.workBytes = 50331648.0
     state.reservation = reservation
     checkCache(not rokuVodCacheAuthorize(state, m.session, "video", -1), "noninteger work reservation refused")
     checkCache(rokuVodCancelReservation(state, pending.id, true, m.session) and rokuVodCacheClose(state), "corrupt reservation release requires exact opaque acknowledgement")
@@ -244,6 +296,7 @@ sub main()
         if mode = "small" then smallCache()
         if mode = "lru" then lruCache()
         if mode = "budget" then budgetCache()
+        if mode = "large" then largeCache()
         if mode = "integrity" then integrityCache()
         print "STITCH_VOD_CACHE_CASE: " + mode
         print "STITCH_VOD_CACHE_PASS: __MARKER__ " + FormatJson({assertions: m.assertions, failures: 0})

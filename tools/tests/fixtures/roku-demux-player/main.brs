@@ -863,7 +863,7 @@ sub testLateBindingAndOrdinaryPaths()
         player = openPlayer(kind)
         session = sessionOf(player)
         check(session <> invalid and session.isSameNode(m.scene.localPlaybackSession), "handleContent binds the scene owner after attachment")
-        check(player.callFunc("fixtureRead").task.enableRokuDemux = (kind = "LIVE"), "only LIVE opts the fetch task into descriptor eligibility")
+        check(player.callFunc("fixtureRead").task.enableRokuDemux = (kind = "LIVE" or kind = "VOD"), "LIVE and verified VOD opt into descriptor eligibility; CLIP does not")
         direct = content()
         deliver(player, direct)
         video = player.callFunc("fixtureRead").video

@@ -12,12 +12,32 @@ const small = header(30, 123, 'VOD') +
     '#EXTINF:1.000001,\nfirst.m4s?sig=fixture%2Fab%25\n' +
     '#EXTINF:0.25,\nsecond.m4s\n#EXTINF:30,\nlast.m4s\n#EXT-X-ENDLIST\n';
 const single = header() + '#EXTINF:10,\n0.m4s\n#EXT-X-ENDLIST\n';
+const withComments = text => text
+    .replace('#EXTM3U\n', '#EXTM3U\n#ID3-EQUIV-TDTG:2026-10-09T12:00:00.000Z\n#fixture repeated\n#fixture repeated\n')
+    .replace('#EXTINF:1.000001,\n', '#EXTINF:1.000001,\n#\n#ext-X-KEY:METHOD=AES-128,URI="not-a-tag"\n')
+    .replace('#EXT-X-ENDLIST\n', '#foreign text https://foreign.example.test/not-a-request\n#EXT-X-ENDLIST\n');
+const comments = [
+    { name: 'observed comment LF', text: withComments(small) },
+    { name: 'observed comment CRLF', text: withComments(small).replaceAll('\n', '\r\n') },
+    { name: 'comment before each segment', text: small.replaceAll(',\n', ',\n#pending duration retained\n') }
+];
 const replace = (name, before, after) => ({ name, text: single.replace(before, after) });
 const bad = [
     { name: 'empty body', text: '' },
     { name: 'over body ceiling', text: 'x'.repeat(262145) },
     { name: 'not ASCII', text: single + '\u0080' },
     { name: 'bad first line', text: single.replace('#EXTM3U', '#NOPE') },
+    { name: 'comment before first header', text: '#fixture\n' + single },
+    { name: 'comment after ENDLIST', text: single + '#ID3-EQUIV-TDTG:ignored\n' },
+    { name: 'duplicate header is still an unknown EXT tag', text: single.replace('#EXTINF:10,', '#EXTM3U\n#EXTINF:10,') },
+    replace('bare EXT tag', '#EXTINF:10,', '#EXT\n#EXTINF:10,'),
+    replace('EXT tag during pending duration', '0.m4s', '#EXT-X-VERSION:7\n0.m4s'),
+    replace('comment with leading whitespace', '#EXTINF:10,', ' #comment\n#EXTINF:10,'),
+    replace('comment with trailing whitespace', '#EXTINF:10,', '#comment \n#EXTINF:10,'),
+    replace('comment with embedded CR', '#EXTINF:10,', '#comment\rbroken\n#EXTINF:10,'),
+    replace('comment with forbidden control', '#EXTINF:10,', '#comment\u0001\n#EXTINF:10,'),
+    replace('comment not ASCII', '#EXTINF:10,', '#comment\u0080\n#EXTINF:10,'),
+    replace('overlong ignored comment', '#EXTINF:10,', '#' + 'x'.repeat(4096) + '\n#EXTINF:10,'),
     replace('missing ENDLIST', '#EXT-X-ENDLIST\n', ''),
     replace('missing type', '#EXT-X-PLAYLIST-TYPE:EVENT\n', ''),
     replace('unsupported type', 'PLAYLIST-TYPE:EVENT', 'PLAYLIST-TYPE:LIVE'),
@@ -80,4 +100,4 @@ function packed(count, durationUs) {
     return { text, records: result };
 }
 
-module.exports = { origin, source, header, playlist, small, single, bad, packed };
+module.exports = { origin, source, header, playlist, small, single, comments, withComments, bad, packed };

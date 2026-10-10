@@ -85,6 +85,33 @@ sub main()
             indexCheck(rokuVodIndexParse(indexBytes(bad.text), source, origin) = invalid, "refuse " + bad.name)
         end for
     end if
+    if mode = "normal" or mode = "small" or mode = "comments"
+        baseline = rokuVodIndexParse(indexBytes(corpus.small), source, origin)
+        indexCheck(baseline <> invalid, "comment comparison baseline accepts")
+        for each sample in corpus.comments
+            commented = rokuVodIndexParse(indexBytes(sample.text), source, origin)
+            indexCheck(commented <> invalid, "comments accept " + sample.name)
+            if commented <> invalid and baseline <> invalid
+                indexCheck(commented.raw.ToAsciiString() = sample.text, "comments retain exact bounded raw bytes")
+                indexCheck(commented.count = baseline.count and commented.sequence = baseline.sequence and commented.totalUs = baseline.totalUs and commented.targetDuration = baseline.targetDuration, "comments preserve complete timeline metadata")
+                indexCheck(commented.mapUri = baseline.mapUri and commented.sourceUrl = baseline.sourceUrl and commented.approvedOrigin = baseline.approvedOrigin, "comments preserve exact signed init and source authority")
+                for entryNo = 0 to baseline.count - 1
+                    expected = rokuVodIndexEntry(baseline, entryNo)
+                    actual = rokuVodIndexEntry(commented, entryNo)
+                    indexCheck(expected <> invalid and actual <> invalid, "commented packed entry exists")
+                    if expected <> invalid and actual <> invalid
+                        indexCheck(actual.uri = expected.uri and actual.durationUs = expected.durationUs and actual.startUs = expected.startUs, "comments preserve every signed reference and microsecond boundary")
+                        indexCheck(rokuVodIndexFind(commented, expected.startUs) = entryNo, "commented sparse seek boundary remains exact")
+                    end if
+                end for
+            end if
+        end for
+        if mode = "comments"
+            for each bad in corpus.bad
+                indexCheck(rokuVodIndexParse(indexBytes(bad.text), source, origin) = invalid, "refuse " + bad.name)
+            end for
+        end if
+    end if
     if mode = "normal"
         large = CreateObject("roByteArray")
         indexCheck(large.ReadFile("pkg:/large.bin"), "self-contained large synthetic body loads")
@@ -118,6 +145,8 @@ sub main()
     else if mode = "lines"
         indexCheck(loadIndex("lines-max.bin", source, origin) <> invalid, "16448-line boundary accepts")
         indexCheck(loadIndex("lines-over.bin", source, origin) = invalid, "16449-line boundary refuses")
+        indexCheck(loadIndex("comment-lines-max.bin", source, origin) <> invalid, "16448 lines with ignored comments accept")
+        indexCheck(loadIndex("comment-lines-over.bin", source, origin) = invalid, "16449 lines with ignored comments refuse")
     end if
     print "STITCH_VOD_INDEX_RESULT: "; m.marker; " "; FormatJSON({ assertions: m.assertions, failures: m.failures })
 end sub

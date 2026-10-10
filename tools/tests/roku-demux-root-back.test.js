@@ -102,7 +102,8 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         for (const file of ['source/constants.brs', 'source/changelog.brs', 'source/utils/misc.brs',
             'source/utils/taskFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/analytics.brs',
             'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs', 'source/utils/uiContrast.brs',
-            'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copy(file);
+            'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs',
+            'source/utils/rokuVodRuntime.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copy(file);
         for (const folder of ['fonts', 'images', 'components/SceneManager/Scene', 'components/SceneManager/Group',
             'components/Modules/CirclePoster', 'components/Modules/MenuBar', 'components/Modules/StatusPanel',
             'components/Modules/RecentlyWatchedBar', 'components/Modules/TwitchContentNode', 'components/Modules/VideoErrorHandler',

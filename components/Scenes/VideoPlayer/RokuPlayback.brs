@@ -24,12 +24,16 @@ sub enableRokuDescriptor(task as object)
     if m.rokuSession.cleanupBlocked then return
     if m.top.contentRequested = invalid then return
     if m.top.contentRequested.contentType = "LIVE" then task.enableRokuDemux = true
+    if m.top.contentRequested.contentType = "VOD" and rokuVodRuntimeAvailable() then task.enableRokuDemux = true
 end sub
 
 function hasRokuDescriptor() as boolean
     if m.rokuSession = invalid or m.top.content = invalid then return false
     if m.top.content.playbackTransport <> "roku-demux" then return false
-    return type(m.top.content.localPlaybackDescriptor) = "roAssociativeArray"
+    descriptor = m.top.content.localPlaybackDescriptor
+    if type(descriptor) <> "roAssociativeArray" then return false
+    if descriptor.version = 2 then return rokuVodRuntimeAvailable() and rokuVodDescriptorValid(descriptor)
+    return true
 end function
 
 function canTryRokuPlayback() as boolean
@@ -102,6 +106,9 @@ sub onRokuSessionEvent()
         if m.rokuPendingContent = invalid or m.rokuPreparedContent <> invalid then return
         if type(event.metadata) <> "roAssociativeArray" then return
         original = m.rokuPendingContent
+        if original.localPlaybackDescriptor.version = 2
+            if not rokuVodRuntimeAvailable() or not rokuVodPlaybackReadyValid(event, m.rokuSessionId, original.localPlaybackDescriptor) then return
+        end if
         fields = original.getFields()
         fields.url = event.url
         fields.StreamUrls = [event.url]
@@ -115,14 +122,14 @@ sub onRokuSessionEvent()
             end if
         end if
         if streams.count() = 0
-            streams = [{ "url": event.url, "quality": event.metadata.isHD, "bitrate": Int(event.metadata.bandwidth / 1000), "contentid": original.localPlaybackDescriptor.qualityId }]
+            streams = [{ "url": event.url, "quality": event.metadata["isHD"], "bitrate": Int(event.metadata.bandwidth / 1000), "contentid": original.localPlaybackDescriptor["qualityId"] }]
         end if
         fields.Streams = streams
-        fields.StreamQualities = [event.metadata.isHD]
+        fields.StreamQualities = [event.metadata["isHD"]]
         fields.isTransmux = false
         fields.isProxied = false
         fields.ForwardQueryStringParams = false
-        fields.playbackNotice = tr("Playing on this Roku at {0}. Automatic uses a fixed quality.").replace("{0}", original.localPlaybackDescriptor.qualityId)
+        fields.playbackNotice = tr("Playing on this Roku at {0}. Automatic uses a fixed quality.").replace("{0}", original.localPlaybackDescriptor["qualityId"])
         playable = CreateObject("roSGNode", "TwitchContentNode")
         playable.setFields(fields)
         m.rokuPendingContent = invalid

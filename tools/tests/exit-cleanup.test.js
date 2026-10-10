@@ -15,7 +15,8 @@ const fixtures = path.join(__dirname, 'fixtures/exit-cleanup');
 const prefix = 'stitch-exit-cleanup-';
 const tracked = ['source/main.brs', 'components/Modules/RokuDemuxSession/RokuDemuxSession.brs',
     'components/Modules/RokuDemuxSession/RokuDemuxSession.xml', 'source/utils/taskFactory.brs',
-    'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs'];
+    'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
+    'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs'];
 
 async function snapshots() {
     return Promise.all(tracked.map(async file => [file,

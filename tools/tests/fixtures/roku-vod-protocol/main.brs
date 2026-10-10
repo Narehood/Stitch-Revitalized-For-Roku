@@ -20,6 +20,17 @@ sub main()
                 p2Check(body.InStr("fixture%") < 0 and body.InStr("cloudfront") < 0, "public manifests expose no upstream signed query")
             end if
         end for
+        commentedBytes = CreateObject("roByteArray")
+        commentedBytes.FromAsciiString(data.commentedSmall)
+        commentedIndex = rokuVodIndexParse(commentedBytes, origin + "/archive/index.m3u8?sig=fixture%2B%25", origin)
+        p2Check(commentedIndex <> invalid, "non-EXT comments accept without timestamp interpretation")
+        if commentedIndex <> invalid
+            for each track in ["video", "audio"]
+                commentedBody = collectManifest(commentedIndex, track, sid, 16384)
+                p2Check(commentedBody <> invalid, "commented complete finite span returns")
+                if commentedBody <> invalid then p2Check(commentedBody = data.smallGoldens[track], "comments preserve exact finite protocol bytes without forwarding comment values")
+            end for
+        end if
         defaultBytes = CreateObject("roByteArray")
         defaultBytes.FromAsciiString(data.defaultPlaylist)
         defaultIndex = rokuVodIndexParse(defaultBytes, origin + "/archive/default.m3u8", origin)
@@ -85,7 +96,7 @@ sub main()
                 p2Check(response.head = (method = "HEAD") and response.range.start = 0 and response.range.length = 10, "HEAD keeps same length and typed send slice")
             end if
             p2Check(rokuVodResponseHeader(request, data.otherSession, 7376, 100) = invalid, "response refuses wrong session")
-            p2Check(rokuVodResponseHeader(request, sid, 7376, 4194305) = invalid, "response refuses asset byte cap")
+            p2Check(rokuVodResponseHeader(request, sid, 7376, 16777217) = invalid, "response refuses asset byte cap")
             request.route.entryNo = 0.0
             p2Check(rokuVodResponseHeader(request, sid, 7376, 100) = invalid, "response refuses floating route identity")
             request.route.entryNo = 0
@@ -105,6 +116,7 @@ sub main()
     for each header in data.badHeaders
         p2Check(rokuVodRequest(header, sid, 7376, 55000) = invalid, "strict header framing refuses")
     end for
+    p2Check(not loopbackRange("", 4194305).ok, "shared LIVE range retains 4MiB cap")
     for each item in data.ranges
         actual = rokuVodRange(item.header, item.size)
         if item.ok

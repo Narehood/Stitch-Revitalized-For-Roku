@@ -1,7 +1,17 @@
 ' Pure completed-recording index. Exact URL pins are not network authorization.
 ' The raw bytes and 24-byte records are Task-private and immutable after parsing.
 function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigin as dynamic) as dynamic
+    return nviScan(bytes, sourceUrl, approvedOrigin, true)
+end function
+
+function rokuVodIndexValidate(bytes as dynamic, sourceUrl as dynamic, approvedOrigin as dynamic) as boolean
+    return nviScan(bytes, sourceUrl, approvedOrigin, false) = true
+end function
+
+function nviScan(bytes as dynamic, sourceUrl as dynamic, approvedOrigin as dynamic, buildRecords as dynamic) as dynamic
     try
+        modeKind = type(buildRecords, 3)
+        if modeKind <> "Boolean" and modeKind <> "roBoolean" then return invalid
         if type(bytes) <> "roByteArray" then return invalid
         size = bytes.Count()
         if size < 1 or size > 262144 then return invalid
@@ -12,8 +22,19 @@ function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigi
         text = bytes.ToAsciiString()
         if text.Len() <> size then return invalid
         if CreateObject("roRegex", "[^" + Chr(9) + Chr(10) + Chr(13) + " -~]", "").IsMatch(text) then return invalid
-        records = CreateObject("roByteArray")
-        records.SetResize(8192 * 24, false)
+        newline = Chr(10)
+        carriageReturn = Chr(13)
+        lineCount = size - text.Replace(newline, "").Len()
+        if text.Right(1) <> newline then lineCount++
+        if lineCount > 16448 then return invalid
+        lineParts = text.Split(newline)
+        if lineParts.Count() > 16449 then return invalid
+        lineAt = 0
+        records = invalid
+        if buildRecords
+            records = CreateObject("roByteArray")
+            records.SetResize(8192 * 24, false)
+        end if
         count = 0
         lines = 0
         offset = 0
@@ -27,14 +48,17 @@ function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigi
         ended = false
         seen = {}
         while offset < size
-            finish = text.InStr(offset, Chr(10))
-            if finish < 0 then finish = size
-            length = finish - offset
-            if length > 0 and text.Mid(offset + length - 1, 1) = Chr(13) then length--
+            line = lineParts[lineAt]
+            finish = offset + line.Len()
+            lineAt++
+            length = line.Len()
+            if length > 0 and line.Right(1) = carriageReturn
+                length--
+                line = line.Left(length)
+            end if
             lines++
             if lines > 16448 or length > 4096 then return invalid
-            line = text.Mid(offset, length)
-            if line.InStr(Chr(13)) >= 0 then return invalid
+            if line.InStr(carriageReturn) >= 0 then return invalid
             if lines = 1
                 if line <> "#EXTM3U" then return invalid
             else if line <> ""
@@ -44,11 +68,13 @@ function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigi
                     if length < 1 or length > 2048 or count >= 8192 then return invalid
                     if nviResolve(base, line) = invalid then return invalid
                     if pendingUs > target * 1000000& or totalUs > 172800000000& - pendingUs then return invalid
-                    at = count * 24
-                    nviPut32(records, at, offset + 0&)
-                    nviPut32(records, at + 4, length + 0&)
-                    nviPut64(records, at + 8, pendingUs)
-                    nviPut64(records, at + 16, totalUs)
+                    if buildRecords
+                        at = count * 24
+                        nviPut32(records, at, offset + 0&)
+                        nviPut32(records, at + 4, length + 0&)
+                        nviPut64(records, at + 8, pendingUs)
+                        nviPut64(records, at + 16, totalUs)
+                    end if
                     totalUs += pendingUs
                     if pendingUs > maximumUs then maximumUs = pendingUs
                     pendingUs = invalid
@@ -60,7 +86,7 @@ function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigi
                     if comma < 1 or value.Len() - comma - 1 > 512 then return invalid
                     pendingUs = nviDuration(value.Left(comma), 30000000&)
                     if pendingUs = invalid or pendingUs = 0& then return invalid
-                else
+                else if line.Left(4) = "#EXT"
                     if pendingUs <> invalid then return invalid
                     colon = line.InStr(":")
                     tag = line
@@ -106,6 +132,7 @@ function rokuVodIndexParse(bytes as dynamic, sourceUrl as dynamic, approvedOrigi
         if not ended or count < 1 or playlistType = "" or mapUri = "" or target = 0 or pendingUs <> invalid then return invalid
         if sequence > 4294967295& - (count - 1) then return invalid
         if maximumUs > target * 1000000& then return invalid
+        if not buildRecords then return true
         records.SetResize(count * 24, false)
         if records.Count() <> count * 24 then return invalid
         raw = bytes.Slice(0, size)
