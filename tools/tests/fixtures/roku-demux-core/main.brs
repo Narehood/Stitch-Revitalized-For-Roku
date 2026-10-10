@@ -304,6 +304,18 @@ sub startupWindowCore()
         checkCore(reason = "native-live: " + item.reason, "startup wait retains strict source guard " + item.reason)
         closeCore(state)
     end for
+    ' Native character checks keep the original accepted sets.
+    for each item in [{ old: "segment-11.m4s", new: "segment-11.m4s?a=b&c=~!$%25'()*+,;@", reason: "" }, { old: "#EXTM3U", new: "#EXTM3U" + Chr(9), reason: "playlist character unsupported" }, { old: "segment-11.m4s", new: "segment-11" + Chr(233) + ".m4s", reason: "playlist character unsupported" }, { old: "segment-11.m4s", new: "segment-11" + Chr(92) + ".m4s", reason: "URL character unsupported" }, { old: "segment-11.m4s", new: "segment-11.m4s#frag", reason: "URL character unsupported" }, { old: "segment-11.m4s", new: "segment 11.m4s", reason: "URL character unsupported" }]
+        reason = ""
+        try
+            unused = nativeLiveParsePlaylist(playlistCore(10&, 3).Replace(item.old, item.new), "https://cdn.example.invalid/live.m3u8")
+        catch e
+            reason = e.message
+        end try
+        expected = ""
+        if item.reason <> "" then expected = "native-live: " + item.reason
+        checkCore(reason = expected, "native character check keeps the accepted set " + item.new)
+    end for
     state = newCore()
     for pass = 0 to 14
         nowMs = pass * 3000&

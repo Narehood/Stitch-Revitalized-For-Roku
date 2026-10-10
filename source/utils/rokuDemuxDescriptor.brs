@@ -13,12 +13,11 @@ end function
 function rokuDemuxAscii(value as dynamic, minimum as integer, maximum as integer, url = false as boolean) as boolean
     if not rokuDemuxString(value) then return false
     if value.Len() < minimum or value.Len() > maximum then return false
-    for i = 0 to value.Len() - 1
-        code = Asc(value.Mid(i, 1))
-        if code < 32 or code > 126 then return false
-        if url and (code = 32 or code = 35 or code = 92) then return false
-    end for
-    return true
+    ' A native match replaces a per-character Mid() scan that cost seconds per
+    ' stream open on a G204X. Chr(92) avoids engine-specific source escapes.
+    pattern = "[^ -~]"
+    if url then pattern = "[^!-~]|[#" + Chr(92) + Chr(92) + "]"
+    return not CreateObject("roRegex", pattern, "").IsMatch(value)
 end function
 
 function rokuDemuxCdnOrigin(url as dynamic) as dynamic
