@@ -72,7 +72,7 @@ sub beginSession(sessionId as string, descriptor as object)
     m.worker.observeField("state", "onSessionWorkerState")
     m.worker.sessionId = sessionId
     m.worker.inputDescriptor = descriptor
-    ' The player calls startSession only after its explicit experimental opt-in.
+    ' The player calls startSession only for eligible combined-track content.
     m.worker.experimentalMode = true
     if rokuDemuxInteger(descriptor["version"]) and descriptor["version"] = 1
         m.worker.enableAdMetadata = true
