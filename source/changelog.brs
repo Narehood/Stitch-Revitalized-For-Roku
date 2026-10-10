@@ -4,29 +4,14 @@
 function getChangelog() as object
     return {
         "3.0.2": [
-            "3.0.0: Combined-audio live streams and eligible recordings now play on this Roku automatically, with no extra computer or prompt",
-            "Fixed: Roku-only playback no longer stops when an ad break starts or ends",
-            "Fixed: No more freeze about 20 seconds after a stream starts",
-            "Improved: Much faster stream processing on the Roku, and automatic recovery from network hiccups",
-            "Ad breaks can still briefly pause and reconnect on Roku-only streams; delay behind live is longer than direct playback"
-        ],
-        "3.0.1": [
-            "3.0.0 Alpha 2: Eligible recorded videos can now offer Try on Roku without a container",
-            "New: A corner ad countdown uses reliable Twitch cues and actual playback timing",
-            "Improved: Buffered ad timing history and continued polling when timing is unavailable",
-            "Improved: Live recovery budgets and eligible manual quality selection",
-            "Unsupported media can still use the optional audio service",
-            "Long-session stability, real-ad readability, Roku-only VOD audio/video and genuine 1440p still need verification",
-            "Source transitions remain disabled; lower live latency is experimental and off by default"
-        ],
-        "3.0.0": [
-            "3.0.0 Alpha 1: An early preview; some streams and devices still need testing",
-            "New: Twitch-inspired design, clearer focus, and named video controls",
-            "Improved: Stream quality selection, recovery, and live chat connections",
-            "Experimental: Try on Roku offers live playback without a separate computer",
-            "Chat: Recorded videos show a notice when chat is unavailable",
-            "Privacy: Diagnostics are off unless you opt in",
-            "Lower live latency is experimental and off by default; improvement is not yet measured"
+            "3.0.0 release (Roku shows version 3.0.2 because 3.0.0 and 3.0.1 were alpha previews)",
+            "New: Twitch-inspired design with clearer focus, status messages and named player controls",
+            "New: Combined-audio streams and eligible recordings play on this Roku automatically, with no extra computer",
+            "New: A corner countdown shows Twitch ad timing when it is available",
+            "Improved: Ad breaks no longer end Roku-only playback; it can pause briefly and reconnects after about ten seconds",
+            "Improved: Faster stream processing, no early freeze, and automatic recovery from network hiccups",
+            "Improved: Quality selection, 1440p on capable devices, and live chat reliability",
+            "Note: Roku-only streams run further behind live than direct playback; lower latency is experimental and off"
         ],
         "2.6.0": [
             "New: Recently Watched sidebar now shows a live indicator — a red dot appears on streamers who are currently live",

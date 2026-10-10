@@ -11,7 +11,7 @@ This checkout incorporates work from [jeremy-albinet's maintained fork](https://
 ## What's new in 3.0.0
 
 - **Playback without Docker or another computer:** compatible streams play directly. Twitch Enhanced Broadcasting streams, which combine audio and video, are split on the Roku itself and now start automatically when no optional audio service is configured. Eligible completed recordings use the same on-device path, with seek, pause and resume.
-- **Keeps playing through ads:** Roku-only live playback continues across Twitch ad breaks and encoder restarts instead of stopping. A corner countdown shows reliable Twitch ad timing when it is available.
+- **Ad breaks no longer end Roku-only playback:** the on-Roku server carries ad and encoder-restart segments forward instead of refusing them. Roku's player can still pause briefly at the start and end of an ad; Stitch reconnects automatically after about ten seconds. A corner countdown shows reliable Twitch ad timing when it is available.
 - **Steadier playback:** no freeze about 20 seconds into a stream, much faster on-device stream processing, a retry for stalled downloads, and automatic reconnection that recovers repeatedly over long sessions.
 - **Twitch-inspired native interface:** dark surfaces, purple focus, redesigned navigation and cards, clearer loading and error states, current-value Settings, and named player controls. Browsing, account, bookmarks, quality, chat and emote features are retained.
 - **Quality and 1440p:** decoder-aware quality filtering, corrected HEVC negotiation and Twitch request formatting, and manual qualities that stay available. 1440p, including 60 fps, is offered when the device can decode it.
