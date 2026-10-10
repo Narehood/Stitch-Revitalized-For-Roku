@@ -196,9 +196,10 @@ function sessionWorkerFailureReason(result as object) as string
     if result.reason <> "live_helper_failed" then return "worker_finished"
     if not rokuDemuxString(result.helperFailureReason) then return "worker_finished"
     ' Restart a new timeline; never reuse the refused epoch or its init/cache.
-    ' A slow or stalled upstream fetch (seen when an ad break starts) is
-    ' transient too: use the same bounded fresh-session recovery.
-    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" or result.helperFailureReason = "native-live: upstream operation deadline" or result.helperFailureReason = "native-live: upstream progress deadline" then return "source_transition"
+    ' A slow or stalled upstream fetch (seen when an ad break starts), or a
+    ' stall long enough to fall behind the retained upstream history, is
+    ' transient too: a fresh session restarts at the live edge.
+    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" or result.helperFailureReason = "native-live: upstream operation deadline" or result.helperFailureReason = "native-live: upstream progress deadline" or result.helperFailureReason = "native-live: continuity window segment bound" or result.helperFailureReason = "native-live: continuity history unavailable" or result.helperFailureReason = "native-live: source sequence gap" then return "source_transition"
     return "worker_finished"
 end function
 
@@ -222,7 +223,7 @@ function sessionWorkerDiagnostic(result as object) as object
     ' These fixed parser/transport messages distinguish common failures without
     ' copying arbitrary exception text into the console.
     if rokuDemuxString(result.helperFailureReason)
-        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "continuity window crosses map or discontinuity", "selected window crosses map or discontinuity", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed", "actual init master incompatible", "actual init decoder rejected", "epoch source duration unsupported", "source epoch progression invalid", "next source epoch invalid", "segment initialization binding invalid"]
+        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "continuity window crosses map or discontinuity", "selected window crosses map or discontinuity", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed", "actual init master incompatible", "actual init decoder rejected", "epoch source duration unsupported", "source epoch progression invalid", "next source epoch invalid", "segment initialization binding invalid", "continuity window segment bound", "continuity history unavailable"]
             if result.helperFailureReason = "native-live: " + message or result.helperFailureReason = "native-demux: " + message
                 summary["helperReason"] = message.Replace(" ", "_")
                 exit for

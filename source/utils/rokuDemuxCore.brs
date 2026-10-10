@@ -600,13 +600,16 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             if state.steadyMode then state.lastUpstreamProgress = nowMs
             return
         end if
+        if state.sourceTransitions and state.started
+            window = nlContinuityWindow(parsed, window, state.publishedLast, true)
+        end if
+        ' Check after continuity: prepended older segments are published too.
         if state.sourceTransitions
             for each segment in window.segments
                 nlCheck(segment.durationUs < 2500000& and segment.durationUs <= window.targetDuration * 1000000& + 499999&, "epoch source duration unsupported")
             end for
         end if
         if state.sourceTransitions and state.started
-            window = nlContinuityWindow(parsed, window, state.publishedLast, true)
             nlEpochAcceptWindow(state, parsed, window)
             state.lastUpstreamProgress = nowMs
             return

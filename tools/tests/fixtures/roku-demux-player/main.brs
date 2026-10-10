@@ -462,6 +462,31 @@ sub testSourceTransitionRecovery()
     check(state.video.control = "play" and state.video.selectedQuality = "1080p60" and state.recovery = 1 and state.reconnect = 0, "one existing error retry resumes selected playback without resetting spent recovery")
     closePlayer(player)
 
+    ' The stopped Roku-only server can also fail the Video after the transition
+    ' armed its reconnect; that error must neither cancel nor repeat recovery.
+    for each errorText in ["fixture network failure", "buffer:loop:demux fixture"]
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        deliver(player, content("roku-demux"))
+        chooseRoku(player)
+        first = player.callFunc("fixtureRead").sessionId
+        ready(session, first)
+        video = player.callFunc("fixtureRead").video
+        session.event = { id: first, status: "failed", reason: "source_transition" }
+        settle(40)
+        timer = player.callFunc("fixtureRead").reconnectTimer
+        video.errorCode = -1
+        video.errorStr = errorText
+        video.state = "error"
+        settle(40)
+        state = player.callFunc("fixtureRead")
+        kept = timer <> invalid and state.reconnectTimer <> invalid
+        if kept then kept = state.reconnectTimer.isSameNode(timer)
+        check(kept and state.retryTimer = invalid and state.reconnect = 1 and state.recovery = 1, "Video error after a scheduled transition keeps one reconnect and one charge: " + errorText)
+        check(state.errorDialog = invalid and m.scene.dialog = invalid, "Video error after a scheduled transition opens no dialog: " + errorText)
+        closePlayer(player)
+    end for
+
     for each mode in ["startup", "stale", "other", "malformed", "blocked", "exit", "deferred", "disposed", "manual", "budget"]
         player = openPlayer("LIVE")
         session = sessionOf(player)

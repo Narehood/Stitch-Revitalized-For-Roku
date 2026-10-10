@@ -615,6 +615,9 @@ sub onVideoStateChange()
         exitPlayer()
     else if m.video.state = "error"
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
+        ' A scheduled reconnect replaces this Video; the stopped Roku-only
+        ' server can fail it first, which must not cancel or repeat recovery.
+        if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
 
         errorCode = m.video.errorCode
         errorMsg = m.video.errorStr
@@ -640,7 +643,7 @@ end sub
 
 sub handleStreamError(errorStr = invalid as dynamic)
     if m.video = invalid or m.isExiting or m.errorDialog <> invalid then return
-    if m.retryTimer <> invalid or m.reconnectTask <> invalid then return
+    if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
     if m.errorHandler = invalid
         m.errorHandler = CreateObject("roSGNode", "VideoErrorHandler")
     end if

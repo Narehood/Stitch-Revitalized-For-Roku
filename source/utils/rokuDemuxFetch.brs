@@ -134,9 +134,9 @@ sub nlStart(state as object, intent as object, phase as string, port as object, 
     if phase = "get" then headers.Range = "bytes=0-" + (intent.limit - 1).ToStr()
     nlCheck(transfer.SetHeaders(headers), "request headers unavailable")
     transfer.SetUrl(intent.url)
-    ' A freshly stitched ad's first segment can miss the CDN cache; the player
-    ' holds a ten-second cushion, so allow one transfer that long.
-    op = { transfer: transfer, identity: transfer.GetIdentity(), kind: intent.kind, url: intent.url, limit: intent.limit, phase: phase, deadline: nowMs + 10000& }
+    ' A hung transfer is retried once (see nativeLiveTick); two attempts fit
+    ' inside the player's ten-second cushion and the upstream progress bound.
+    op = { transfer: transfer, identity: transfer.GetIdentity(), kind: intent.kind, url: intent.url, limit: intent.limit, phase: phase, deadline: nowMs + 6000& }
     state.op = op ' Retain exactly one native object before starting it.
     nlUseWork(state, "transfer", nowMs)
     if phase = "head"
@@ -154,7 +154,16 @@ function nativeLiveTick(state as object, port as object, nowMs as dynamic) as ob
         nlUseWork(state, "tick", nowMs)
         if state.op <> invalid
             op = state.op
-            nlCheck(nowMs < op.deadline, "upstream operation deadline")
+            if nowMs >= op.deadline
+                ' Retry one hung transfer from a fresh request for the same
+                ' intent; a second timeout on that URL is fatal.
+                retried = false
+                if state.DoesExist("timedOutUrl") then retried = state.timedOutUrl = op.url
+                nlCheck(not retried and nlString(op.url), "upstream operation deadline")
+                state.timedOutUrl = op.url
+                nlCheck(nlCancelInput(state), "cancellation or input cleanup failed")
+                return nativeLiveStatus(state)
+            end if
             if op.phase = "get"
                 fs = CreateObject("roFileSystem")
                 if fs.Exists(nlInputPath())
@@ -213,6 +222,7 @@ function nativeLiveHandleUrlEvent(state as object, event as object, nowMs as dyn
             op.transfer = invalid
             nlCheck(nativeLiveInputCleanup(), "completed input cleanup failed")
             state.ownInputFile = false
+            state.timedOutUrl = ""
             rokuDemuxFeedInput(state, op.kind, payload, nowMs)
             if twitchAdClockBoolean(state.adClockEnabled) and state.adClockEnabled = true
                 twitchAdClockCapture(state, op.kind, payload, op.url)

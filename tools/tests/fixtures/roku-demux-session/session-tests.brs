@@ -432,6 +432,9 @@ sub testSourceTransitionClassification()
         { ready: true, reason: "live_helper_failed", helper: "native-live: selected map initialization changed", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "source_transition", label: "upstream operation deadline" }
         { ready: true, reason: "live_helper_failed", helper: "native-live: upstream progress deadline", expected: "source_transition", label: "upstream progress deadline" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity window segment bound", expected: "source_transition", label: "continuity span" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity history unavailable", expected: "source_transition", label: "continuity history" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: source sequence gap", expected: "source_transition", label: "sequence gap" }
         { ready: false, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-demux: selected discontinuity change unsupported", expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: "native-demux: continuity window crosses map or discontinuity", expected: "worker_finished" }
