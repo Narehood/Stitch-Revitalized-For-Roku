@@ -2,6 +2,7 @@ sub runTests(control as string)
     m.assertions = 0
     m.failures = 0
     m.control = control
+    testSourceTransitionClassification()
     ' Actual result summaries preserve useful failure codes, never private input.
     manager = newManager()
     diagnostic = manager.callFunc("fixtureDiagnostic", { reason: "live_helper_failed", elapsedMs: 720000&, requests: 320&, failureCategory: 1, cleanupOk: true, sourceUrl: "https://private.invalid/DIAGNOSTIC_SECRET_TOKEN", helperFailureReason: "native-live: selected map initialization changed" })
@@ -12,9 +13,13 @@ sub runTests(control as string)
     check(diagnostic.reason = "unknown" and diagnostic.Count() = 1, "unknown text and coerced or unbounded diagnostic values omitted")
     diagnostic = manager.callFunc("fixtureDiagnostic", { reason: "accept_failed|actual_init_required" })
     check(diagnostic.reason = "unknown", "diagnostic reason must be a single exact code")
-    for each message in ["GET status or range unsupported", "cache byte budget exceeded", "upstream operation deadline"]
+    for each message in ["GET status or range unsupported", "cache byte budget exceeded", "upstream operation deadline", "continuity window crosses map or discontinuity", "selected window crosses map or discontinuity"]
         diagnostic = manager.callFunc("fixtureDiagnostic", { helperFailureReason: "native-live: " + message })
         check(diagnostic.helperReason = message.Replace(" ", "_"), "fixed upstream/cache failure remains distinguishable")
+    end for
+    for each helper in ["native-live: selected window crosses map or discontinuity extra", "native-live: selected window crosses map or discontinuity https://private.invalid/DIAGNOSTIC_SECRET_TOKEN", "native-live: unexpected_sensitive_error"]
+        diagnostic = manager.callFunc("fixtureDiagnostic", { helperFailureReason: helper })
+        check(not diagnostic.DoesExist("helperReason") and not diagnostic.DoesExist("helperFailureReason"), "selected-window diagnostics reject nonexact text without raw data")
     end for
     id = manager.callFunc("startSession", sessionDescriptor())
     worker = manager.callFunc("fixtureRead").worker
@@ -47,6 +52,7 @@ sub runTests(control as string)
     id = manager.callFunc("startSession", hd)
     worker = manager.callFunc("fixtureRead").worker
     check(worker.experimentalMode and worker.cacheBudgetBytes = 33554432 and worker.listenPort = 0, "validated offered1080 uses explicit experimental32MiB policy")
+    check((type(worker.enableAdMetadata) = "Boolean" or type(worker.enableAdMetadata) = "roBoolean") and worker.enableAdMetadata, "consented LIVE v1 HD worker has strict Boolean cue forwarding")
     check(worker.inputDescriptor["qualityId"] = "1080p60" and worker.inputDescriptor["metadata"]["height"] = 1080, "1080 identity remains truthful without mutating descriptor")
     finishManager(manager)
 
@@ -59,6 +65,7 @@ sub runTests(control as string)
     check(worker.inputDescriptor["qualityId"] = "720p60" and worker.sessionId = first, "typed input and identity")
     check(sessionIdentifier(first) and worker.functionName = "runServer", "lowercase hex session namespace and exact worker entry")
     check(worker.experimentalMode and worker.cacheBudgetBytes = 16777216 and worker.listenPort = 0 and not worker.stopRequested, "explicit experimental opt-in and bounded worker options")
+    check((type(worker.enableAdMetadata) = "Boolean" or type(worker.enableAdMetadata) = "roBoolean") and worker.enableAdMetadata, "actual running LIVE v1 worker enables observational cue metadata")
     worker.ready = readyFor("00000000000000000000000000000000")
     check(manager.event.status = "starting", "stale ready ignored")
     worker.ready = readyFor(first)
@@ -96,6 +103,7 @@ sub runTests(control as string)
     state = manager.callFunc("fixtureRead")
     check(manager.busy and state.currentId = third, "replacement starts only after all three acknowledgments")
     check(not state.worker.isSameNode(worker) and state.worker.inputDescriptor["sourceUrl"].InStr("/third.m3u8") > 0, "latest pending input used by one fresh worker")
+    check((type(state.worker.enableAdMetadata) = "Boolean" or type(state.worker.enableAdMetadata) = "roBoolean") and state.worker.enableAdMetadata, "latest consented LIVE v1 replacement preserves strict cue forwarding")
     check(state.video = invalid and worker.control = "stop", "old observers and reference released through factory after stop")
     worker.ready = readyFor(first)
     check(manager.event.id = third and manager.event.status = "starting", "released worker cannot inject stale ready")
@@ -407,6 +415,164 @@ sub runTests(control as string)
 
     finishTests()
 end sub
+
+sub testSourceTransitionClassification()
+    cases = [
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected discontinuity change unsupported", expected: "source_transition", label: "selected epoch" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity window crosses map or discontinuity", expected: "source_transition", label: "continuity window" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity", expected: "source_transition", label: "selected window" }
+        { ready: false, reason: "live_helper_failed", helper: "native-live: selected discontinuity change unsupported", expected: "worker_finished" }
+        { ready: false, reason: "live_helper_failed", helper: "native-live: continuity window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: false, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: "native_exception", helper: "native-live: selected discontinuity change unsupported", expected: "worker_finished" }
+        { ready: true, reason: "native_exception", helper: "native-live: continuity window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: "native_exception", helper: "native-live: selected window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: {}, helper: "native-live: continuity window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: {}, helper: "native-live: selected window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected map initialization changed", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: upstream operation deadline", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-demux: selected discontinuity change unsupported", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-demux: continuity window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-demux: selected window crosses map or discontinuity", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected discontinuity change unsupported extra", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: continuity window crosses map or discontinuity extra", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity extra", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity https://private.invalid/DIAGNOSTIC_SECRET_TOKEN", expected: "worker_finished" }
+        { ready: true, reason: {}, helper: "native-live: selected discontinuity change unsupported", expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: {}, expected: "worker_finished" }
+        { ready: true, reason: "live_helper_failed", helper: invalid, expected: "worker_finished" }
+    ]
+    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity"]
+        for each field in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
+            for each value in [false, invalid, "true", 1]
+                cases.push({ ready: true, reason: "live_helper_failed", helper: helper, expected: "worker_finished", badField: field, badValue: value })
+            end for
+        end for
+    end for
+    for each item in cases
+        manager = newManager()
+        id = manager.callFunc("startSession", sessionDescriptor())
+        worker = manager.callFunc("fixtureRead").worker
+        if item.ready then worker.ready = readyFor(id)
+        port = CreateObject("roMessagePort")
+        manager.observeField("event", port)
+        result = cleanupFor(id)
+        result.reason = item.reason
+        result.helperFailureReason = item.helper
+        if item.DoesExist("badField")
+            if item.badValue = invalid
+                result.Delete(item.badField)
+            else
+                result[item.badField] = item.badValue
+            end if
+        end if
+        worker.result = result
+        failed = nextFailure(port)
+        check(failed <> invalid, "actual result handler emits a failure event")
+        label = "transition classification requires exact ready reason and safe cleanup"
+        if item.DoesExist("label") then label += ": " + item.label
+        if failed <> invalid then check(failed.reason = item.expected and failed.id = id, label)
+        check(worker.stopRequested and manager.busy, "classified failure still retains the cooperative worker owner")
+        manager.unobserveField("event")
+        finishManager(manager)
+    end for
+
+    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity"]
+        manager = newManager()
+        first = manager.callFunc("startSession", sessionDescriptor("old-epoch"))
+        worker = manager.callFunc("fixtureRead").worker
+        worker.ready = readyFor(first)
+        video = CreateObject("roSGNode", "SessionVideoBoundary")
+        video.state = "playing"
+        check(manager.callFunc("attachVideo", first, video), "transition has a real manager-owned playing Video boundary")
+        port = CreateObject("roMessagePort")
+        manager.observeField("event", port)
+        stale = cleanupFor("00000000000000000000000000000000")
+        stale.reason = "live_helper_failed"
+        stale.helperFailureReason = helper
+        worker.result = stale
+        check(not worker.stopRequested and nextFailure(port) = invalid, "foreign transition identity cannot stop or classify the current owner")
+        worker.result = { sessionId: 1, reason: "live_helper_failed", helperFailureReason: helper }
+        check(not worker.stopRequested and nextFailure(port) = invalid, "malformed transition identity cannot affect the current owner")
+        result = cleanupFor(first)
+        result.reason = "live_helper_failed"
+        result.helperFailureReason = helper
+        worker.result = result
+        failed = nextFailure(port)
+        check(failed <> invalid, "ready transition publishes its fixed failure event")
+        if failed <> invalid then check(failed.reason = "source_transition", "ready exact transition publishes only the static restart reason")
+        check(video.control = "stop" and worker.stopRequested and manager.busy, "transition requests actual Video and worker stop before replacement")
+        second = manager.callFunc("startSession", sessionDescriptor("fresh-epoch"))
+        state = manager.callFunc("fixtureRead")
+        check(second <> first and state.currentId = first and state.worker.isSameNode(worker), "fresh descriptor queues behind the stopped old timeline")
+        worker.result = result
+        check(nextFailure(port) = invalid, "repeated stopping result cannot publish another transition")
+        worker.state = "stop"
+        check(manager.busy and manager.callFunc("fixtureRead").worker.isSameNode(worker), "actual worker STOP cannot replace a still-playing Video")
+        video.state = "stopped"
+        state = manager.callFunc("fixtureRead")
+        check(state.currentId = second and not state.worker.isSameNode(worker) and state.worker.control = "run", "fresh worker starts only after old worker and Video STOP")
+        check(worker.control = "stop" and state.worker.inputDescriptor.sourceUrl.InStr("fresh-epoch") >= 0 and state.video = invalid, "replacement uses fresh descriptor without old owner or cache references")
+        check(not state.worker.stopRequested and manager.busy, "old transition cleanup never stops the fresh worker")
+        manager.unobserveField("event")
+        finishManager(manager)
+    end for
+
+    ' Video's error state and the worker result may notify in either order.
+    for each errorFirst in [false, true]
+        manager = newManager()
+        first = manager.callFunc("startSession", sessionDescriptor("selected-window-old"))
+        worker = manager.callFunc("fixtureRead").worker
+        worker.ready = readyFor(first)
+        video = CreateObject("roSGNode", "SessionVideoBoundary")
+        video.state = "playing"
+        check(manager.callFunc("attachVideo", first, video), "selected-window error ordering has real Video owner")
+        port = CreateObject("roMessagePort")
+        manager.observeField("event", port)
+        if errorFirst
+            video.state = "error"
+            check(not worker.stopRequested and nextFailure(port) = invalid, "Video error before result does not fabricate a transition")
+        end if
+        result = cleanupFor(first)
+        result.reason = "live_helper_failed"
+        result.helperFailureReason = "native-live: selected window crosses map or discontinuity"
+        worker.result = result
+        failed = nextFailure(port)
+        check(failed <> invalid, "selected-window result emits one failure in either callback ordering")
+        if failed <> invalid then check(failed.reason = "source_transition" and failed.id = first, "selected-window callback ordering keeps exact ready classification")
+        if not errorFirst then video.state = "error"
+        check(nextFailure(port) = invalid and video.control = "stop" and worker.stopRequested, "Video error after result cannot duplicate classification or acknowledge STOP")
+        second = manager.callFunc("startSession", sessionDescriptor("selected-window-superseded"))
+        third = manager.callFunc("startSession", sessionDescriptor("selected-window-fresh"))
+        check(third <> second and manager.callFunc("fixtureRead").pending.id = third, "selected-window recovery retains only latest pending identity")
+        worker.result = result
+        check(nextFailure(port) = invalid, "selected-window duplicate result during stop cannot reconnect again")
+        worker.state = "stop"
+        check(manager.busy and manager.callFunc("fixtureRead").worker.isSameNode(worker), "Video error never replaces truthful Video STOP acknowledgment")
+        video.state = "stopped"
+        state = manager.callFunc("fixtureRead")
+        check(state.currentId = third and not state.worker.isSameNode(worker) and state.video = invalid, "selected-window replacement waits for both STOP acknowledgments")
+        check(state.worker.inputDescriptor.sourceUrl.InStr("selected-window-fresh") >= 0 and not state.worker.stopRequested, "selected-window reconnect uses only fresh descriptor and cooperative owner")
+        worker.result = result
+        check(state.worker.isSameNode(manager.callFunc("fixtureRead").worker) and nextFailure(port) = invalid, "released old result cannot affect the selected-window replacement")
+        manager.unobserveField("event")
+        finishManager(manager)
+    end for
+end sub
+
+function nextFailure(port as object) as dynamic
+    ' Port events retain the failed payload even when stopping is published next.
+    while true
+        event = port.GetMessage()
+        if event = invalid then return invalid
+        if type(event) = "roSGNodeEvent"
+            data = event.GetData()
+            if type(data) = "roAssociativeArray"
+                if data.status = "failed" then return data
+            end if
+        end if
+    end while
+end function
 
 sub onManagerEvent()
     if m.watchManager = invalid or m.reentrantCalled then return

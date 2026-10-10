@@ -1,5 +1,10 @@
 sub init()
     m.disposed = false
+    initAdCountdown()
+    if m.adBadge <> invalid
+        m.adBadge.adLabel = tr("Ad")
+        m.adBadge.numberedAdLabel = tr("Ad {0} of {1}")
+    end if
     ' Initialize UI elements
     m.top.enableUI = false
     m.top.enableTrickPlay = false
@@ -158,6 +163,7 @@ function videoAreaWidth() as integer
 end function
 
 sub layoutOverlay()
+    if m.adBadge <> invalid then m.adBadge.videoAreaWidth = videoAreaWidth()
     width = videoAreaWidth()
     m.scrim.width = width
     m.scrimFadeFill.width = width
@@ -232,6 +238,7 @@ end sub
 ' outcome event from the prior stream, which would otherwise be emitted
 ' against the new stream's latency sample.
 sub onContentChange()
+    ignored = clearAdCountdown(m.adOwner)
     if m.top.content <> invalid
         m.startupSeekFired = false
         m.top.recentSeekTimestamp = 0
@@ -243,6 +250,7 @@ end sub
 
 sub onVideoStateChange()
     if m.disposed then return
+    updateAdPresented()
     ? getLogTimestamp(); " [StitchVideo][state] state="; m.top.state; " pos="; m.top.position
     if m.top.state = "playing"
         m.controlButton.uri = "pkg:/images/pause.png"
@@ -817,6 +825,7 @@ end function
 sub onDestroy()
     if m.disposed then return
     m.disposed = true
+    destroyAdCountdown()
     if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
         m.fadeAwayTimer.unobserveField("fire")

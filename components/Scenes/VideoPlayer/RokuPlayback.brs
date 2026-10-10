@@ -24,12 +24,16 @@ sub enableRokuDescriptor(task as object)
     if m.rokuSession.cleanupBlocked then return
     if m.top.contentRequested = invalid then return
     if m.top.contentRequested.contentType = "LIVE" then task.enableRokuDemux = true
+    if m.top.contentRequested.contentType = "VOD" and rokuVodRuntimeAvailable() then task.enableRokuDemux = true
 end sub
 
 function hasRokuDescriptor() as boolean
     if m.rokuSession = invalid or m.top.content = invalid then return false
     if m.top.content.playbackTransport <> "roku-demux" then return false
-    return type(m.top.content.localPlaybackDescriptor) = "roAssociativeArray"
+    descriptor = m.top.content.localPlaybackDescriptor
+    if type(descriptor) <> "roAssociativeArray" then return false
+    if descriptor.version = 2 then return rokuVodRuntimeAvailable() and rokuVodDescriptorValid(descriptor)
+    return true
 end function
 
 function canTryRokuPlayback() as boolean
@@ -102,6 +106,9 @@ sub onRokuSessionEvent()
         if m.rokuPendingContent = invalid or m.rokuPreparedContent <> invalid then return
         if type(event.metadata) <> "roAssociativeArray" then return
         original = m.rokuPendingContent
+        if original.localPlaybackDescriptor.version = 2
+            if not rokuVodRuntimeAvailable() or not rokuVodPlaybackReadyValid(event, m.rokuSessionId, original.localPlaybackDescriptor) then return
+        end if
         fields = original.getFields()
         fields.url = event.url
         fields.StreamUrls = [event.url]
@@ -115,14 +122,14 @@ sub onRokuSessionEvent()
             end if
         end if
         if streams.count() = 0
-            streams = [{ "url": event.url, "quality": event.metadata.isHD, "bitrate": Int(event.metadata.bandwidth / 1000), "contentid": original.localPlaybackDescriptor.qualityId }]
+            streams = [{ "url": event.url, "quality": event.metadata["isHD"], "bitrate": Int(event.metadata.bandwidth / 1000), "contentid": original.localPlaybackDescriptor["qualityId"] }]
         end if
         fields.Streams = streams
-        fields.StreamQualities = [event.metadata.isHD]
+        fields.StreamQualities = [event.metadata["isHD"]]
         fields.isTransmux = false
         fields.isProxied = false
         fields.ForwardQueryStringParams = false
-        fields.playbackNotice = tr("Playing on this Roku at {0}. Automatic uses a fixed quality.").replace("{0}", original.localPlaybackDescriptor.qualityId)
+        fields.playbackNotice = tr("Playing on this Roku at {0}. Automatic uses a fixed quality.").replace("{0}", original.localPlaybackDescriptor["qualityId"])
         playable = CreateObject("roSGNode", "TwitchContentNode")
         playable.setFields(fields)
         m.rokuPendingContent = invalid
@@ -130,6 +137,20 @@ sub onRokuSessionEvent()
         m.top.content = playable
         playContent(m.rokuPlayRecovery)
     else if event.status = "failed"
+        sourceTransition = false
+        if GetInterface(event.reason, "ifString") <> invalid then sourceTransition = event.reason = "source_transition"
+        if sourceTransition
+            if m.isExiting or m.manualRetryPending or m.errorDialog <> invalid then return
+            if m.rokuPendingContent <> invalid or m.rokuPreparedContent = invalid or m.video = invalid or not m.rokuChosen then return
+            if m.top.contentRequested = invalid then return
+            if m.top.contentRequested.contentType <> "LIVE" then return
+            if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
+            m.rokuPreparedContent = invalid
+            ' The owner still acknowledges old Task/Video cleanup before a
+            ' refreshed, decoder-validated session can replace the timeline.
+            beginLiveReconnect("source_transition")
+            return
+        end if
         m.rokuPendingContent = invalid
         m.rokuPreparedContent = invalid
         showErrorDialog(tr("Roku playback stopped"), tr("This stream could not continue on Roku. Try again, choose another quality, or configure the optional audio service."), not m.rokuSession.cleanupBlocked)
@@ -200,4 +221,42 @@ sub closeTransmuxDialog()
     if scene <> invalid and scene.dialog <> invalid
         if scene.dialog.isSameNode(dialog) then scene.dialog = invalid
     end if
+end sub
+
+' Scene-retained metadata ownership survives wrapper replacements. Its stop
+' never blocks or retries playback, and untrusted/Automatic sources hide ads.
+sub startAdMetadata(content as object)
+    if m.disposed or m.video = invalid or content = invalid then return
+    if not m.video.hasField("positionInfo") then return
+    kind = "direct"
+    if m.rokuSessionId <> ""
+        if m.rokuPreparedContent = invalid then return
+        if not m.rokuPreparedContent.isSameNode(content) then return
+        if rokuVodDescriptorValid(content.localPlaybackDescriptor) then return
+        kind = "loopback"
+    else
+        if content.isProxied then return
+        if type(content.Streams) <> "roArray" then return
+        if content.Streams.Count() <> 1 then return
+        if content.Streams[0].url <> content.url then return
+    end if
+    scene = m.top.getScene()
+    if scene = invalid then return
+    owner = scene.findNode("stitchAdMetadataOwner")
+    if owner = invalid
+        owner = CreateObject("roSGNode", "AdMetadataOwner")
+        if owner = invalid then return
+        owner.id = "stitchAdMetadataOwner"
+        scene.appendChild(owner)
+    end if
+    if owner.subtype() <> "AdMetadataOwner" then return
+    m.adMetadataOwner = owner
+    m.adContentOwner = owner.callFunc("beginContent", m.video, content.url, kind)
+end sub
+
+sub stopAdMetadata()
+    if m.adMetadataOwner = invalid then return
+    if tadString(m.adContentOwner) and m.adContentOwner <> "" then m.adMetadataOwner.callFunc("endContent", m.adContentOwner)
+    m.adContentOwner = ""
+    m.adMetadataOwner = invalid
 end sub

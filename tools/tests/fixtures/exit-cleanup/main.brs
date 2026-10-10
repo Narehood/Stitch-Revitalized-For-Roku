@@ -57,6 +57,10 @@ sub runExitCase(mode as string)
             check(m.state.alive and field = "localPlaybackSession", "scene is read only before screen closure")
             return m.state.visibleSession
         end function,
+        findNode: function(id as string) as dynamic
+            check(m.state.alive and id = "stitchAdMetadataOwner", "optional ad owner is captured before scene destruction")
+            return invalid
+        end function,
         unobserveField: sub(field as string)
             m.state.unobserves++
             check(m.state.alive and field = "exitApp", "exit observer is removed only while screen is alive")

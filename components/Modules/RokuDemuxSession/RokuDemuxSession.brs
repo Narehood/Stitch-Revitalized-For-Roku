@@ -4,6 +4,7 @@ sub init()
     m.video = invalid
     m.pending = invalid
     m.currentId = ""
+    m.currentDescriptor = invalid
     m.workerResult = invalid
     m.stopping = false
     m.transitioning = false
@@ -18,7 +19,9 @@ end sub
 
 function startSession(descriptor as object) as string
     if m.disposed or m.top.cleanupBlocked then return ""
-    if not rokuDemuxDescriptorValid(descriptor) then return ""
+    if not rokuDemuxDescriptorValid(descriptor)
+        if not rokuVodRuntimeAvailable() or not rokuVodDescriptorValid(descriptor) then return ""
+    end if
     ' Retain only the validated primitive snapshot while an older owner stops.
     descriptor = ParseJSON(FormatJSON(descriptor))
     sessionId = LCase(CreateObject("roDeviceInfo").GetRandomUUID()).Replace("-", "")
@@ -44,6 +47,7 @@ end function
 
 sub beginSession(sessionId as string, descriptor as object)
     m.currentId = sessionId
+    m.currentDescriptor = descriptor
     m.workerResult = invalid
     m.stopping = false
     m.readyReceived = false
@@ -51,9 +55,15 @@ sub beginSession(sessionId as string, descriptor as object)
     m.blockedExitNotified = false
     m.blockedPendingId = ""
     m.cleanupClock = invalid
-    m.worker = CreateObject("roSGNode", "RokuDemuxServer")
+    if descriptor.version = 2
+        workerType = "RokuVodDemuxServer"
+        m.worker = CreateObject("roSGNode", workerType)
+    else
+        m.worker = CreateObject("roSGNode", "RokuDemuxServer")
+    end if
     if m.worker = invalid
         m.currentId = ""
+        m.currentDescriptor = invalid
         sessionEvent(sessionId, "failed", "worker_unavailable")
         return
     end if
@@ -64,8 +74,12 @@ sub beginSession(sessionId as string, descriptor as object)
     m.worker.inputDescriptor = descriptor
     ' The player calls startSession only after its explicit experimental opt-in.
     m.worker.experimentalMode = true
+    if rokuDemuxInteger(descriptor["version"]) and descriptor["version"] = 1
+        m.worker.enableAdMetadata = true
+    end if
     m.worker.cacheBudgetBytes = 16777216
-    if descriptor["metadata"]["height"] > 720 then m.worker.cacheBudgetBytes = 33554432
+    if descriptor.version = 2 then m.worker.cacheBudgetBytes = 25165824
+    if descriptor.version = 1 and descriptor["metadata"]["height"] > 720 then m.worker.cacheBudgetBytes = 33554432
     m.worker.listenPort = 0
     m.worker.stopRequested = false
     m.worker.functionName = "runServer"
@@ -117,18 +131,25 @@ sub onSessionReady()
     if m.disposed or m.stopping or m.readyReceived or m.worker = invalid then return
     ready = m.worker.ready
     if type(ready) <> "roAssociativeArray" then return
-    if not rokuDemuxString(ready.sessionId) then return
-    if ready.sessionId <> m.currentId then return
+    if not rokuDemuxString(ready["sessionId"]) then return
+    if ready["sessionId"] <> m.currentId then return
     if not validSessionReady(ready)
         sessionEvent(m.currentId, "failed", "invalid_ready")
         beginSessionStop()
         return
     end if
     m.readyReceived = true
-    m.top.event = { id: m.currentId, status: "ready", reason: "", url: "http://127.0.0.1:" + ready.boundPort.ToStr() + "/master.m3u8", metadata: ready.metadata }
+    if m.currentDescriptor.version = 2
+        m.top.event = { "id": m.currentId, "status": "ready", "reason": "", "url": "http://127.0.0.1:" + ready["boundPort"].ToStr() + ready["masterPath"], "metadata": ready.metadata, "mode": "vod", "totalDurationUs": ready["totalDurationUs"], "masterPath": ready["masterPath"] }
+    else
+        m.top.event = { id: m.currentId, status: "ready", reason: "", url: "http://127.0.0.1:" + ready.boundPort.ToStr() + "/master.m3u8", metadata: ready.metadata }
+    end if
 end sub
 
 function validSessionReady(ready as object) as boolean
+    if m.currentDescriptor <> invalid
+        if m.currentDescriptor.version = 2 then return rokuVodRuntimeAvailable() and rokuVodSessionReadyValid(ready, m.currentId, m.currentDescriptor)
+    end if
     if not rokuDemuxString(ready.sessionId) then return false
     if not sessionIdValid(ready.sessionId) then return false
     kind = type(ready.boundPort, 3)
@@ -155,11 +176,25 @@ sub onSessionResult()
     ' Never include the session identity, source URL, credentials or raw errors.
     print "[RokuPlayback] Worker result: "; FormatJSON(sessionWorkerDiagnostic(result))
     if not m.stopping
-        sessionEvent(m.currentId, "failed", "worker_finished")
+        sessionEvent(m.currentId, "failed", sessionWorkerFailureReason(result))
         beginSessionStop()
     end if
     checkSessionCleanup()
 end sub
+
+function sessionWorkerFailureReason(result as object) as string
+    if m.currentDescriptor <> invalid
+        if m.currentDescriptor.version = 2 then return "worker_finished"
+    end if
+    if not m.readyReceived then return "worker_finished"
+    if not sessionCleanupSafe() then return "worker_finished"
+    if not rokuDemuxString(result.reason) then return "worker_finished"
+    if result.reason <> "live_helper_failed" then return "worker_finished"
+    if not rokuDemuxString(result.helperFailureReason) then return "worker_finished"
+    ' Restart a new timeline; never reuse the refused epoch or its init/cache.
+    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" then return "source_transition"
+    return "worker_finished"
+end function
 
 function sessionWorkerDiagnostic(result as object) as object
     summary = { reason: "unknown" }
@@ -181,7 +216,7 @@ function sessionWorkerDiagnostic(result as object) as object
     ' These fixed parser/transport messages distinguish common failures without
     ' copying arbitrary exception text into the console.
     if rokuDemuxString(result.helperFailureReason)
-        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed"]
+        for each message in ["upstream operation deadline", "URL completion or deadline invalid", "upstream progress deadline", "publication progress deadline", "selected map initialization changed", "selected discontinuity change unsupported", "continuity window crosses map or discontinuity", "selected window crosses map or discontinuity", "source sequence gap", "cached segment identity changed", "playlist sequence moved backwards", "steady work interval bound", "cache byte budget exceeded", "cache asset count bound", "binary payload bound", "completed input count mismatch", "HEAD status or range unsupported", "GET status or range unsupported", "transfer encoding unsupported", "Content-Length required", "native operation failed", "cancellation or input cleanup failed"]
             if result.helperFailureReason = "native-live: " + message or result.helperFailureReason = "native-demux: " + message
                 summary["helperReason"] = message.Replace(" ", "_")
                 exit for
@@ -268,6 +303,7 @@ sub checkSessionCleanup()
     m.worker = destroyTask(stoppedWorker, "state")
     m.workerResult = invalid
     m.currentId = ""
+    m.currentDescriptor = invalid
     m.stopping = false
     m.cleanupClock = invalid
     m.top.busy = false

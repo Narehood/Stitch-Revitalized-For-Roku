@@ -590,6 +590,8 @@ sub onDestroy()
         disposeNodeTree(m.startupStatus)
     end if
     teardownAllScenes()
+    metadataOwner = m.top.findNode("stitchAdMetadataOwner")
+    if metadataOwner <> invalid then ignored = metadataOwner.callFunc("onDestroy")
     if m.top.localPlaybackSession <> invalid then ignored = m.top.localPlaybackSession.callFunc("onDestroy")
     disposeNodeTree(m.recentBar)
     disposeNodeTree(m.menu)

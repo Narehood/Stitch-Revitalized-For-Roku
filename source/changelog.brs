@@ -3,6 +3,15 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.1": [
+            "3.0.0 Alpha 2: Eligible recorded videos can now offer Try on Roku without a container",
+            "New: A corner ad countdown uses reliable Twitch cues and actual playback timing",
+            "Improved: Buffered ad timing history and continued polling when timing is unavailable",
+            "Improved: Live recovery budgets and eligible manual quality selection",
+            "Unsupported media can still use the optional audio service",
+            "Long-session stability, real-ad readability, Roku-only VOD audio/video and genuine 1440p still need verification",
+            "Source transitions remain disabled; lower live latency is experimental and off by default"
+        ],
         "3.0.0": [
             "3.0.0 Alpha 1: An early preview; some streams and devices still need testing",
             "New: Twitch-inspired design, clearer focus, and named video controls",

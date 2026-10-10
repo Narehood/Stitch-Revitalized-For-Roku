@@ -7,10 +7,13 @@ sub handleContent()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     m.reconnectAttempts = 0
     m.recoveryAttempts = 0
+    m.sourceTransitionCharges = 0
+    resetLiveRecoveryHealth()
     m.resumePosition = invalid
     m.nativeFallbackTried = false
     m.manualRetryPending = false
     m.preferredQuality = invalid
+    m.manualLiveQuality = invalid
     m.errorHandler.callFunc("resetErrorState")
     m.top.chatStarted = false
     if m.chatWindow <> invalid
@@ -127,6 +130,12 @@ sub onQualityChangeRequested(event = invalid as dynamic)
         end for
     end if
     if index < 0 or index >= m.top.metadata.Count() then return
+    if m.top.contentRequested.contentType = "LIVE"
+        m.manualLiveQuality = invalid
+        quality = m.top.metadata[index].QualityID
+        ' Internal error/buffer downshifts have no user event.
+        if event <> invalid and GetInterface(quality, "ifString") <> invalid and quality <> "" and quality <> "Automatic" then m.manualLiveQuality = quality
+    end if
     if m.video.isSubtype("StitchVideo") then m.video.QualityChangeRequestFlag = false
     if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
     new_content = CreateObject("roSGNode", "TwitchContentNode")
@@ -159,6 +168,8 @@ end function
 ' change) leave isRecovery=false so they get the low-latency seek.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    stopAdMetadata()
+    resetLiveRecoveryHealth()
     if prepareRokuPlayback(isRecovery) then return
     ' Reset reconnect/watchdog state on every (re)start so stale values
     ' from a prior playback session don't cause false triggers.
@@ -342,6 +353,7 @@ sub playContent(isRecovery = false as boolean)
             end if
         end if
         m.video.content = contentNodeToPlay
+        startAdMetadata(contentNodeToPlay)
 
         if contentNodeToPlay.streamerProfileImageUrl <> invalid
             m.video.channelAvatar = contentNodeToPlay.streamerProfileImageUrl
@@ -364,6 +376,8 @@ sub playContent(isRecovery = false as boolean)
 end sub
 
 sub exitPlayer()
+    stopAdMetadata()
+    resetLiveRecoveryHealth()
     ' If allowBreak is true, this is a real user/back exit. During internal
     ' reconnects we set allowBreak=false before calling exitPlayer().
     if m.allowBreak
@@ -459,6 +473,8 @@ sub init()
     m.maxReconnectAttempts = 6
     m.recoveryAttempts = 0
     m.maxRecoveryAttempts = 6
+    m.sourceTransitionCharges = 0
+    resetLiveRecoveryHealth()
     m.resumePosition = invalid
     m.reconnectCooldownSec = 45
     m.lastReconnectSuccessSec = 0
@@ -466,6 +482,7 @@ sub init()
     m.stallSeconds = 0
     m.reconnectTimer = invalid
     m.retryTimer = invalid
+    m.manualLiveQuality = invalid
     m.playbackInitTime = invalid ' tracks when current playback attempt started
 
     m.watchdogTimer = CreateObject("roSGNode", "Timer")
@@ -523,6 +540,13 @@ sub onPositionChanged()
 
     ' LIVE watchdog: keep track of forward progress (post-ad freezes often stop position)
     if m.video <> invalid and m.top.contentRequested <> invalid and m.top.contentRequested.contentType = "LIVE"
+        if m.liveRecoveryVideo <> invalid
+            if not liveRecoveryNumber(m.video.position)
+                resetLiveRecoveryHealth()
+            else if m.video.position < m.liveRecoveryLastPosition
+                resetLiveRecoveryHealth()
+            end if
+        end if
         delaySeconds = 0.0
         segment = m.video.streamingSegment
         if segment <> invalid and segment.latency <> invalid
@@ -543,6 +567,8 @@ end sub
 
 sub onVideoStateChange()
     if m.video = invalid or m.isExiting then return
+    if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
+    if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
     if m.video.state = "playing" and not m.compatibilityNoticeShown
         m.compatibilityNoticeShown = true
@@ -756,15 +782,20 @@ end sub
 
 ' ===== LIVE stall watchdog / reconnect =====
 sub onWatchdogFire()
-    if m.isExiting then return
-    if m.video = invalid or m.top.contentRequested = invalid then return
-    if m.top.contentRequested.contentType <> "LIVE" then return
-    if m.video.state <> "playing" then return
+    if m.disposed or m.isExiting or m.video = invalid or m.top.contentRequested = invalid
+        resetLiveRecoveryHealth()
+        return
+    end if
+    if m.top.contentRequested.contentType <> "LIVE" or m.video.state <> "playing"
+        resetLiveRecoveryHealth()
+        return
+    end if
 
     nowSec = CreateObject("roDateTime").AsSeconds()
 
     ' Cooldown after a successful reconnect to avoid immediate re-triggers while Twitch stabilizes
     if m.lastReconnectSuccessSec <> 0 and (nowSec - m.lastReconnectSuccessSec) < m.reconnectCooldownSec
+        resetLiveRecoveryHealth()
         return
     end if
 
@@ -776,11 +807,14 @@ sub onWatchdogFire()
     ' actively undoes the live-edge correction. 20s gives Roku enough time
     ' to fully restabilize even on slow networks before re-engaging.
     if m.video.recentSeekTimestamp <> 0 and (nowSec - m.video.recentSeekTimestamp) < 20
+        resetLiveRecoveryHealth()
         ' Reset position tracking so the moment cooldown ends we start fresh.
         m.lastGoodPosition = invalid
         m.stallSeconds = 0
         return
     end if
+
+    updateLiveRecoveryHealth(nowSec)
 
     ' If position advanced, reset stall tracking
     if m.lastGoodPosition = invalid
@@ -817,11 +851,87 @@ sub onWatchdogFire()
     end if
 end sub
 
+sub resetLiveRecoveryHealth()
+    m.liveRecoveryVideo = invalid
+    m.liveRecoverySessionId = ""
+    m.liveRecoveryStartSec = invalid
+    m.liveRecoveryLastSec = invalid
+    m.liveRecoveryStartPosition = invalid
+    m.liveRecoveryLastPosition = invalid
+end sub
+
+function liveRecoveryNumber(value as dynamic) as boolean
+    kind = type(value, 3)
+    if kind <> "Integer" and kind <> "LongInteger" and kind <> "Float" and kind <> "Double" and kind <> "roInt" and kind <> "roFloat" and kind <> "roDouble" then return false
+    return value >= 0 and value <= 2147483647
+end function
+
+sub updateLiveRecoveryHealth(nowSec as integer)
+    if m.disposed or m.isExiting or m.rokuExitPending or m.rokuDeferredPlay or m.manualRetryPending or m.errorDialog <> invalid or m.transmuxDialog <> invalid
+        resetLiveRecoveryHealth()
+        return
+    end if
+    if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid or m.rokuPendingContent <> invalid
+        resetLiveRecoveryHealth()
+        return
+    end if
+    if m.video = invalid or m.rokuSession = invalid or m.rokuPreparedContent = invalid or m.top.content = invalid or m.top.contentRequested = invalid
+        resetLiveRecoveryHealth()
+        return
+    end if
+    if not m.rokuChosen or m.rokuSessionId = "" or m.rokuSession.cleanupBlocked or m.top.contentRequested.contentType <> "LIVE" or m.video.state <> "playing"
+        resetLiveRecoveryHealth()
+        return
+    end if
+    if not m.rokuPreparedContent.isSameNode(m.top.content)
+        resetLiveRecoveryHealth()
+        return
+    end if
+    position = m.video.position
+    if not liveRecoveryNumber(nowSec) or not liveRecoveryNumber(position)
+        resetLiveRecoveryHealth()
+        return
+    end if
+    sameOwner = false
+    if m.liveRecoveryVideo <> invalid then sameOwner = m.liveRecoveryVideo.isSameNode(m.video) and m.liveRecoverySessionId = m.rokuSessionId
+    if sameOwner
+        elapsed = nowSec - m.liveRecoveryLastSec
+        progress = position - m.liveRecoveryLastPosition
+        ' Duplicate ticks add no time; a seek/backward observation still breaks health.
+        if elapsed = 0 and progress >= 0 and progress <= 3 then return
+        if elapsed < 0 or elapsed > 6 or progress <= 0 or progress > elapsed + 3
+            resetLiveRecoveryHealth()
+            sameOwner = false
+        end if
+    end if
+    if not sameOwner
+        m.liveRecoveryVideo = m.video
+        m.liveRecoverySessionId = m.rokuSessionId
+        m.liveRecoveryStartSec = nowSec
+        m.liveRecoveryStartPosition = position
+    end if
+    m.liveRecoveryLastSec = nowSec
+    m.liveRecoveryLastPosition = position
+    ' A ready/playing event cannot forgive failures. Require real elapsed time
+    ' and sustained media progress; preserve all unrelated error-recovery debt.
+    if nowSec - m.liveRecoveryStartSec < 120 or position - m.liveRecoveryStartPosition < 90 then return
+    charges = m.sourceTransitionCharges
+    kind = type(charges, 3)
+    if kind <> "Integer" and kind <> "LongInteger" and kind <> "roInt" then return
+    if charges <= 0 or charges > m.maxReconnectAttempts or charges > m.reconnectAttempts or charges > m.recoveryAttempts then return
+    m.reconnectAttempts -= charges
+    m.recoveryAttempts -= charges
+    m.sourceTransitionCharges = 0
+    resetLiveRecoveryHealth()
+end sub
+
 sub beginLiveReconnect(reason as string)
     if m.isExiting then return
 
     ' If a reconnect is already scheduled/in-flight, don't stack them
     if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
+
+    resetLiveRecoveryHealth()
 
     m.reconnectAttempts = m.reconnectAttempts + 1
     m.recoveryAttempts++
@@ -848,6 +958,7 @@ sub beginLiveReconnect(reason as string)
     m.reconnectTimer.duration = delaySec
     m.reconnectTimer.repeat = false
     m.reconnectTimer.observeField("fire", "doLiveReconnect")
+    if reason = "source_transition" then m.sourceTransitionCharges++
     m.reconnectTimer.control = "start"
 end sub
 
@@ -905,6 +1016,7 @@ sub onLiveReconnectResponse()
     if m.video <> invalid
         if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
         quality = m.video.GetField("selectedQuality")
+        if m.top.contentRequested.contentType = "LIVE" and m.manualLiveQuality <> invalid then quality = m.manualLiveQuality
         if quality <> invalid and refreshedMetadata <> invalid
             for each entry in refreshedMetadata
                 if entry.QualityID = quality then refreshedContent.SetFields(entry)
@@ -1077,6 +1189,7 @@ sub rememberRetryState()
     if m.video = invalid or m.top.contentRequested = invalid then return
     if m.top.contentRequested.contentType = "LIVE"
         quality = m.video.selectedQuality
+        if m.manualLiveQuality <> invalid then quality = m.manualLiveQuality
         if quality <> invalid and quality <> "" then m.retryQuality = quality
     else
         position = m.video.position
@@ -1107,6 +1220,8 @@ sub retryAfterError()
     end if
     m.reconnectAttempts = 0
     m.recoveryAttempts = 0
+    m.sourceTransitionCharges = 0
+    resetLiveRecoveryHealth()
     m.nativeFallbackTried = false
     if m.errorHandler <> invalid then m.errorHandler.callFunc("resetErrorState")
     m.resumePosition = m.retryPosition
@@ -1216,6 +1331,7 @@ function tryNativePlaybackFallback() as boolean
 end function
 
 sub stopPlaybackForDialog()
+    resetLiveRecoveryHealth()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     cleanupReconnectTask()
     ignored = stopRokuPlayback()
@@ -1264,6 +1380,7 @@ sub dismissChatNotice()
 end sub
 
 sub onDestroy()
+    stopAdMetadata()
     if m.disposed then return
     m.disposed = true
     m.isExiting = true

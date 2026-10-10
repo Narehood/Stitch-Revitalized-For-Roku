@@ -59,8 +59,9 @@ async function addComponent(dir, folder, name, probe = '', replacements = []) {
 async function addCommon(dir, title, marker, main) {
     await addFile(dir, 'manifest', `title=${title}\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n`);
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/lifecycle.brs', 'source/utils/analytics.brs']) await copyFile(dir, file);
-    for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster']) await copyTree(dir, folder);
+        'source/utils/lifecycle.brs', 'source/utils/analytics.brs',
+        'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
+    for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
     // Explicit I/O boundaries: in-memory registry and an inert Task-shaped node.
     await addFile(dir, 'source/utils/config.brs', await fixture('config.brs'));
     await addFile(dir, 'components/TwitchApiTask.xml', await fixture('TwitchApiTask.xml'));
@@ -71,8 +72,9 @@ async function buildHeroPackage(dir, marker) {
     await addCommon(dir, 'Offline Startup Navigation Fixture', marker, 'hero-main.brs');
     // The cooperative owner is idle here: no local playback Task is started.
     await copyTree(dir, 'components/Modules/RokuDemuxSession');
-    for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs',
-        'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
+    for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
+        'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
+        'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
     for (const file of ['source/changelog.brs', 'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs'])
         await copyFile(dir, file);
     for (const folder of ['components/SceneManager/Scene', 'components/SceneManager/Group',

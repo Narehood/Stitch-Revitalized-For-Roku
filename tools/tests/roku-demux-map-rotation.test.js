@@ -16,7 +16,8 @@ const prefix = 'stitch-roku-map-rotation-';
 const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const sourceFiles = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch', 'rokuDemuxCommon',
     'rokuDemuxProtocol', 'rokuDemuxInitMetadata', 'rokuDemuxInitGate', 'rokuDemuxServerPolicy',
-    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls'].map(name => `source/utils/${name}.brs`);
+    'rokuDemuxDescriptor', 'deviceCapabilities', 'playbackHls',
+    'twitchAdCountdown', 'twitchAdClock', 'twitchAdProtocol'].map(name => `source/utils/${name}.brs`);
 const server = 'components/Tasks/RokuDemuxServer/RokuDemuxServer';
 const sha = data => createHash('sha256').update(data).digest('hex');
 const cases = ['equivalent-map-pending-gate-media-and-held-lease', 'binary-refusal-same-length-valid',
@@ -154,8 +155,11 @@ test('actual same-init MAP rotation retains approved assets and refuses changed 
         t.diagnostic(`fresh actual-function execution ${marker}: ${counts.cases} cases / ${counts.assertions} assertions`);
         const core = sources.get(coreName).toString();
         const equality = 'payload.Count() = state.initByteCount and digest = state.initDigest';
-        assert.equal(core.split(equality).length, 2);
-        await add(coreName, core.replace(equality, 'true'));
+        // Mutate the original path; opted-in source transitions have their own
+        // identity checks and negative controls in the epoch integration suite.
+        const legacyIdentity = `        else\n            nlCheck(${equality}, "selected map initialization changed")\n        end if`;
+        assert.equal(core.split(legacyIdentity).length, 2);
+        await add(coreName, core.replace(legacyIdentity, legacyIdentity.replace(equality, 'true')));
         const wrongIdentity = await execute();
         requireExecution(wrongIdentity);
         assert.match(wrongIdentity.output, /STITCH_ROKU_MAP_FAIL: map-fixture: changed binary rejected same-length-valid/);

@@ -285,7 +285,7 @@ function nativeLiveParsePlaylist(text as string, baseUrl as string, approvedOrig
     return { mapUrl: mapUrl, mediaSequence: sequence, targetDuration: target, segments: segments, ended: ended }
 end function
 
-function nlWindow(playlist as object, delayUs as longinteger) as object
+function nlWindow(playlist as object, delayUs as longinteger, waitForStartup = false as boolean, sourceTransitions = false as boolean) as object
     nlCheck(not playlist.ended or delayUs = 0&, "historical ENDLIST unsupported")
     segments = playlist.segments
     finish = segments.Count() - 1
@@ -312,13 +312,17 @@ function nlWindow(playlist as object, delayUs as longinteger) as object
     selectedMap = result[0].mapUrl
     selectedEpoch = result[0].epoch
     for each segment in result
+        if sourceTransitions then exit for
+        if waitForStartup and not playlist.ended
+            if segment.mapUrl <> selectedMap or segment.epoch <> selectedEpoch then return invalid
+        end if
         nlCheck(segment.mapUrl = selectedMap and segment.epoch = selectedEpoch, "selected window crosses map or discontinuity")
     end for
     return { segments: result, durationUs: total, sourceOffsetUs: behind, targetDuration: playlist.targetDuration, mapUrl: selectedMap, epoch: selectedEpoch, ended: playlist.ended }
 end function
 
 ' Preserve every unpublished sequence still present in bounded upstream history.
-function nlContinuityWindow(playlist as object, window as object, publishedLast as longinteger) as object
+function nlContinuityWindow(playlist as object, window as object, publishedLast as longinteger, sourceTransitions = false as boolean) as object
     nlInteger(publishedLast, 0&, 4294967295&)
     nextSequence = publishedLast + 1&
     if window.segments[0].sequence <= nextSequence then return window
@@ -337,7 +341,7 @@ function nlContinuityWindow(playlist as object, window as object, publishedLast 
     for i = start to finish
         segment = segments[i]
         nlCheck(segment.sequence = nextSequence + i - start, "continuity sequence gap")
-        nlCheck(segment.mapUrl = window.mapUrl and segment.epoch = window.epoch, "continuity window crosses map or discontinuity")
+        if not sourceTransitions then nlCheck(segment.mapUrl = window.mapUrl and segment.epoch = window.epoch, "continuity window crosses map or discontinuity")
         total += segment.durationUs
         result.Push(segment)
     end for
@@ -354,22 +358,29 @@ function nativeLiveCreate(mediaUrl as string, nowMs as dynamic, sourceDelaySecon
     nlCheck(cacheBudgetBytes = 16777216& or cacheBudgetBytes = 25165824& or cacheBudgetBytes = 33554432&, "unsupported cache budget")
     nlCheck(cacheBudgetBytes = 16777216& or trustedExperimentalTransport, "larger cache budget requires experimental transport")
     steadyMode = false
+    sourceTransitions = false
     sessionId = ""
     if steadyOptions <> invalid
-        nlCheck(Type(steadyOptions) = "roAssociativeArray" and steadyOptions.Count() = 2, "steady options shape")
+        nlCheck(Type(steadyOptions) = "roAssociativeArray" and (steadyOptions.Count() = 2 or steadyOptions.Count() = 3), "steady options shape")
         nlCheck(steadyOptions.DoesExist("mode") and steadyOptions.DoesExist("sessionId"), "steady options keys")
         nlCheck(nlString(steadyOptions.mode) and steadyOptions.mode = "steady", "steady mode must be explicit")
         nlCheck(nlString(steadyOptions.sessionId), "steady session identity type")
         sessionId = steadyOptions.sessionId
         nlCheck(CreateObject("roRegex", "^[0-9a-f]{32}$", "").IsMatch(sessionId), "steady session identity shape")
         nlCheck(trustedExperimentalTransport, "steady mode requires experimental transport")
+        if steadyOptions.Count() = 3
+            nlCheck(steadyOptions.DoesExist("sourceTransitions"), "source transition option key")
+            flagType = Type(steadyOptions.sourceTransitions, 3)
+            nlCheck((flagType = "Boolean" or flagType = "roBoolean") and steadyOptions.sourceTransitions, "source transitions must be explicit true")
+            sourceTransitions = true
+        end if
         steadyMode = true
     end if
     clockCap = 2147400000&
     if steadyMode then clockCap = 4294967235000&
     nlInteger(nowMs, 0&, clockCap)
     nlInteger(sourceDelaySeconds, 0&, 60&)
-    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], initDigest: "", initByteCount: 0, initAliasCount: 0&, pendingWindow: invalid, pendingPlaylistSequence: -1&, assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
+    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sourceTransitions: sourceTransitions, localEpoch: 0&, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], initDigest: "", initByteCount: 0, initAliasCount: 0&, pendingWindow: invalid, pendingPlaylistSequence: -1&, assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
 end function
 
 sub nlTime(state as object, nowMs as dynamic)
@@ -475,7 +486,10 @@ function nlIntent(state as object, nowMs as dynamic) as object
     nlTime(state, nowMs)
     if state.closed or state.phase = "failed" or state.phase = "ended" then return invalid
     if state.phase = "ready" and nowMs >= state.nextPoll then state.phase = "playlist"
-    if state.phase = "playlist" then return { kind: "playlist", url: state.sourceUrl, limit: 262144 }
+    if state.phase = "playlist"
+        if nowMs < state.nextPoll then return invalid
+        return { kind: "playlist", url: state.sourceUrl, limit: 262144 }
+    end if
     if state.phase = "init" then return { kind: "init", url: state.mapUrl, limit: 2097152 }
     if state.phase = "init-rotation" then return { kind: "init", url: state.pendingWindow.mapUrl, limit: 2097152 }
     if state.phase = "segment"
@@ -485,6 +499,80 @@ function nlIntent(state as object, nowMs as dynamic) as object
     return invalid
 end function
 
+' Only opted-in, already-started playback selects a complete mixed window.
+sub nlEpochAcceptWindow(state as object, parsed as object, window as object)
+    for each segment in parsed.segments
+        at = nlSegmentIndex(state, segment.sequence)
+        if at >= 0
+            old = state.segments[at]
+            nlCheck(old.url = segment.url and old.duration = segment.duration and old.durationUs = segment.durationUs and old.mapUrl = segment.mapUrl and old.sourceEpoch = segment.epoch, "cached epoch segment identity changed")
+        end if
+    end for
+    previous = invalid
+    for each segment in window.segments
+        if previous <> invalid then nlCheck(segment.epoch = previous.epoch or segment.epoch = previous.epoch + 1&, "source epoch progression invalid")
+        previous = segment
+    end for
+    nlCheck(window.segments[0].sequence <= state.publishedLast + 1&, "source sequence gap")
+    state.window = window
+    state.lastPlaylistSequence = parsed.mediaSequence
+    nlIncrement(state, "playlistCount")
+    state.phase = "segment"
+    nlEpochPrepare(state)
+end sub
+
+' Keep the old scalar init and advertised bodies until the next pair is complete.
+sub nlEpochPrepare(state as object)
+    segment = nlMissing(state)
+    if segment = invalid then return
+    nlCheck(segment.sequence > state.publishedLast, "published epoch history unavailable")
+    nlCheck(segment.epoch = state.epoch or segment.epoch = state.epoch + 1&, "next source epoch invalid")
+    localEpoch = state.localEpoch
+    nlInteger(localEpoch, 0&, 4294967295&)
+    if segment.epoch <> state.epoch
+        nlInteger(localEpoch, 0&, 4294967294&)
+        localEpoch += 1&
+    end if
+    if segment.mapUrl <> state.mapUrl
+        nlCheck(state.initIds.Count() = 2 and state.initDigest <> "" and state.pendingWindow = invalid, "epoch initialization state invalid")
+        state.pendingWindow = { mapUrl: segment.mapUrl, epoch: segment.epoch, localEpoch: localEpoch, sequence: segment.sequence }
+        state.phase = "init-rotation"
+    else
+        state.epoch = segment.epoch
+        state.localEpoch = localEpoch
+    end if
+end sub
+
+sub nlEpochCommitInit(state as object, ids as object, tracks as object, digest as string, byteCount as integer)
+    nlEpochPendingValid(state)
+    pending = state.pendingWindow
+    segment = nlMissing(state)
+    nlCheck(pending <> invalid and segment <> invalid and pending.sequence = segment.sequence and pending.mapUrl = segment.mapUrl and pending.epoch = segment.epoch, "pending epoch initialization invalid")
+    state.initIds = ids
+    state.tracks = tracks
+    state.initDigest = digest
+    state.initByteCount = byteCount
+    state.mapUrl = pending.mapUrl
+    state.epoch = pending.epoch
+    state.localEpoch = pending.localEpoch
+    state.pendingWindow = invalid
+    state.phase = "segment"
+end sub
+
+sub nlEpochPendingValid(state as object)
+    pending = state.pendingWindow
+    segment = nlMissing(state)
+    nlCheck(Type(pending) = "roAssociativeArray" and segment <> invalid, "pending epoch initialization invalid")
+    keys = ["mapUrl", "epoch", "localEpoch", "sequence"]
+    if pending.Count() = 7 then keys = ["mapUrl", "epoch", "localEpoch", "sequence", "tracks", "digest", "byteCount"]
+    nlCheck(loopbackKeys(pending, keys), "pending epoch initialization invalid")
+    nlCheck(pending.sequence = segment.sequence and pending.mapUrl = segment.mapUrl and pending.epoch = segment.epoch, "pending epoch initialization invalid")
+    nlInteger(pending.localEpoch, 0&, 4294967295&)
+    expected = state.localEpoch + 0&
+    if pending.epoch = state.epoch + 1& then expected += 1&
+    nlCheck((pending.epoch = state.epoch or pending.epoch = state.epoch + 1&) and pending.localEpoch = expected, "pending local epoch invalid")
+end sub
+
 sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as dynamic)
     nlCheck(state.op = invalid, "feed while transfer active")
     intent = nlIntent(state, nowMs)
@@ -493,7 +581,31 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         nlCheck(nlString(payload), "playlist payload must be string")
         parsed = nativeLiveParsePlaylist(payload, state.sourceUrl, state.approvedOrigins)
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
-        window = nlWindow(parsed, state.delayUs)
+        waitForStartup = state.steadyMode and not state.started and state.publishedLast < 0& and state.initIds.Count() = 0 and not parsed.ended
+        if state.sourceTransitions and state.started
+            window = nlWindow(parsed, state.delayUs, false, true)
+        else
+            window = nlWindow(parsed, state.delayUs, waitForStartup)
+        end if
+        if window = invalid
+            ' Wait on this normal mixed window; never select an older timeline.
+            state.lastPlaylistSequence = parsed.mediaSequence
+            nlIncrement(state, "playlistCount")
+            state.nextPoll = nowMs + parsed.targetDuration * 500&
+            if state.steadyMode then state.lastUpstreamProgress = nowMs
+            return
+        end if
+        if state.sourceTransitions
+            for each segment in window.segments
+                nlCheck(segment.durationUs < 2500000& and segment.durationUs <= window.targetDuration * 1000000& + 499999&, "epoch source duration unsupported")
+            end for
+        end if
+        if state.sourceTransitions and state.started
+            window = nlContinuityWindow(parsed, window, state.publishedLast, true)
+            nlEpochAcceptWindow(state, parsed, window)
+            state.lastUpstreamProgress = nowMs
+            return
+        end if
         if state.publishedLast >= 0& then window = nlContinuityWindow(parsed, window, state.publishedLast)
         nlCheck(state.epoch < 0& or state.epoch = window.epoch, "selected discontinuity change unsupported")
         if state.publishedLast >= 0& then nlCheck(window.segments[0].sequence <= state.publishedLast + 1&, "source sequence gap")
@@ -523,7 +635,22 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         nlCheck(payload.Count() > 0 and payload.Count() <= intent.limit, "binary payload bound")
         if kind = "init"
             digest = nlInitDigest(state, payload)
-            if state.phase = "init-rotation"
+            if state.sourceTransitions and state.phase = "init-rotation"
+                tracks = nlInspectEpochInit(payload)
+                if payload.Count() = state.initByteCount and digest = state.initDigest
+                    nlInteger(state.initAliasCount, 0&, 4294967294&)
+                    nlEpochCommitInit(state, state.initIds, tracks, digest, payload.Count())
+                    nlIncrement(state, "initAliasCount")
+                else
+                    pending = state.pendingWindow
+                    pending.tracks = tracks
+                    pending.digest = digest
+                    pending.byteCount = payload.Count()
+                    state.pendingWindow = pending
+                    state.input = payload
+                    state.phase = "init-video"
+                end if
+            else if state.phase = "init-rotation"
                 nlCheck(state.pendingWindow <> invalid and state.pendingWindow.epoch = state.epoch, "pending map initialization invalid")
                 nlInteger(state.initAliasCount, 0&, 4294967294&)
                 nlInteger(state.playlistCount, 0&, 4294967294&)
@@ -554,18 +681,38 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             state.input = payload
             state.pendingSegment = nlMissing(state)
             nlCheck(state.pendingSegment <> invalid, "segment identity missing")
+            if state.sourceTransitions then nlCheck(state.pendingSegment.mapUrl = state.mapUrl and state.pendingSegment.epoch = state.epoch and state.pendingWindow = invalid, "segment initialization binding invalid")
             state.phase = "segment-video"
         end if
     end if
     if state.steadyMode then state.lastUpstreamProgress = nowMs
 end sub
 
+function nlInspectEpochInit(payload as object) as object
+    tracks = nativeDemuxBulkInspectInit(payload)
+    video = 0
+    audio = 0
+    for each track in tracks
+        if track[1] = "video" then video += 1
+        if track[1] = "audio" then audio += 1
+    end for
+    nlCheck(tracks.Count() = 2 and video = 1 and audio = 1, "one video and one audio track required")
+    return tracks
+end function
+
 ' Native SHA256 plus exact length retains identity without retaining the original input.
 function nlInitDigest(state as object, payload as object) as string
     nlCheck(Type(payload) = "roByteArray" and payload.Count() > 0 and payload.Count() <= 2097152, "initialization byte bound")
     digest = nlBodyDigest(payload)
     if state.phase = "init-rotation"
-        nlCheck(payload.Count() = state.initByteCount and digest = state.initDigest, "selected map initialization changed")
+        if state.sourceTransitions
+            nlEpochPendingValid(state)
+            pending = state.pendingWindow
+            nlCheck(pending.epoch = state.epoch or pending.epoch = state.epoch + 1&, "next source epoch invalid")
+            if pending.epoch = state.epoch then nlCheck(payload.Count() = state.initByteCount and digest = state.initDigest, "selected map initialization changed")
+        else
+            nlCheck(payload.Count() = state.initByteCount and digest = state.initDigest, "selected map initialization changed")
+        end if
     end if
     return digest
 end function
@@ -587,6 +734,7 @@ function nlProtected(state as object, id as string) as boolean
             if at >= 0
                 saved = state.segments[at]
                 if saved.videoId = id or saved.audioId = id then return true
+                if state.sourceTransitions and (saved.initVideoId = id or saved.initAudioId = id) then return true
             end if
         end for
     end if
@@ -605,7 +753,11 @@ sub nlPrune(state as object)
     state.assets = retained
     segments = []
     for each segment in state.segments
-        if nlAssetIndex(state, segment.videoId) >= 0 and nlAssetIndex(state, segment.audioId) >= 0 then segments.Push(segment)
+        if nlAssetIndex(state, segment.videoId) >= 0 and nlAssetIndex(state, segment.audioId) >= 0
+            keep = true
+            if state.sourceTransitions then keep = nlAssetIndex(state, segment.initVideoId) >= 0 and nlAssetIndex(state, segment.initAudioId) >= 0
+            if keep then segments.Push(segment)
+        end if
     end for
     state.segments = segments
     generations = []
@@ -660,14 +812,38 @@ sub nlPublish(state as object, nowMs as dynamic)
         if state.steadyMode then nlInteger(state.nextGeneration, 1&, 4294967295&)
         publication = { generation: state.nextGeneration, mediaSequence: first, targetDuration: window.targetDuration, initVideoId: state.initIds[0], initAudioId: state.initIds[1], durationUs: window.durationUs, sourceOffsetUs: window.sourceOffsetUs, ended: window.ended, segments: [] }
         ids = [state.initIds[0], state.initIds[1]]
+        if state.sourceTransitions
+            firstSaved = state.segments[nlSegmentIndex(state, first)]
+            publication.version = 2
+            publication.discontinuitySequence = firstSaved.localEpoch
+            publication.targetDuration = 2
+            publication.initVideoId = firstSaved.initVideoId
+            publication.initAudioId = firstSaved.initAudioId
+        end if
         publishedSegments = []
         for each segment in window.segments
             saved = state.segments[nlSegmentIndex(state, segment.sequence)]
-            publishedSegments.Push({ sequence: segment.sequence, duration: segment.duration, durationUs: segment.durationUs, videoId: saved.videoId, audioId: saved.audioId })
+            item = { sequence: segment.sequence, duration: segment.duration, durationUs: segment.durationUs, videoId: saved.videoId, audioId: saved.audioId }
+            if state.sourceTransitions
+                nlCheck(saved.mapUrl = segment.mapUrl and saved.sourceEpoch = segment.epoch and saved.durationUs = segment.durationUs, "publication epoch binding invalid")
+                item.epoch = saved.localEpoch
+                item.initVideoId = saved.initVideoId
+                item.initAudioId = saved.initAudioId
+            end if
+            publishedSegments.Push(item)
             ids.Push(saved.videoId)
             ids.Push(saved.audioId)
         end for
         publication.segments = publishedSegments
+        if state.sourceTransitions
+            assets = loopbackPublicationAssets(publication)
+            nlCheck(assets <> invalid, "epoch publication invalid")
+            ids = []
+            for each asset in assets
+                nlCheck(nlAssetIndex(state, asset.id) >= 0, "epoch publication asset missing")
+                ids.Push(asset.id)
+            end for
+        end if
         state.generations.Push({ id: state.nextGeneration, advertised: false, ids: ids, publication: publication })
         state.latest = state.nextGeneration
         state.nextGeneration += 1&
@@ -692,7 +868,16 @@ sub nativeLiveAdvance(state as object, nowMs as dynamic)
         state.phase = "init-audio"
     else if state.phase = "init-audio"
         audio = nativeDemuxBulkInit(state.input, "audio")
-        state.initIds = nlStorePair(state, state.temporaryVideo, audio)
+        if state.sourceTransitions and state.pendingWindow <> invalid
+            nlEpochPendingValid(state)
+            pending = state.pendingWindow
+            nlCheck(pending.digest = nlBodyDigest(state.input) and pending.byteCount = state.input.Count() and FormatJson(pending.tracks) = FormatJson(nlInspectEpochInit(state.input)), "staged initialization identity changed")
+            nlInteger(state.initPairCount, 0&, 4294967294&)
+            ids = nlStorePair(state, state.temporaryVideo, audio)
+            nlEpochCommitInit(state, ids, pending.tracks, pending.digest, pending.byteCount)
+        else
+            state.initIds = nlStorePair(state, state.temporaryVideo, audio)
+        end if
         nlIncrement(state, "initPairCount")
         state.input = invalid
         state.temporaryVideo = invalid
@@ -705,12 +890,22 @@ sub nativeLiveAdvance(state as object, nowMs as dynamic)
         ids = nlStorePair(state, state.temporaryVideo, audio)
         nlIncrement(state, "segmentPairCount")
         segment = state.pendingSegment
-        state.segments.Push({ sequence: segment.sequence, duration: segment.duration, url: segment.url, videoId: ids[0], audioId: ids[1] })
+        saved = { sequence: segment.sequence, duration: segment.duration, url: segment.url, videoId: ids[0], audioId: ids[1] }
+        if state.sourceTransitions
+            saved.durationUs = segment.durationUs
+            saved.mapUrl = segment.mapUrl
+            saved.sourceEpoch = segment.epoch
+            saved.localEpoch = state.localEpoch
+            saved.initVideoId = state.initIds[0]
+            saved.initAudioId = state.initIds[1]
+        end if
+        state.segments.Push(saved)
         state.input = invalid
         state.temporaryVideo = invalid
         state.pendingSegment = invalid
         state.phase = "segment"
     end if
+    if state.sourceTransitions and state.phase = "segment" then nlEpochPrepare(state)
     if state.phase = "segment" and nlMissing(state) = invalid then nlPublish(state, nowMs)
 end sub
 
@@ -727,6 +922,19 @@ function nativeLivePublication(state as object) as object
                 copiedSegments.Push({ sequence: segment.sequence, duration: segment.duration, durationUs: segment.durationUs, videoId: segment.videoId, audioId: segment.audioId })
             end for
             copy.segments = copiedSegments
+            if state.sourceTransitions
+                copy.version = original.version
+                copy.discontinuitySequence = original.discontinuitySequence
+                for j = 0 to copiedSegments.Count() - 1
+                    item = copiedSegments[j]
+                    segment = original.segments[j]
+                    item.epoch = segment.epoch
+                    item.initVideoId = segment.initVideoId
+                    item.initAudioId = segment.initAudioId
+                    copiedSegments[j] = item
+                end for
+                copy.segments = copiedSegments
+            end if
             return copy
         end if
     end for

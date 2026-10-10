@@ -1013,5 +1013,13 @@
             <source>Try on Roku</source>
             <translation>Try on Roku</translation>
         </message>
+        <message>
+            <source>Ad</source>
+            <translation>Ad</translation>
+        </message>
+        <message>
+            <source>Ad {0} of {1}</source>
+            <translation>Ad {0} of {1}</translation>
+        </message>
     </context>
 </TS>
