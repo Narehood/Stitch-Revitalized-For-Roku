@@ -235,12 +235,88 @@ function twitchAdClockInBounds(utcUs as dynamic, bounds as dynamic) as boolean
     return false
 end function
 
+' Merge only exact observed records. Overlap that was already accepted within
+' one payload retains that payload's existing pod-rounding policy; new overlap
+' across publications is refused. No clock/date interval is extended.
+function twitchAdClockRetain(previous as object, current as object, isCue as boolean) as dynamic
+    if isCue
+        if not tadCuesValid(previous) or not tadCuesValid(current) then return invalid
+        cap = 32
+    else
+        if not twitchAdClockBoundsValid(previous) or not twitchAdClockBoundsValid(current) then return invalid
+        cap = 128
+    end if
+    result = []
+    oldIndex = 0
+    newIndex = 0
+    last = invalid
+    lastOld = false
+    lastNew = false
+    while oldIndex < previous.Count() or newIndex < current.Count()
+        fromOld = false
+        fromNew = false
+        if oldIndex >= previous.Count()
+            candidate = current[newIndex]
+            fromNew = true
+        else if newIndex >= current.Count()
+            candidate = previous[oldIndex]
+            fromOld = true
+        else if previous[oldIndex].startUs < current[newIndex].startUs
+            candidate = previous[oldIndex]
+            fromOld = true
+        else if previous[oldIndex].startUs > current[newIndex].startUs
+            candidate = current[newIndex]
+            fromNew = true
+        else
+            candidate = previous[oldIndex]
+            duplicate = current[newIndex]
+            if candidate.endUs <> duplicate.endUs then return invalid
+            if isCue
+                if candidate.durationUs <> duplicate.durationUs or candidate.podCount <> duplicate.podCount or candidate.podPosition <> duplicate.podPosition then return invalid
+            end if
+            fromOld = true
+            fromNew = true
+        end if
+        if last <> invalid and candidate.startUs < last.endUs
+            if not isCue then return invalid
+            if not ((lastOld and fromOld) or (lastNew and fromNew)) then return invalid
+        end if
+        item = { startUs: candidate.startUs, endUs: candidate.endUs }
+        if isCue
+            item.durationUs = candidate.durationUs
+            item.podCount = candidate.podCount
+            item.podPosition = candidate.podPosition
+        end if
+        if result.Count() = cap then result.Shift()
+        result.Push(item)
+        last = item
+        lastOld = fromOld
+        lastNew = fromNew
+        if fromOld then oldIndex += 1
+        if fromNew then newIndex += 1
+    end while
+    if isCue
+        if not tadCuesValid(result) then return invalid
+    else
+        if not twitchAdClockBoundsValid(result) then return invalid
+    end if
+    return result
+end function
+
+sub twitchAdClockResetMetadata()
+    m.adBounds = []
+    m.adCues = []
+    m.adLastUtc = invalid
+    if m.adBadge <> invalid then m.adBadge.callFunc("setCues", m.adOwner, [])
+end sub
+
 ' Shared wrapper handlers use only sanitized cue/bounds and the actual native
 ' frame observation. Metadata polling has no authority over playback time.
 sub initAdCountdown()
     m.adBadge = m.top.findNode("adCountdown")
     m.adOwner = ""
     m.adBounds = []
+    m.adCues = []
     m.adLastUtc = invalid
     m.top.observeField("positionInfo", "onAdPresented")
 end sub
@@ -250,6 +326,7 @@ function beginAdCountdown(owner as string) as boolean
     if m.adOwner <> "" then m.adBadge.callFunc("clear", m.adOwner)
     m.adOwner = owner
     m.adBounds = []
+    m.adCues = []
     m.adLastUtc = invalid
     return m.adBadge.callFunc("beginContent", owner)
 end function
@@ -257,13 +334,25 @@ end function
 function setAdMetadata(owner as string, cues as dynamic, bounds as dynamic) as boolean
     if m.disposed or m.adBadge = invalid or owner <> m.adOwner or owner = "" then return false
     if not tadCuesValid(cues) or not twitchAdClockBoundsValid(bounds)
-        m.adBounds = []
-        m.adLastUtc = invalid
-        m.adBadge.callFunc("setCues", owner, [])
+        twitchAdClockResetMetadata()
         return false
     end if
-    m.adBounds = bounds
-    if not m.adBadge.callFunc("setCues", owner, cues) then return false
+    if cues.Count() = 0 and bounds.Count() = 0
+        twitchAdClockResetMetadata()
+        return true
+    end if
+    retainedBounds = twitchAdClockRetain(m.adBounds, bounds, false)
+    retainedCues = twitchAdClockRetain(m.adCues, cues, true)
+    if retainedBounds = invalid or retainedCues = invalid
+        twitchAdClockResetMetadata()
+        return false
+    end if
+    if not m.adBadge.callFunc("setCues", owner, retainedCues)
+        twitchAdClockResetMetadata()
+        return false
+    end if
+    m.adBounds = retainedBounds
+    m.adCues = retainedCues
     ' Cue refresh does not read a future seek value or invent a rendered frame.
     updateAdPresented()
     return true
@@ -294,6 +383,7 @@ function clearAdCountdown(owner as string) as boolean
     if m.adBadge <> invalid then m.adBadge.callFunc("clear", owner)
     m.adOwner = ""
     m.adBounds = []
+    m.adCues = []
     m.adLastUtc = invalid
     return true
 end function

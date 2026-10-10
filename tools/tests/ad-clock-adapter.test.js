@@ -161,12 +161,24 @@ async function executeMetadataIo(mutate = false, fixtureName = 'io-main.brs') {
                     const matches = source.match(actualGuard);
                     assert.equal(matches?.length, 1, 'one exact in-flight existence guard');
                     source = source.replace(actualGuard, match => match.replace('if fs.Exists(m.path)', 'if true'));
+                } else if (mutate === 'gap-terminal' || mutate === 'gap-empty') {
+                    const gapBranch = /if not twitchAdClockTimelineValid\(timeline\)\r?\n(?:\s*'[^\r\n]*\r?\n)*\s+adMetadataEmpty\(owner\)/g;
+                    assert.equal(source.match(gapBranch)?.length, 1, 'one actual optional timing branch');
+                    source = source.replace(gapBranch, match => mutate === 'gap-terminal'
+                        ? `${match}\n                        exit while`
+                        : match.replace('adMetadataEmpty(owner)', 'm.stopped = false'));
+                } else if (mutate === 'gap-cleanup' || mutate === 'gap-identity') {
+                    const guard = mutate === 'gap-cleanup'
+                        ? 'if not fs.Delete(m.path) then exit while'
+                        : 'if event.GetSourceIdentity() = m.identity';
+                    assert.equal(source.split(guard).length, 2, 'one actual cleanup/identity guard');
+                    source = source.replace(guard, mutate === 'gap-cleanup' ? 'if false then exit while' : 'if true');
                 }
             }
             assert.deepEqual(bsc.Parser.parse(source, {mode: bsc.ParseMode.BrightScript}).diagnostics, []);
             await fs.writeFile(path.join(dir, path.basename(file)), source);
         }
-        assert.ok(['io-main.brs', 'inflight-main.brs'].includes(fixtureName));
+        assert.ok(['io-main.brs', 'inflight-main.brs', 'gap-main.brs'].includes(fixtureName));
         const main = (await fs.readFile(path.join(__dirname, 'fixtures/ad-clock-adapter', fixtureName), 'utf8')).replaceAll('__MARKER__', marker);
         assert.deepEqual(bsc.Parser.parse(main, {mode: bsc.ParseMode.BrightScript}).diagnostics, []);
         await fs.writeFile(path.join(dir, 'main.brs'), main);
@@ -204,6 +216,27 @@ test('restoring the old unguarded in-flight Stat fails actual two-poll progressi
     assert.match(result.output, /STITCH_AD_CLOCK_FAIL:.*actual independent two-poll publication count second-delayed/);
     assert.match(result.output, /STITCH_AD_CLOCK_FAIL:.*absent in-flight destination never receives Stat second-delayed/);
     t.diagnostic(JSON.stringify({guard: 'actual pending-path existence', normalExit: true, rejected: true, elapsedMs: result.elapsedMs}));
+});
+
+test('actual same metadata worker hides optional timing gaps and recovers without changing hard IO refusals', {timeout: 40000}, async t => {
+    const result = await executeMetadataIo(false, 'gap-main.brs');
+    const proof = positive(result, result.marker);
+    positive({...result, output: result.output.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')}, result.marker);
+    t.diagnostic(JSON.stringify(proof));
+});
+
+test('actual old gap termination and removed empty, deletion or identity guards fail with normal exit', {timeout: 135000}, async t => {
+    for (const mutation of ['gap-terminal', 'gap-empty', 'gap-cleanup', 'gap-identity']) {
+        const result = await executeMetadataIo(mutation, 'gap-main.brs');
+        normal(result);
+        assert.throws(() => positive(result, result.marker));
+        assert.match(result.output, /STITCH_AD_CLOCK_FAIL:/);
+        if (mutation === 'gap-terminal') assert.match(result.output, /same worker resumes valid metadata after optional gap/);
+        if (mutation === 'gap-empty') assert.match(result.output, /actual gap explicitly publishes empty cues and bounds/);
+        if (mutation === 'gap-cleanup') assert.match(result.output, /fresh poll must not overwrite an undeleted staging file/);
+        if (mutation === 'gap-identity') assert.match(result.output, /hard response cannot supply later cues gap-stale/);
+        t.diagnostic(JSON.stringify({guard: mutation, normalExit: true, rejected: true, elapsedMs: result.elapsedMs}));
+    }
 });
 
 // Full actual Fetch/Core feed bodies run. Only native URL event/filesystem

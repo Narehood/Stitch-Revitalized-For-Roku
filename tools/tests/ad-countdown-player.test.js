@@ -48,14 +48,14 @@ async function build(dir, marker, mutation) {
     // Explicit registry boundary; no device storage/network/decoder is accessed.
     await write(dir, 'source/utils/config.brs', await fs.readFile(path.join(root, 'tools/tests/fixtures/ui-phase2-player/config.brs')));
     const probe = await fs.readFile(path.join(fixtureDir, 'probe.brs'), 'utf8');
-    const wrapperProbe = probe.slice(0, probe.indexOf('function fixtureAdOwnerRead'));
+    const wrapperProbe = probe.slice(0, probe.indexOf('function fixtureAdOwnerRead')) + '\n' + await fs.readFile(path.join(fixtureDir, 'retention-probe.brs'), 'utf8');
     const ownerProbe = probe.slice(probe.indexOf('function fixtureAdOwnerRead'));
     for (const name of ['StitchVideo', 'CustomVideo']) await component(dir, name, wrapperProbe);
     await component(dir, 'AdMetadataOwner', ownerProbe);
     // The only worker replacement is unavailable network IO: real Task lifecycle,
     // typed stop, response/state observers, owner handlers and badge run normally.
     for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs', 'AdClockHost.xml']) await write(dir, `components/${file}`, await fs.readFile(path.join(fixtureDir, file)));
-    await write(dir, 'source/main.brs', (await fs.readFile(path.join(fixtureDir, 'main.brs'), 'utf8')).replaceAll('__MARKER__', marker));
+    await write(dir, 'source/main.brs', (await fs.readFile(path.join(fixtureDir, 'main.brs'), 'utf8')).replaceAll('__MARKER__', marker).replaceAll('__RETENTION_ONLY__', mutation?.retentionOnly ? 'true' : 'false'));
     if (mutation) {
         const actual = await fs.readFile(path.join(dir, mutation.file), 'utf8');
         assert.equal(actual.split(mutation.before).length, 2, 'unique actual production guard');
@@ -139,6 +139,19 @@ test('actual stale-owner and closed-before-stopped guard removals are rejected',
         normal(result);
         assert.throws(() => accepted(result, result.marker));
         assert.match(result.output, /STITCH_AD_PLAYER_FAIL:/);
+        t.diagnostic(JSON.stringify({guard: mutation.before, rejected: true, normalExit: true, elapsedMs: result.elapsedMs}));
+    }
+});
+test('actual latest-only, cross-publication overlap and retention-cap mutations are rejected', {timeout: 75000}, async t => {
+    for (const mutation of [
+        {before: 'retainedBounds = twitchAdClockRetain(m.adBounds, bounds, false)', after: 'retainedBounds = bounds'},
+        {before: 'if not ((lastOld and fromOld) or (lastNew and fromNew)) then return invalid', after: 'if false then return invalid'},
+        {before: 'if result.Count() = cap then result.Shift()', after: 'if false then result.Shift()'}
+    ]) {
+        const result = await execute({...mutation, file: 'source/utils/twitchAdClock.brs', retentionOnly: true});
+        normal(result);
+        assert.match(result.output, /STITCH_AD_PLAYER_FAIL:/);
+        assert.throws(() => accepted(result, result.marker));
         t.diagnostic(JSON.stringify({guard: mutation.before, rejected: true, normalExit: true, elapsedMs: result.elapsedMs}));
     }
 });

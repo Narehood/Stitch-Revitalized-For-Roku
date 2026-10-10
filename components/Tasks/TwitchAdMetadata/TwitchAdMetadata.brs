@@ -111,18 +111,20 @@ sub readMetadata()
                     text = ReadAsciiFile(m.path)
                     if text.Len() <> stat.size then exit while
                     timeline = twitchAdClockTimeline(text)
-                    if not twitchAdClockTimelineValid(timeline)
-                        adMetadataEmpty(owner)
-                        exit while
-                    end if
                     if m.top.stopRequested then exit while
-                    ' The exact five-field cues and segment bounds alone cross
-                    ' this boundary; signed source text and IDs never do.
-                    bounds = []
-                    for each segment in timeline.segments
-                        bounds.Push({ startUs: segment.startUs, endUs: segment.startUs + segment.durationUs })
-                    end for
-                    m.top.response = { owner: owner, cues: timeline.cues, bounds: bounds }
+                    if not twitchAdClockTimelineValid(timeline)
+                        ' Optional timing may disappear while media stays valid.
+                        ' Hide the badge, then follow the same cleanup/poll path.
+                        adMetadataEmpty(owner)
+                    else
+                        ' The exact five-field cues and segment bounds alone cross
+                        ' this boundary; signed source text and IDs never do.
+                        bounds = []
+                        for each segment in timeline.segments
+                            bounds.Push({ startUs: segment.startUs, endUs: segment.startUs + segment.durationUs })
+                        end for
+                        m.top.response = { owner: owner, cues: timeline.cues, bounds: bounds }
+                    end if
                     m.transfer = invalid
                     m.identity = invalid
                     if not fs.Delete(m.path) then exit while
