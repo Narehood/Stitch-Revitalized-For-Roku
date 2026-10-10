@@ -316,6 +316,9 @@ sub playContent(isRecovery = false as boolean)
             ' The opt-in startup seek is separate and needs hardware measurements.
             ' https://developer.roku.com/dev/docs/specs/media (live edge spec)
             contentNodeToPlay.PlayStart = 2147483647
+            ' The on-Roku splitter publishes ~14 s windows in bursts. Starting
+            ' at the default edge leaves a 6 s cushion that runs dry ~20 s in.
+            if m.rokuSessionId <> "" then contentNodeToPlay.PlayStart = 4
         else if isClipContent
             contentNodeToPlay.ignoreStreamErrors = false
             contentNodeToPlay.switchingStrategy = "no-adaptation"
@@ -612,6 +615,9 @@ sub onVideoStateChange()
         exitPlayer()
     else if m.video.state = "error"
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
+        ' A scheduled reconnect replaces this Video; the stopped Roku-only
+        ' server can fail it first, which must not cancel or repeat recovery.
+        if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
 
         errorCode = m.video.errorCode
         errorMsg = m.video.errorStr
@@ -637,7 +643,7 @@ end sub
 
 sub handleStreamError(errorStr = invalid as dynamic)
     if m.video = invalid or m.isExiting or m.errorDialog <> invalid then return
-    if m.retryTimer <> invalid or m.reconnectTask <> invalid then return
+    if m.retryTimer <> invalid or m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
     if m.errorHandler = invalid
         m.errorHandler = CreateObject("roSGNode", "VideoErrorHandler")
     end if

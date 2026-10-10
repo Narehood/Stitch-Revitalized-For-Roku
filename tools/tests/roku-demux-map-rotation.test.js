@@ -23,7 +23,7 @@ const sha = data => createHash('sha256').update(data).digest('hex');
 const cases = ['equivalent-map-pending-gate-media-and-held-lease', 'binary-refusal-same-length-valid',
     'binary-refusal-longer-valid', 'binary-refusal-malformed', 'pending-before', 'pending-during',
     'pending-decoder-refusal', 'source-refusal-epoch', 'source-refusal-mixed-map',
-    'source-refusal-cached-media-uri', 'source-refusal-unapproved-origin', 'transport-deadline',
+    'source-refusal-cached-media-uri', 'source-refusal-unapproved-origin', 'transport-deadline-retry', 'transport-deadline',
     'transport-work-quota', 'transport-cancel-failure', 'transport-healthy-pending',
     'successful-only-safe-alias-telemetry-and-exhaustion'];
 
@@ -72,7 +72,7 @@ function requirePositive(result, marker) {
     const counts = passes[0].match(/ cases=\s*(\d+) assertions=\s*(\d+)$/);
     assert.ok(counts, detail);
     assert.equal(Number(counts[1]), cases.length);
-    assert.equal(Number(counts[2]), 532, 'complete real-function assertions required');
+    assert.equal(Number(counts[2]), 563, 'complete real-function assertions required');
     return {cases: Number(counts[1]), assertions: Number(counts[2])};
 }
 

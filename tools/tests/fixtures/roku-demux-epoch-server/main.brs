@@ -182,7 +182,17 @@ sub esInitCases()
     esAssert(actual.videoTrackId = 17& and actual.audioTrackId = 18& and timing.videoTimescale = 45000& and timing.audioTimescale = 44100&, "changed actual IDs and v1 mdhd scales are inspected rather than invented")
     esAssert(esHasEvent("decoder") >= 0 and esHasEvent("feed") > esHasEvent("decoder"), "first actual init approval precedes feed")
     esCase("init-genuine-compatible")
-    for each name in ["profile", "audio", "rate", "larger", "zeroScale", "missingTiming", "flags", "reserved"]
+    ' Ads and encoder restarts change these; the decoder gate still applies.
+    for each name in ["profile", "audio", "rate", "larger"]
+        esReset()
+        esFirstInit()
+        originalMaster = FormatJson(m.config.metadata)
+        esRotation()
+        esAssert(rokuDemuxFeedInput(m.liveState, "init", esBytes(name), 2001&) and m.feedCount = 2, "decoder-approved changed init is fed " + name)
+        esAssert(FormatJson(m.config.metadata) = originalMaster, "accepted later init leaves the advertised master unchanged " + name)
+        esCase("init-accepted-" + name)
+    end for
+    for each name in ["zeroScale", "missingTiming", "flags", "reserved"]
         esReset()
         esFirstInit()
         originalMaster = FormatJson(m.config.metadata)
