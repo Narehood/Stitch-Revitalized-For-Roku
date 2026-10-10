@@ -7,6 +7,9 @@ sub runServer()
     m.monotonicClock = invalid
     m.lastNowMs = 0&
     m.steadyMode = false
+    m.sourceTransitions = false
+    m.initMasterMetadata = invalid
+    m.initMasterTiming = invalid
     m.sessionId = ""
     if loopbackSteadySessionIdValid(m.top.sessionId) then m.sessionId = m.top.sessionId
     m.listenPort = 0
@@ -24,6 +27,7 @@ sub runServer()
     m.publications = {}
     m.activeBody = invalid
     m.activeLease = ""
+    m.validationLease = ""
     m.activeGeneration = 0
     m.lastDiagnostics = invalid
     m.result = {
@@ -98,12 +102,14 @@ sub runServer()
     if m.lastDiagnostics <> invalid then m.result["helperDiagnostics"] = m.lastDiagnostics
     m.liveState = invalid
     m.config = invalid
+    m.initMasterMetadata = invalid
+    m.initMasterTiming = invalid
     m.top.inputDescriptor = invalid
     m.publications = invalid
     m.currentPublication = invalid
     m.activeBody = invalid
     m.lastDiagnostics = invalid
-    m.result.cacheReferencesReleased = m.result.helperClosed and m.result.cleanupOk and m.liveState = invalid and m.publications = invalid and m.currentPublication = invalid and m.activeBody = invalid
+    m.result.cacheReferencesReleased = m.result.helperClosed and m.result.cleanupOk and m.liveState = invalid and m.publications = invalid and m.currentPublication = invalid and m.activeBody = invalid and m.validationLease = "" and m.initMasterMetadata = invalid and m.initMasterTiming = invalid
     try
         m.result["elapsedMs"] = liveServerNow()
     catch error
@@ -138,7 +144,12 @@ sub serveBoundedLive()
         return
     end if
     ' Explicit experiment only: unknown-framing/pre-body/redirect limits remain.
-    m.liveState = nativeLiveCreate(m.config.trustedMediaUrl, liveServerNow(), m.config.sourceDelaySeconds, m.config.approvedOrigins, true, m.cacheBudgetBytes, { "mode": "steady", "sessionId": m.sessionId })
+    options = liveSteadyOptions()
+    if options = invalid
+        m.result.reason = "invalid_source_transition_policy"
+        return
+    end if
+    m.liveState = nativeLiveCreate(m.config.trustedMediaUrl, liveServerNow(), m.config.sourceDelaySeconds, m.config.approvedOrigins, true, m.cacheBudgetBytes, options)
     m.result["experimentalUnknownFramingTransport"] = true
     ' Drop the signed private input from the harness's config immediately.
     m.config.Delete("trustedMediaUrl")
@@ -408,6 +419,7 @@ function pumpLiveServer(delayMs as integer) as boolean
             return false
         end if
         key = publication.generation.ToStr()
+        newGeneration = not m.publications.DoesExist(key)
         if not m.publications.DoesExist(key)
             m.publications[key] = { "publication": publication, "holdUntilMs": 0&, "activeRequests": 0&, "delivered": false }
             liveIncrement("publicationsObserved", 1 + 0&)
@@ -418,10 +430,8 @@ function pumpLiveServer(delayMs as integer) as boolean
                 return false
             end if
         end if
-        if not loopbackPublicationValid(publication)
-            m.result.reason = "invalid_live_publication"
-            return false
-        end if
+        assets = livePublicationAssets(publication)
+        if assets = invalid then return false
         if FormatJson(m.publications[key].publication) <> FormatJson(publication)
             m.result.reason = "publication_generation_mutated"
             return false
@@ -429,6 +439,9 @@ function pumpLiveServer(delayMs as integer) as boolean
         if publication.generation < m.currentGeneration
             m.result.reason = "publication_generation_regressed"
             return false
+        end if
+        if publication.DoesExist("version") and newGeneration
+            if not validateLivePublicationCache(assets, publication) then return false
         end if
         m.currentPublication = publication
         m.currentGeneration = publication.generation
@@ -587,26 +600,125 @@ function advertisedAssetTrack(id as string) as string
     for each key in m.publications
         entry = m.publications[key]
         if entry.publication.generation = m.currentGeneration or entry.activeRequests > 0 or entry.holdUntilMs > liveServerNow()
-            pub = entry.publication
-            for each track in ["video", "audio"]
-                known = id = pub.initVideoId
-                if track = "audio" then known = id = pub.initAudioId
-                for each segment in pub.segments
-                    candidate = segment.videoId
-                    if track = "audio" then candidate = segment.audioId
-                    if id = candidate then known = true
-                end for
-                if known
-                    if match <> "" and match <> track
+            assets = livePublicationAssets(entry.publication)
+            if assets = invalid then return ""
+            for each asset in assets
+                if asset.id = id
+                    if match <> "" and match <> asset.track
                         m.result.reason = "asset_track_conflict"
                         return ""
                     end if
-                    match = track
+                    match = asset.track
                 end if
             end for
         end if
     end for
     return match
+end function
+
+function livePublicationAssets(publication as dynamic) as dynamic
+    assets = loopbackPublicationAssets(publication)
+    if assets = invalid
+        m.result.reason = "invalid_live_publication"
+        return invalid
+    end if
+    if publication.DoesExist("version")
+        if not loopbackBoolean(m.sourceTransitions) or m.sourceTransitions <> true or not m.steadyMode
+            m.result.reason = "source_transitions_not_enabled"
+            return invalid
+        end if
+        if m.result.actualInitValidated <> true or m.result.decoderApproved <> true
+            m.result.reason = "actual_init_required"
+            return invalid
+        end if
+    end if
+    session = ""
+    if m.steadyMode then session = m.sessionId
+    for each asset in assets
+        if loopbackAssetSession(asset.id) <> session
+            m.result.reason = "publication_session_mismatch"
+            return invalid
+        end if
+    end for
+    return assets
+end function
+
+function liveCachedAssetValid(asset as dynamic, id as string, track as string) as boolean
+    if not loopbackKeys(asset, ["id", "mime", "kind", "size", "data"]) then return false
+    if asset.id <> id or asset.kind <> track or asset.mime <> track + "/mp4" then return false
+    if not loopbackInteger(asset.size) or asset.size < 1 or asset.size > 4194304 then return false
+    if type(asset.data) <> "roByteArray" then return false
+    return asset.data.Count() = asset.size
+end function
+
+' Check one temporarily acquired body at a time before the new generation is
+' made current. Core retains the advertised generation while these leases close.
+function validateLivePublicationCache(assets as object, publication as object) as boolean
+    for each record in assets
+        if m.top.stopRequested then return false
+        previousTrack = advertisedAssetTrack(record.id)
+        if liveFailureRecorded() then return false
+        if previousTrack <> "" and previousTrack <> record.track
+            m.result.reason = "asset_track_conflict"
+            return false
+        end if
+        for each key in m.publications
+            entry = m.publications[key]
+            if entry.publication.generation = m.currentGeneration or entry.activeRequests > 0 or entry.holdUntilMs > liveServerNow()
+                oldRole = liveAssetRole(entry.publication, record.id)
+                if oldRole <> ""
+                    newRole = liveAssetRole(publication, record.id)
+                    if oldRole <> newRole
+                        m.result.reason = "asset_role_conflict"
+                        return false
+                    end if
+                    if oldRole = "init" and liveInitPartner(entry.publication, record.id) <> liveInitPartner(publication, record.id)
+                        m.result.reason = "asset_pair_conflict"
+                        return false
+                    end if
+                end if
+            end if
+        end for
+        asset = nativeLiveAcquire(m.liveState, record.id)
+        if asset = invalid
+            m.result.reason = "advertised_asset_missing"
+            return false
+        end if
+        m.validationLease = record.id
+        valid = liveCachedAssetValid(asset, record.id, record.track)
+        asset = invalid
+        nativeLiveRelease(m.liveState, m.validationLease)
+        m.validationLease = ""
+        if not valid
+            m.result.reason = "invalid_cached_asset"
+            return false
+        end if
+        if m.top.stopRequested then return false
+    end for
+    return true
+end function
+
+function liveAssetRole(publication as object, id as string) as string
+    if id = publication.initVideoId or id = publication.initAudioId then return "init"
+    for each segment in publication.segments
+        if publication.DoesExist("version")
+            if id = segment.initVideoId or id = segment.initAudioId then return "init"
+        end if
+        if id = segment.videoId or id = segment.audioId then return "media"
+    end for
+    return ""
+end function
+
+function liveInitPartner(publication as object, id as string) as string
+    if id = publication.initVideoId then return publication.initAudioId
+    if id = publication.initAudioId then return publication.initVideoId
+    if publication.DoesExist("version")
+        for each segment in publication.segments
+            if id = segment.initVideoId then return segment.initAudioId
+            if id = segment.initAudioId then return segment.initVideoId
+        end for
+    end if
+    return ""
 end function
 
 function prepareLiveResponse(request as object) as dynamic
@@ -642,11 +754,7 @@ function prepareLiveResponse(request as object) as dynamic
     end if
     m.activeLease = request.assetId
     m.result.reason = "invalid_cached_asset"
-    if not loopbackKeys(asset, ["id", "mime", "kind", "size", "data"]) then return invalid
-    if asset.id <> request.assetId or asset.kind <> track or asset.mime <> track + "/mp4" then return invalid
-    if not loopbackInteger(asset.size) or asset.size < 1 or asset.size > 4194304 then return invalid
-    if type(asset.data) <> "roByteArray" then return invalid
-    if asset.data.Count() <> asset.size then return invalid
+    if not liveCachedAssetValid(asset, request.assetId, track) then return invalid
     m.result.reason = "not_started"
     return { "data": asset.data, "bytes": asset.size, "mime": asset.mime, "track": track }
 end function
@@ -790,6 +898,16 @@ sub closeLiveConnection()
         end try
         m.activeLease = ""
     end if
+    if loopbackString(m.validationLease)
+        if m.validationLease <> ""
+            try
+                nativeLiveRelease(m.liveState, m.validationLease)
+            catch error
+                m.result.cleanupOk = false
+            end try
+            m.validationLease = ""
+        end if
+    end if
     if m.activeGeneration > 0
         key = m.activeGeneration.ToStr()
         if m.publications.DoesExist(key)
@@ -911,6 +1029,14 @@ function prepareRokuDemuxInput() as boolean
         m.result.reason = "experimental_mode_required"
         return false
     end if
+    transitions = m.top.enableSourceTransitions
+    if type(m.top) = "roAssociativeArray"
+        if not m.top.DoesExist("enableSourceTransitions") then transitions = false
+    end if
+    if not loopbackBoolean(transitions)
+        m.result.reason = "invalid_source_transition_policy"
+        return false
+    end if
     if not rokuDemuxCacheBudgetValid(m.top.cacheBudgetBytes)
         m.result.reason = "invalid_cache_budget"
         return false
@@ -933,10 +1059,19 @@ function prepareRokuDemuxInput() as boolean
     end if
     m.listenPort = CInt(port)
     m.steadyMode = true
+    m.sourceTransitions = transitions
     m.cacheBudgetBytes = m.top.cacheBudgetBytes
     m.httpQuota = liveQuotaCreate(liveServerNow())
     m.config = { "trustedMediaUrl": descriptor["sourceUrl"], "approvedOrigins": descriptor["approvedOrigins"], "metadata": descriptor["metadata"], "sourceDelaySeconds": 0 }
     descriptor = invalid
     m.result["steadyMode"] = true
     return true
+end function
+
+function liveSteadyOptions() as dynamic
+    if not loopbackBoolean(m.steadyMode) or m.steadyMode <> true or not loopbackSteadySessionIdValid(m.sessionId) then return invalid
+    if not loopbackBoolean(m.sourceTransitions) then return invalid
+    options = { "mode": "steady", "sessionId": m.sessionId }
+    if m.sourceTransitions then options["sourceTransitions"] = true
+    return options
 end function
