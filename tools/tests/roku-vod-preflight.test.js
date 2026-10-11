@@ -19,7 +19,8 @@ const dependencies = [indexPath, runtimePath, 'source/utils/rokuVodDescriptor.br
     'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs'];
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
-function runChild(args, cwd, timeoutMs = 60000, outputLimit = 1024 * 1024) {
+// GitHub's Windows runners took just over 60 s for one boundary fixture.
+function runChild(args, cwd, timeoutMs = 120000, outputLimit = 1024 * 1024) {
     return new Promise(resolve => {
         const child = spawn(process.execPath, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
         let output = '', bytes = 0, exceeded = false, timedOut = false, startupError;
