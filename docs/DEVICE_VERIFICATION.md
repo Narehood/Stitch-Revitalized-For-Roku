@@ -155,10 +155,18 @@ Use the same broadcast/device for default and experimental modes. Record actual 
 
 Measure startup time, observable broadcast-to-display delay, chat alignment, stalls, rebuffering, live-edge recovery and A/V sync. Use a broadcaster clock or comparable visible cue where available. Repeat runs to distinguish stable improvement from network variation; record conditions and sample count.
 
+On October 10, 2026, a G204X on OS 15.3.4 measured delay as the TV clock minus the presented frame's `PROGRAM-DATE-TIME` (`positionInfo` epoch 1), i.e. behind Twitch's broadcast timestamps rather than the broadcaster's camera. Twitch's live playlists use 2-second segments with `TARGETDURATION:6` and no partial segments; the newest complete segment trailed the PC clock by about 0–2 seconds. Roku started about 18 seconds before a playlist's end, or at its first segment when the playlist was shorter, and ignored `PlayStart`. A rewritten `TARGETDURATION:2` alone changed the refresh interval but not the start.
+
 | Mode | Startup | Display delay | Stalls / duration | Chat alignment / A/V sync | Evidence |
 |---|---|---|---|---|---|
-| Default | Pending | Pending | Pending | Pending | Pending |
-| Experimental | Pending | Pending | Pending | Pending | Pending |
+| Default, direct | ~1.3 s | 21.1–21.6 s | none / several 1–2 min runs | Pending | jynxzi, 1080p60 |
+| Default + old live-edge seek | ~1.3 s + seek | 24.3 s | none / 1 min | Pending | jynxzi; seek removed from use |
+| Default, Roku-only (14 s window) | ~4 s | 25.5–25.7 s | none / 2 min | Pending | valkyrae |
+| Experimental relay, direct, Automatic | 1.2–1.8 s | 8.3–11.4 s | one run ended "finished" at 42 s; others none over 1.5–4 min | Pending | hasanabi, xqc; Automatic stepped up from 3.4 to 9.1 Mbps |
+| Experimental relay, direct, Highest | ~1.3 s | 9.95 s | none / 2 min | Pending | xqc |
+| Experimental, Roku-only (8 s window) | ~2.2 s | 16.4–16.8 s | none / 1–2 min | Pending | valkyrae, TheBurntPeanut |
+
+The relay keeps the newest three segments at startup, then holds that first segment while the playlist grows to fifteen. Through a PC proxy with a fixed quality, promoting Twitch's `fast_bread` prefetch segments reached 6.6–9.2 seconds, but startup waited up to 8 seconds and Automatic fell to 160p, because those segments download at broadcast speed. Two-segment playlists started later (11.4 s). These are single-device samples; chat alignment, A/V sync and ad breaks have not been confirmed by a person.
 
 Keep the experiment off by default. If unreliable on a capability group, adjust or disable it there.
 
