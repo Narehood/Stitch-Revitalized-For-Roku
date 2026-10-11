@@ -7,7 +7,10 @@
         <field id="stopRequested" type="boolean" value="false" />
         <!-- { url } once listening, or { failure } -->
         <field id="status" type="assocarray" />
+        <!-- Twitch ended the stream (its playlist carries EXT-X-ENDLIST). -->
+        <field id="ended" type="boolean" value="false" />
     </interface>
+    <script type="text/brightscript" uri="pkg:/source/utils/rokuDemuxCommon.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/lowLatencyPlaylist.brs" />
     <script type="text/brightscript" uri="LowLatencyRelay.brs" />
 </component>

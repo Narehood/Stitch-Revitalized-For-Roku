@@ -4,6 +4,8 @@
 sub initLowLatencyPlayback()
     m.lowLatencyRelay = invalid
     m.lowLatencyReadyUrl = ""
+    m.lowLatencyPending = false
+    m.lowLatencyDirect = false
     m.lowLatencyRecovery = false
     m.lowLatencyUnavailable = false
 end sub
@@ -23,12 +25,18 @@ end function
 function prepareLowLatencyPlayback(isRecovery as boolean) as boolean
     if m.lowLatencyReadyUrl <> "" then return false
     stopLowLatencyRelay()
+    ' One direct start after a failed relay; the next start tries again.
+    if m.lowLatencyDirect
+        m.lowLatencyDirect = false
+        return false
+    end if
     if not lowLatencyEligible() then return false
     m.lowLatencyRelay = CreateObject("roSGNode", "LowLatencyRelay")
     if m.lowLatencyRelay = invalid
         m.lowLatencyUnavailable = true
         return false
     end if
+    m.lowLatencyPending = true
     m.lowLatencyRecovery = isRecovery
     m.lowLatencyRelay.observeField("status", "onLowLatencyStatus")
     m.lowLatencyRelay.sourceUrl = m.top.content.url
@@ -36,22 +44,33 @@ function prepareLowLatencyPlayback(isRecovery as boolean) as boolean
     return true
 end function
 
+' Only the attempt playContent is waiting for is applied. A relay that fails
+' after serving is left to the player's stall and error recovery.
 sub onLowLatencyStatus(event as object)
-    if m.disposed or m.isExiting or m.lowLatencyRelay = invalid then return
+    if m.disposed or m.isExiting or m.lowLatencyRelay = invalid or not m.lowLatencyPending then return
     if not event.getRoSGNode().isSameNode(m.lowLatencyRelay) then return
     status = event.getData()
     if type(status) <> "roAssociativeArray" then return
+    m.lowLatencyPending = false
     if GetInterface(status.url, "ifString") <> invalid
         m.lowLatencyReadyUrl = status.url
-        playContent(m.lowLatencyRecovery)
-    else if m.lowLatencyReadyUrl = "" and (m.video = invalid or not m.video.lowLatency)
-        ' Refused before use (for example separate audio): play directly.
+    else
         ? getLogTimestamp(); " [VideoPlayer] Lower latency unavailable: "; status.failure
-        m.lowLatencyUnavailable = true
+        ' A refused playlist (for example separate audio) stays refused for
+        ' this item; a failed fetch or bind may work on the next start.
+        if status.failure = "unsupported_playlist" then m.lowLatencyUnavailable = true
         stopLowLatencyRelay()
-        playContent(m.lowLatencyRecovery)
+        m.lowLatencyDirect = true
     end if
+    playContent(m.lowLatencyRecovery)
 end sub
+
+' Roku can report finished when a relayed playlist stops advancing. Unless
+' Twitch ended the stream, that is recovered like a stall instead of leaving.
+function lowLatencyFinishedEarly() as boolean
+    if m.lowLatencyRelay = invalid or m.video = invalid or m.rokuSessionId <> "" then return false
+    return m.video.lowLatency and not m.lowLatencyRelay.ended
+end function
 
 ' Consumes the ready URL: the returned copy plays through the relay, while
 ' m.top.content keeps the signed Twitch source for refreshes and switches.
@@ -78,4 +97,5 @@ sub stopLowLatencyRelay()
     if m.lowLatencyRelay <> invalid then m.lowLatencyRelay.stopRequested = true
     m.lowLatencyRelay = destroyTask(m.lowLatencyRelay, "status")
     m.lowLatencyReadyUrl = ""
+    m.lowLatencyPending = false
 end sub

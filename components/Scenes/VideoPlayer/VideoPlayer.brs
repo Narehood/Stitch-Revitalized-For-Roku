@@ -5,8 +5,16 @@ sub handleContent()
     stopPlaybackForDialog()
     m.rokuChosen = false
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
+    ' The stopped wrapper stays until the new item plays. Without its playback
+    ' observers, an error from its closed relay cannot start recovery.
+    if m.video <> invalid
+        m.video.unobserveField("position")
+        m.video.unobserveField("state")
+        m.video.unobserveField("duration")
+    end if
     stopLowLatencyRelay()
     m.lowLatencyUnavailable = false
+    m.lowLatencyDirect = false
     m.reconnectAttempts = 0
     m.recoveryAttempts = 0
     m.sourceTransitionCharges = 0
@@ -616,7 +624,11 @@ sub onVideoStateChange()
     end if
 
     if m.video.state = "finished" and m.allowBreak
-        exitPlayer()
+        if lowLatencyFinishedEarly()
+            beginLiveReconnect("relay_finished")
+        else
+            exitPlayer()
+        end if
     else if m.video.state = "error"
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
         ' A scheduled reconnect replaces this Video; the stopped Roku-only

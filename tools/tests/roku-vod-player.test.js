@@ -71,7 +71,7 @@ async function build(dir, marker, capability, mutation) {
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
         'components/Modules/CustomVideo', 'components/Modules/AdCountdown',
         'components/Modules/AdMetadataOwner', 'components/Tasks/LowLatencyRelay']) await tree(dir, folder);
-    await copy(dir, 'source/utils/lowLatencyPlaylist.brs');
+    for (const file of ['source/utils/lowLatencyPlaylist.brs', 'source/utils/rokuDemuxCommon.brs']) await copy(dir, file);
     for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs']) {
         await add(dir, `components/${file}`, await fs.readFile(path.join(root, 'tools/tests/fixtures/ad-countdown-player', file)));
     }

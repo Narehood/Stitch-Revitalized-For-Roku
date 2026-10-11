@@ -1196,9 +1196,70 @@ sub testLowLatencyRelay()
     restarted.status = { url: "http://127.0.0.1:49381/live.m3u8" }
     settle(60)
     check(player.callFunc("fixtureRead").video.content.url = "http://127.0.0.1:49381/live.m3u8", "the reconnected wrapper plays the fresh relay")
+    ' The stopped relay wrapper is still current when the next relay fails.
+    player.callFunc("fixtureReconnect")
+    settle(40)
+    player.callFunc("fixtureRead").reconnectTask.response = lowLatencySource()
+    settle(60)
+    failed = player.callFunc("fixtureRead").relay
+    failed.status = { failure: "source_unavailable" }
+    settle(60)
+    state = player.callFunc("fixtureRead")
+    check(state.video.control = "play" and state.video.content.url = source.url and not state.video.lowLatency and failed.stopRequested and state.relay = invalid, "a failed relay after a served one plays the signed source")
+    player.callFunc("fixtureReconnect")
+    settle(40)
+    player.callFunc("fixtureRead").reconnectTask.response = lowLatencySource()
+    settle(60)
+    retried = player.callFunc("fixtureRead").relay
+    check(retried <> invalid and not retried.isSameNode(failed), "a failed fetch is tried through the relay again on the next start")
+    retried.status = { url: "http://127.0.0.1:49382/live.m3u8" }
+    settle(60)
+    state = player.callFunc("fixtureRead")
+    check(state.video.content.url = "http://127.0.0.1:49382/live.m3u8" and state.video.lowLatency, "the retried relay plays")
+    ' Roku can finish a relayed live playlist early; that recovers in place.
+    state.video.state = "finished"
+    settle(40)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer <> invalid and state.reconnect = 1 and not state.disposed and player.callFunc("fixtureRead").relay <> invalid, "a relay that finishes early reconnects instead of leaving")
     player.callFunc("fixtureBack")
     settle(60)
-    check(restarted.stopRequested and player.callFunc("fixtureRead").relay = invalid, "Back stops the relay")
+    check(retried.stopRequested and player.callFunc("fixtureRead").relay = invalid, "Back stops the relay")
+    closePlayer(player)
+
+    ' A stream Twitch ended leaves the player as direct playback does.
+    player = openPlayer("LIVE")
+    deliver(player, lowLatencySource())
+    relay = player.callFunc("fixtureRead").relay
+    relay.status = { url: "http://127.0.0.1:49380/live.m3u8" }
+    settle(60)
+    relay.ended = true
+    player.callFunc("fixtureRead").video.state = "finished"
+    settle(60)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer = invalid and state.reconnect = 0 and relay.stopRequested and state.relay = invalid, "an ended stream leaves the player")
+    closePlayer(player)
+
+    ' Loading another item while a relay serves the first one: closing that
+    ' relay must not start recovery for the stopped wrapper.
+    player = openPlayer("LIVE")
+    deliver(player, lowLatencySource())
+    relay = player.callFunc("fixtureRead").relay
+    relay.status = { url: "http://127.0.0.1:49380/live.m3u8" }
+    settle(60)
+    previous = player.callFunc("fixtureRead").video
+    player.contentRequested = request("LIVE")
+    settle(40)
+    ' This engine stops delivering the replaced wrapper's state changes, so
+    ' the detached observers themselves are not proven here.
+    previous.errorCode = -1
+    previous.errorStr = "fixture network failure"
+    previous.state = "error"
+    settle(40)
+    state = player.callFunc("fixtureRead")
+    check(relay.stopRequested and state.task <> invalid and state.retryTimer = invalid and state.reconnectTimer = invalid and state.reconnect = 0 and state.recovery = 0, "loading another item closes the relay without recovering its stopped wrapper")
+    deliver(player, lowLatencySource())
+    following = player.callFunc("fixtureRead").relay
+    check(following <> invalid and not following.isSameNode(relay) and player.callFunc("fixtureRead").reconnect = 0, "the next item starts its own relay")
     closePlayer(player)
 
     player = openPlayer("LIVE")

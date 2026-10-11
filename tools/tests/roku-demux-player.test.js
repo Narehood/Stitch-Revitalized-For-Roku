@@ -18,6 +18,21 @@ const snapshotFiles = ['components/Scenes/VideoPlayer/VideoPlayer.brs',
     'components/heroScene.brs', 'components/heroScene.xml',
     'components/Modules/StitchVideo/StitchVideo.brs', 'components/Modules/StitchVideo/StitchVideo.xml',
     'components/Modules/VideoErrorHandler/VideoErrorHandler.brs'];
+const lowLatencyScript = 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs';
+// Each removes one relay fix; [file, actual text, mutated text, expected failure].
+const lowLatencyMutations = {
+    'low-latency-no-stop': [snapshotFiles[0], '        m.isExiting = true\n        stopLowLatencyRelay()\n',
+        '        m.isExiting = true\n', 'Back stops the relay'],
+    'low-latency-stale-wrapper': [lowLatencyScript, '    else\n        ? getLogTimestamp(); " [VideoPlayer] Lower latency unavailable: "',
+        '    else if m.video = invalid or not m.video.lowLatency\n        ? getLogTimestamp(); " [VideoPlayer] Lower latency unavailable: "',
+        'a failed relay after a served one plays the signed source'],
+    'low-latency-latched': [lowLatencyScript, '        if status.failure = "unsupported_playlist" then m.lowLatencyUnavailable = true\n',
+        '        m.lowLatencyUnavailable = true\n', 'a failed fetch is tried through the relay again on the next start'],
+    'low-latency-finished-exit': [snapshotFiles[0], '        if lowLatencyFinishedEarly()\n', '        if false\n',
+        'a relay that finishes early reconnects instead of leaving'],
+    'low-latency-ended-reconnect': [lowLatencyScript, '    return m.video.lowLatency and not m.lowLatencyRelay.ended\n',
+        '    return m.video.lowLatency\n', 'an ended stream leaves the player']
+};
 
 async function snapshot() {
     return Promise.all(snapshotFiles.map(async file => [file,
@@ -68,7 +83,7 @@ async function buildPackage(dir, marker, mode = 'normal') {
         'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
     // Inert relay boundary: the loopback server and its playlists are covered
     // by the offline low-latency-playlist fixture.
-    await addFile(dir, 'components/LowLatencyRelay.xml', '<component name="LowLatencyRelay" extends="Group"><interface><field id="sourceUrl" type="string" /><field id="startCount" type="integer" value="3" /><field id="maxCount" type="integer" value="15" /><field id="stopRequested" type="boolean" value="false" /><field id="status" type="assocarray" /><field id="control" type="string" /></interface></component>');
+    await addFile(dir, 'components/LowLatencyRelay.xml', '<component name="LowLatencyRelay" extends="Group"><interface><field id="sourceUrl" type="string" /><field id="startCount" type="integer" value="3" /><field id="maxCount" type="integer" value="15" /><field id="stopRequested" type="boolean" value="false" /><field id="status" type="assocarray" /><field id="ended" type="boolean" value="false" /><field id="control" type="string" /></interface></component>');
     await addFile(dir, 'components/DialogKeyBoundary.xml', '<component name="DialogKeyBoundary" extends="Group"><interface><field id="pressCount" type="integer" /></interface><script uri="DialogKeyBoundary.brs" /></component>');
     await addFile(dir, 'components/DialogKeyBoundary.brs', 'function onKeyEvent(key as string, press as boolean) as boolean\n    if LCase(key) = "ok" and press then m.top.pressCount++\n    return true\nend function\n');
     const probe = await fixture('PlayerProbe.brs');
@@ -146,11 +161,11 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.equal(script.split(before).length, 2, `one current ${mode} health guard required`);
         await addFile(dir, playerPath, script.replace(before, after));
     }
-    if (mode === 'low-latency-no-stop') {
-        const script = await fs.readFile(path.join(dir, playerPath), 'utf8');
-        const stop = '        m.isExiting = true\n        stopLowLatencyRelay()\n';
-        assert.equal(script.split(stop).length, 2, 'one actual Back relay stop required');
-        await addFile(dir, playerPath, script.replace(stop, '        m.isExiting = true\n'));
+    if (lowLatencyMutations[mode]) {
+        const [file, before, after] = lowLatencyMutations[mode];
+        const script = await fs.readFile(path.join(dir, file), 'utf8');
+        assert.equal(script.split(before).length, 2, `one actual ${mode} anchor required`);
+        await addFile(dir, file, script.replace(before, after));
     }
     if (mode === 'lost-manual-live-quality') {
         const script = await fs.readFile(path.join(dir, playerPath), 'utf8');
@@ -182,7 +197,7 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.ok(start?.includes('    testLiveManualQualityIntent()'));
         const qualityOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testLiveManualQualityIntent()').join('\n');
         main = main.replace(start, qualityOnly);
-    } else if (mode === 'low-latency' || mode === 'low-latency-no-stop') {
+    } else if (mode === 'low-latency' || lowLatencyMutations[mode]) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLowLatencyRelay()'));
         const relayOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testLowLatencyRelay()').join('\n');
@@ -322,13 +337,15 @@ test('manual LIVE quality intent survives a missing recovery rung and rejects ge
     t.diagnostic('actual remembered manual-quality matching removal fails normally and is rejected');
 });
 
-test('lower-latency relay starts, plays its local URL, restarts, falls back and stops on Back', { timeout: 150000 }, async t => {
+test('lower-latency relay starts, plays its local URL, restarts, falls back and stops on Back', { timeout: 240000 }, async t => {
     const actual = await runFixture('low-latency');
     t.diagnostic(`${acceptResult(actual.result, actual.marker)} actual relay wiring assertions; the relay is an inert boundary`);
-    const leaked = await runFixture('low-latency-no-stop');
-    assertNormalExit(leaked.result, 'low-latency-no-stop');
-    assert.match(leaked.result.output, /STITCH_UI_FAIL:Back stops the relay/);
-    assert.throws(() => acceptResult(leaked.result, leaked.marker));
+    for (const [mode, [, , , expected]] of Object.entries(lowLatencyMutations)) {
+        const mutated = await runFixture(mode);
+        assertNormalExit(mutated.result, mode);
+        assert.ok(mutated.result.output.includes(`STITCH_UI_FAIL:${expected}`), childDiagnostic(mutated.result, mode));
+        assert.throws(() => acceptResult(mutated.result, mutated.marker));
+    }
 });
 
 test('a genuine failed BrightScript assertion and a stale success marker are rejected', { timeout: 180000 }, async () => {
