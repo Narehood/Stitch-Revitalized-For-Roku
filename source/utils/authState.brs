@@ -25,8 +25,9 @@ function getOAuthValidationState(status as integer, response as dynamic) as stri
     if status = 200 and getInterface(response, "ifAssociativeArray") <> invalid
         expiresType = type(response.expires_in)
         if expiresType = "Integer" or expiresType = "roInt" or expiresType = "roInteger" or expiresType = "LongInteger" or expiresType = "roLongInteger"
-            if response.expires_in > 0 then return "valid"
-            return "invalid"
+            ' Twitch reports 0 for tokens that never expire, which this client's
+            ' device sign-in issues; an expired token is answered with 401.
+            if response.expires_in >= 0 then return "valid"
         end if
     end if
     return "indeterminate"
