@@ -20,6 +20,9 @@ function adMetadataSource(source as dynamic, kind as dynamic) as string
         if port = invalid then return ""
         if port < 1024& then return ""
         return source.Left(source.Len() - 12) + "/video.m3u8"
+    else if kind = "relay"
+        ' The lower-latency relay keeps every date range of its source.
+        if CreateObject("roRegex", "^http://127\.0\.0\.1:49[0-9]{3}/live\.m3u8$", "").IsMatch(source) then return source
     end if
     return ""
 end function

@@ -152,9 +152,11 @@ sub serveBoundedLive()
     end if
     m.liveState = nativeLiveCreate(m.config.trustedMediaUrl, liveServerNow(), m.config.sourceDelaySeconds, m.config.approvedOrigins, true, m.cacheBudgetBytes, options)
     m.liveState.adClockEnabled = m.adMetadataEnabled
-    ' Fourteen seconds lets the player start with a ten-second cushion
-    ' (VideoPlayer PlayStart); six seconds ran dry about 20 s in.
+    ' The player starts at the window's first segment, so its length sets
+    ' the delay: 14 s measured ~25 s behind live and 8 s ~17 s on a G204X.
+    ' Six seconds ran dry about 20 s in before the parsing stalls were fixed.
     m.liveState.windowUs = 14000000&
+    if m.top.lowLatency then m.liveState.windowUs = 8000000&
     m.result["experimentalUnknownFramingTransport"] = true
     ' Drop the signed private input from the harness's config immediately.
     m.config.Delete("trustedMediaUrl")

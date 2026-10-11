@@ -8,6 +8,7 @@
         testChoiceReadyAndBack()
         testCancelledStartAndDisposal()
         testDirectSwitch()
+        testLowLatencyRelay()
         testRepeatedRetainedQualityChoices()
         testCombinedQualityWithoutDescriptor()
         testQualityRecoveryLadder()
@@ -420,6 +421,7 @@ sub testSourceTransitionRecovery()
     second = player.callFunc("fixtureRead").sessionId
     started = calls(session, "start")
     check(second <> first and started.count() = 2 and started[1].descriptor.qualityId = "1080p60" and started[1].descriptor.fixtureIdentity = "fresh-descriptor", "transition refresh retains selected 1080 quality using the fresh descriptor")
+    check(started[0].lowLatency = true and started[1].lowLatency = true, "the lower-latency preference reaches every Roku-only session start")
     check(original.control = "stop" and player.callFunc("fixtureRead").pendingContent <> invalid and player.callFunc("fixtureRead").recovery = 1, "refresh stops the old wrapper and retains spent budget while replacement awaits ready")
     ready(session, first)
     check(calls(session, "attach").count() = 1, "stale old ready cannot attach the refreshed transition session")
@@ -1164,4 +1166,62 @@ sub testRefusalAndBlockedOwner()
     deliver(player, content("roku-demux"))
     check(m.scene.dialog.buttons.count() = 1 and m.scene.dialog.buttons[0] = "Back" and calls(session, "start").count() = 0, "blocked owner offers Back-only fallback without start")
     closePlayer(player)
+end sub
+
+function lowLatencySource() as object
+    node = content()
+    node.url = "https://fixture.invalid/master.m3u8"
+    return node
+end function
+
+' The relay is an inert boundary here; its playlists are covered offline.
+sub testLowLatencyRelay()
+    player = openPlayer("LIVE")
+    source = lowLatencySource()
+    deliver(player, source)
+    relay = player.callFunc("fixtureRead").relay
+    check(relay <> invalid and relay.sourceUrl = source.url and relay.control = "run", "an eligible direct live stream starts the relay with its signed source")
+    check(player.callFunc("fixtureRead").video = invalid, "playback waits for the relay's local URL")
+    relay.status = { url: "http://127.0.0.1:49380/live.m3u8" }
+    settle(60)
+    video = player.callFunc("fixtureRead").video
+    check(video <> invalid and video.control = "play" and video.content.url = "http://127.0.0.1:49380/live.m3u8" and video.lowLatency, "the ready relay URL plays with the low-latency tag")
+    check(player.content.url = source.url, "the player keeps the signed source for refreshes and switches")
+    player.callFunc("fixtureReconnect")
+    settle(40)
+    player.callFunc("fixtureRead").reconnectTask.response = lowLatencySource()
+    settle(60)
+    restarted = player.callFunc("fixtureRead").relay
+    check(relay.stopRequested and relay.control = "stop" and restarted <> invalid and not restarted.isSameNode(relay), "a reconnect stops the old relay and starts a fresh one near the live edge")
+    restarted.status = { url: "http://127.0.0.1:49381/live.m3u8" }
+    settle(60)
+    check(player.callFunc("fixtureRead").video.content.url = "http://127.0.0.1:49381/live.m3u8", "the reconnected wrapper plays the fresh relay")
+    player.callFunc("fixtureBack")
+    settle(60)
+    check(restarted.stopRequested and player.callFunc("fixtureRead").relay = invalid, "Back stops the relay")
+    closePlayer(player)
+
+    player = openPlayer("LIVE")
+    deliver(player, lowLatencySource())
+    relay = player.callFunc("fixtureRead").relay
+    relay.status = { failure: "unsupported_playlist" }
+    settle(60)
+    video = player.callFunc("fixtureRead").video
+    check(video <> invalid and video.content.url = "https://fixture.invalid/master.m3u8" and not video.lowLatency and relay.stopRequested, "a refused source plays directly without the tag")
+    player.callFunc("fixtureReconnect")
+    settle(40)
+    player.callFunc("fixtureRead").reconnectTask.response = lowLatencySource()
+    settle(60)
+    check(player.callFunc("fixtureRead").relay = invalid and player.callFunc("fixtureRead").video.content.url = "https://fixture.invalid/master.m3u8", "a refused stream is not retried through the relay")
+    closePlayer(player)
+
+    registry = m.global.fixtureRegistry
+    registry["playback.lowLatency"] = "false"
+    m.global.fixtureRegistry = registry
+    player = openPlayer("LIVE")
+    deliver(player, lowLatencySource())
+    check(player.callFunc("fixtureRead").relay = invalid and player.callFunc("fixtureRead").video.content.url = "https://fixture.invalid/master.m3u8", "with the setting off, live plays directly")
+    closePlayer(player)
+    registry["playback.lowLatency"] = "true"
+    m.global.fixtureRegistry = registry
 end sub

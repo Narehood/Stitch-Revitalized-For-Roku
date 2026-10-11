@@ -181,10 +181,10 @@ sub layoutOverlay()
     updateCaption()
 end sub
 
-' VideoPlayer clears suppressStartupSeek only for a user-started session with
-' the experiment enabled. The tag states the mode, never a measured result.
+' VideoPlayer sets lowLatency while the relay serves this wrapper. The tag
+' states the mode, never a measured result.
 sub updateLatencyTag()
-    m.latencyTag.visible = (m.top.suppressStartupSeek = false)
+    m.latencyTag.visible = m.top.lowLatency
 end sub
 
 function captionForButton(index as integer) as string

@@ -14,11 +14,11 @@ sub recordCall(item as object)
     m.top.calls = calls
 end sub
 
-function startSession(descriptor as object) as string
+function startSession(descriptor as object, lowLatency = false as boolean) as string
     m.serial += 1
     id = "fixture-session-" + m.serial.toStr()
     if m.top.refuseStart then id = ""
-    recordCall({ action: "start", id: id, descriptor: descriptor })
+    recordCall({ action: "start", id: id, descriptor: descriptor, lowLatency: lowLatency })
     if id <> "" then m.top.busy = true
     return id
 end function

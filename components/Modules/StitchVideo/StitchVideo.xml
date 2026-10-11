@@ -38,9 +38,11 @@
              recovery paths (watchdog reconnect, error-driven retryPlayback) so
              the player doesn't immediately re-anchor at the live edge after a
              stall — which would shrink buffer headroom and feed the next stall.
-             VideoPlayer enables it only for an explicit low-latency experiment
-             on user-initiated playback; stable playback keeps it suppressed. -->
+             VideoPlayer now always suppresses it: the seek measured further
+             behind live than Roku's own start. -->
         <field id="suppressStartupSeek" type="bool" value="true" />
+        <!-- True while this wrapper plays with lower live latency. -->
+        <field id="lowLatency" type="bool" value="false" />
 
     </interface>
 

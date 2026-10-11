@@ -9,6 +9,7 @@ sub initRokuPlayback()
     m.rokuDeferredPlay = false
     m.rokuExitPending = false
     m.rokuPlayRecovery = false
+    m.rokuLowLatency = false
     scene = m.top.getScene()
     if scene = invalid then return
     if not scene.hasField("localPlaybackSession") then return
@@ -72,7 +73,8 @@ function prepareRokuPlayback(isRecovery as boolean) as boolean
         m.rokuPreparedContent = invalid
         m.rokuPendingContent = m.top.content
         m.rokuPlayRecovery = isRecovery
-        sessionId = m.rokuSession.callFunc("startSession", m.top.content.localPlaybackDescriptor)
+        m.rokuLowLatency = get_user_setting("playback.lowLatency", "false") = "true"
+        sessionId = m.rokuSession.callFunc("startSession", m.top.content.localPlaybackDescriptor, m.rokuLowLatency)
         if type(sessionId) <> "String" and type(sessionId) <> "roString" then sessionId = ""
         m.rokuSessionId = sessionId
         if sessionId = ""
@@ -251,6 +253,7 @@ sub startAdMetadata(content as object)
         if type(content.Streams) <> "roArray" then return
         if content.Streams.Count() <> 1 then return
         if content.Streams[0].url <> content.url then return
+        if m.video.lowLatency then kind = "relay"
     end if
     scene = m.top.getScene()
     if scene = invalid then return
