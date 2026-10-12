@@ -18,7 +18,7 @@ function beginContent(video as object, source as string, sourceKind as string) a
     if not video.isSubtype("Video") then return ""
     if not video.hasField("supportsDisposal") or not video.supportsDisposal then return ""
     if source <> video.content.url then return ""
-    if sourceKind <> "direct" and sourceKind <> "loopback" then return ""
+    if sourceKind <> "direct" and sourceKind <> "loopback" and sourceKind <> "relay" then return ""
     owner = LCase(CreateObject("roDeviceInfo").GetRandomUUID()).Replace("-", "")
     if not tadOwner(owner) then return ""
     ' One pending primitive source snapshot and its current video replace any

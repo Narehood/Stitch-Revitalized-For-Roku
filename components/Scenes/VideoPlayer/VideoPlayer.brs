@@ -5,6 +5,16 @@ sub handleContent()
     stopPlaybackForDialog()
     m.rokuChosen = false
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
+    ' The stopped wrapper stays until the new item plays. Without its playback
+    ' observers, an error from its closed relay cannot start recovery.
+    if m.video <> invalid
+        m.video.unobserveField("position")
+        m.video.unobserveField("state")
+        m.video.unobserveField("duration")
+    end if
+    stopLowLatencyRelay()
+    m.lowLatencyUnavailable = false
+    m.lowLatencyDirect = false
     m.reconnectAttempts = 0
     m.recoveryAttempts = 0
     m.sourceTransitionCharges = 0
@@ -166,16 +176,14 @@ function FormatSeconds(seconds as integer) as string
 end function
 
 ' isRecovery=true is set by internal recovery paths (watchdog reconnect,
-' error-driven retryPlayback). It tells the freshly-created StitchVideo node
-' to skip its startup live-edge seek so we don't immediately re-anchor at the
-' live edge after a stall — which would shrink buffer headroom and feed the
-' next stall. User-initiated entry points (first open, re-open, quality
-' change) leave isRecovery=false so they get the low-latency seek.
+' error-driven retryPlayback) and is carried through asynchronous Roku-only
+' and lower-latency preparation.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
     stopAdMetadata()
     resetLiveRecoveryHealth()
     if prepareRokuPlayback(isRecovery) then return
+    if prepareLowLatencyPlayback(isRecovery) then return
     ' Reset reconnect/watchdog state on every (re)start so stale values
     ' from a prior playback session don't cause false triggers.
     m.isExiting = false
@@ -313,12 +321,18 @@ sub playContent(isRecovery = false as boolean)
     if m.video.videoBookmarks = invalid then m.video.videoBookmarks = {}
 
     contentNodeToPlay = m.top.content ' This is the TwitchContentNode
+    lowLatency = false
     if contentNodeToPlay <> invalid
+        if isLiveContent and m.lowLatencyReadyUrl <> ""
+            contentNodeToPlay = lowLatencyContent(contentNodeToPlay)
+            lowLatency = true
+        end if
         if isLiveContent
             contentNodeToPlay.ignoreStreamErrors = false ' Important for HLS error reporting
             contentNodeToPlay.switchingStrategy = "full-adaptation"
-            ' Roku clips this start position to the availability window.
-            ' The opt-in startup seek is separate and needs hardware measurements.
+            ' Roku clips this start position to the availability window. A
+            ' G204X began ~18 s before a playlist's end, or at its first segment
+            ' when shorter, so the lower-latency relay shortens the playlist.
             ' https://developer.roku.com/dev/docs/specs/media (live edge spec)
             contentNodeToPlay.PlayStart = 2147483647
             ' The on-Roku splitter publishes ~14 s windows in bursts. Starting
@@ -338,21 +352,12 @@ sub playContent(isRecovery = false as boolean)
             end if
         end if
 
-        ' Invariant: m.video is a fresh StitchVideo node here. exitPlayer()
-        ' tears down the previous instance, so this assignment runs on a
-        ' newly created node with init() defaults (startupSeekFired=false,
-        ' recentSeekTimestamp=0). Do NOT optimize this path to reuse an
-        ' existing m.video across reconnects without also explicitly
-        ' resetting those latches — otherwise the startup seek will be
-        ' suppressed on the new stream.
-        '
-        ' On recovery paths (watchdog reconnect / error retry) mark the new
-        ' node so it skips the startup live-edge seek. Must be set BEFORE the
-        ' content assignment because state=playing can race through quickly
-        ' after content is applied, and the gate is checked in
-        ' StitchVideo's onVideoStateChange.
+        ' Seeking to the live edge measured 3 s further behind on a G204X;
+        ' lower latency comes from the relay instead. Both are set before
+        ' content because state=playing can follow it quickly.
         if isLiveContent
-            m.video.suppressStartupSeek = m.rokuSessionId <> "" or isRecovery or get_user_setting("playback.lowLatency", "false") <> "true"
+            m.video.suppressStartupSeek = true
+            m.video.lowLatency = lowLatency or (m.rokuSessionId <> "" and m.rokuLowLatency)
         end if
         if m.rokuSessionId <> ""
             if not m.rokuSession.callFunc("attachVideo", m.rokuSessionId, m.video)
@@ -390,6 +395,7 @@ sub exitPlayer()
     ' reconnects we set allowBreak=false before calling exitPlayer().
     if m.allowBreak
         m.isExiting = true
+        stopLowLatencyRelay()
         m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
         ' Stop chat immediately so the IRC connection and ChatJob task are
         ' released before the scene tears down, regardless of chat visibility.
@@ -458,6 +464,7 @@ end function
 sub init()
     m.disposed = false
     initRokuPlayback()
+    initLowLatencyPlayback()
     m.bookmarksTask = m.top.findNode("bookmarksTask")
     m.chatWindow = m.top.findNode("chat")
     if m.chatWindow <> invalid
@@ -617,7 +624,11 @@ sub onVideoStateChange()
     end if
 
     if m.video.state = "finished" and m.allowBreak
-        exitPlayer()
+        if lowLatencyFinishedEarly()
+            beginLiveReconnect("relay_finished")
+        else
+            exitPlayer()
+        end if
     else if m.video.state = "error"
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
         ' A scheduled reconnect replaces this Video; the stopped Roku-only
@@ -1390,6 +1401,7 @@ sub onDestroy()
     m.disposed = true
     m.isExiting = true
     destroyRokuPlayback()
+    stopLowLatencyRelay()
     m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
     stopPlaybackForDialog()
     if m.watchdogTimer <> invalid then m.watchdogTimer.unobserveField("fire")

@@ -315,11 +315,11 @@ sub testLiveControls()
     check(seen("QualityChangeRequestFlag").count() = 1, "closing the dialog requests no change")
 
     ' The tag reflects this wrapper's session only.
-    video.suppressStartupSeek = false
+    video.lowLatency = true
     video.content = createObject("roSGNode", "ContentNode")
     waitRead(video, "tagVisible", true, "the low-latency tag")
     check(video.callFunc("fixtureRead").tagText = "Low-latency mode (experimental)", "the tag names the experiment without claiming a result")
-    video.suppressStartupSeek = true
+    video.lowLatency = false
     video.content = createObject("roSGNode", "ContentNode")
     waitRead(video, "tagVisible", false, "the tag to hide")
     check(not video.callFunc("fixtureRead").tagVisible, "a recovery or stable session hides the tag")

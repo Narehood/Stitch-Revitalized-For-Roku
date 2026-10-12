@@ -85,6 +85,7 @@ components/                # SceneGraph components (XML + BRS pairs)
   Tasks/                   # Task nodes for async work (API calls, content loading)
     GetTwitchContent/      # Content-fetching task nodes
     httpRequest/           # Generic HTTP task node
+    LowLatencyRelay/       # Loopback relay serving trimmed live playlists (opt-in lower latency)
     twitch-api-sdk/        # TwitchApiTask XML and separate auth/query SDK scripts
   DeepLinking/             # External launch handling
 settings/settings.json     # User-facing settings definitions

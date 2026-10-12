@@ -115,6 +115,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         await component('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');
         await component('components/Modules/StitchVideo', 'StitchVideo', 'StitchVideoProbe');
         await copy('components/Scenes/VideoPlayer/RokuPlayback.brs');
+        await copy('components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
         await component('components/Modules/RokuDemuxSession', 'RokuDemuxSession', 'ManagerProbe');
         const worker = 'CreateObject("roSGNode", "RokuDemuxServer")';
         const managerPath = 'components/Modules/RokuDemuxSession/RokuDemuxSession.brs';

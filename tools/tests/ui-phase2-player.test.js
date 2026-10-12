@@ -140,6 +140,7 @@ sub fixtureSpendRecovery(count as integer)
 end sub
 `);
     await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
     for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);

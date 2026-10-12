@@ -17,7 +17,7 @@ sub init()
     if m.cleanupTimer <> invalid then m.cleanupTimer.observeField("fire", "onCleanupTick")
 end sub
 
-function startSession(descriptor as object) as string
+function startSession(descriptor as object, lowLatency = false as boolean) as string
     if m.disposed or m.top.cleanupBlocked then return ""
     if not rokuDemuxDescriptorValid(descriptor)
         if not rokuVodRuntimeAvailable() or not rokuVodDescriptorValid(descriptor) then return ""
@@ -28,11 +28,11 @@ function startSession(descriptor as object) as string
     if not sessionIdValid(sessionId) then return ""
     if m.worker <> invalid or m.transitioning
         previousPending = m.pending
-        m.pending = { id: sessionId, descriptor: descriptor }
+        m.pending = { id: sessionId, descriptor: descriptor, lowLatency: lowLatency }
         if previousPending <> invalid then sessionEvent(previousPending.id, "cancelled", "superseded")
         if m.worker <> invalid then beginSessionStop()
     else
-        beginSession(sessionId, descriptor)
+        beginSession(sessionId, descriptor, lowLatency)
     end if
     return sessionId
 end function
@@ -45,7 +45,7 @@ function sessionIdValid(value as string) as boolean
     return true
 end function
 
-sub beginSession(sessionId as string, descriptor as object)
+sub beginSession(sessionId as string, descriptor as object, lowLatency = false as boolean)
     m.currentId = sessionId
     m.currentDescriptor = descriptor
     m.workerResult = invalid
@@ -79,6 +79,7 @@ sub beginSession(sessionId as string, descriptor as object)
         ' Ads and encoder restarts arrive as new MAP/discontinuity epochs.
         ' Without this the worker refuses them and playback stops.
         m.worker.enableSourceTransitions = true
+        m.worker.lowLatency = lowLatency
     end if
     ' Live keeps a 14 s window plus held generations (~10 segment pairs), so
     ' even high-bitrate 720p60 sources need more than 16 MiB.
@@ -323,7 +324,7 @@ sub checkSessionCleanup()
     end if
     nextRequest = m.pending
     m.pending = invalid
-    if nextRequest <> invalid then beginSession(nextRequest.id, nextRequest.descriptor)
+    if nextRequest <> invalid then beginSession(nextRequest.id, nextRequest.descriptor, nextRequest.lowLatency)
 end sub
 
 sub onCleanupTick()

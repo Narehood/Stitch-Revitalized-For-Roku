@@ -7,6 +7,8 @@
         <!-- Source-boundary staging is an independent, default-off capability. -->
         <field id="enableSourceTransitions" type="boolean" value="false" />
         <field id="enableAdMetadata" type="boolean" value="false" />
+        <!-- Live only: a shorter window starts the player nearer the edge. -->
+        <field id="lowLatency" type="boolean" value="false" />
         <field id="cacheBudgetBytes" type="integer" value="16777216" />
         <field id="listenPort" type="integer" value="0" />
         <field id="stopRequested" type="boolean" value="false" />

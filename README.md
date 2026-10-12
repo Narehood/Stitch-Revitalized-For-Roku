@@ -21,9 +21,9 @@ This checkout incorporates work from [jeremy-albinet's maintained fork](https://
 ## Known limitations
 
 - **Ad transitions on Roku-only live streams:** at the start and end of an ad, Roku's player can briefly stop and Stitch reconnects automatically after about ten seconds. Making these transitions seamless is the next planned improvement.
-- **Delay behind live:** Roku-only streams run roughly 28 seconds behind live, compared with about 14 seconds for direct playback.
+- **Delay behind live:** measured on one Roku TV, direct playback runs about 21 seconds behind Twitch's broadcast timestamps and Roku-only streams about 25 seconds. The opt-in **Lower live latency** setting brings these to about 8–11 and 16–17 seconds.
 - **Formats:** the on-device splitter supports clear AVC/AAC media within its resource bounds. Bundled HEVC and other unsupported recordings or layouts can still require the optional Python service below; Docker is optional for that service.
-- **Still under verification:** genuine 1440p hardware playback, signed-in secure chat, measured low latency and wider device coverage. See the [verification record](docs/DEVICE_VERIFICATION.md) and [follow-up work](TODO.md).
+- **Still under verification:** genuine 1440p hardware playback, signed-in secure chat, lower latency across ad breaks and slower connections, and wider device coverage. See the [verification record](docs/DEVICE_VERIFICATION.md) and [follow-up work](TODO.md).
 
 ## Build
 
@@ -50,7 +50,7 @@ Some Enhanced Broadcasting streams and completed recordings combine audio and vi
 
 Live chat uses secure WebSocket IRC when that component is available on the device. Older devices retain anonymous IRC chat without sending account credentials over its plaintext connection. Chat has bounded reconnection and visible connection status. VODs and clips show an unavailable-chat notice when chat is opened.
 
-**Lower live latency** is an opt-in experiment in Settings. It may increase buffering. It does not promise a specific delay or native LL-HLS support; measured comparison on real devices is a release gate.
+**Lower live latency** is an opt-in experiment in Settings. Roku's player has no low-latency mode: it starts about 18 seconds before the end of Twitch's playlist and ignores requested start positions. With the setting on, Stitch serves the player a copy of the playlist trimmed to its newest segments from the Roku itself; video still downloads directly from Twitch. On a G204X this measured about 8–11 seconds behind Twitch instead of about 21, and about 16–17 seconds instead of about 25 for Roku-only streams. The smaller buffer can pause more often on slow connections. Twitch's low-latency prefetch segments are not used: on Roku they delayed startup and pushed Automatic quality to its lowest rendition.
 
 ## Optional audio demux service
 

@@ -70,7 +70,8 @@ async function build(dir, marker, capability, mutation) {
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
         'components/Modules/CustomVideo', 'components/Modules/AdCountdown',
-        'components/Modules/AdMetadataOwner']) await tree(dir, folder);
+        'components/Modules/AdMetadataOwner', 'components/Tasks/LowLatencyRelay']) await tree(dir, folder);
+    for (const file of ['source/utils/lowLatencyPlaylist.brs', 'source/utils/rokuDemuxCommon.brs']) await copy(dir, file);
     for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs']) {
         await add(dir, `components/${file}`, await fs.readFile(path.join(root, 'tools/tests/fixtures/ad-countdown-player', file)));
     }
@@ -82,7 +83,7 @@ async function build(dir, marker, capability, mutation) {
     }
     await add(dir, 'source/utils/config.brs', await fs.readFile(path.join(sharedFixtures, 'config.brs')));
     await add(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fs.readFile(path.join(sharedFixtures, 'EmojiLabelRegex.brs')));
-    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs']) {
+    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs']) {
         await copy(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), 'actual owner/player handlers must execute unchanged');
     }
