@@ -3,6 +3,14 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.3": [
+            "3.0.1 release (Roku package version 3.0.3)",
+            "New: Lower live latency now reduces delay using the Roku itself, without another computer",
+            "Measured on one TV: direct playback about 8-11 seconds behind live, down from about 21",
+            "Improved: Relay fallback, recovery, quality changes and stream switching",
+            "Fix: Sign-in is kept when Twitch issues a non-expiring token",
+            "Lower live latency stays experimental and off by default; slower networks may buffer more"
+        ],
         "3.0.2": [
             "3.0.0 release (Roku shows version 3.0.2 because 3.0.0 and 3.0.1 were alpha previews)",
             "New: Twitch-inspired design with clearer focus, status messages and named player controls",
