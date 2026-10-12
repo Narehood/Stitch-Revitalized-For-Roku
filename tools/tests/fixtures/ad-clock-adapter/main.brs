@@ -7,7 +7,156 @@ sub main()
     testBoundaries()
     testHeaders()
     testSourceEpochAgreement()
+    testMixedEpochProjection()
     print "STITCH_AD_CLOCK_END: __MARKER__ "; FormatJson({assertions: m.assertions, failures: m.failures})
+end sub
+
+function mixedEpochSource() as string
+    text = sourceText().Replace("#EXT-X-MEDIA-SEQUENCE:41" + Chr(10), "#EXT-X-MEDIA-SEQUENCE:41" + Chr(10) + "#EXT-X-DISCONTINUITY-SEQUENCE:27" + Chr(10))
+    for each suffix in ["04", "06"]
+        tag = "#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:00:" + suffix + ".000000Z"
+        text = text.Replace(tag, "#EXT-X-DISCONTINUITY" + Chr(10) + tag)
+    end for
+    return text
+end function
+
+function mixedEpochPublication(localBase = 0 as integer) as object
+    base = publication()
+    segments = []
+    for i = 0 to 3
+        localEpoch = localBase
+        if i >= 2 then localEpoch += i - 1
+        initVideo = 1
+        if i = 2 then initVideo = 3
+        prefix = "live-0123456789abcdef0123456789abcdef-"
+        segments.Push({ sequence: 41 + i, duration: "2.000", durationUs: 2000000, videoId: prefix + (7 + i * 2).ToStr(), audioId: prefix + (8 + i * 2).ToStr(), epoch: localEpoch, initVideoId: prefix + initVideo.ToStr(), initAudioId: prefix + (initVideo + 1).ToStr() })
+    end for
+    base.version = 2
+    base.discontinuitySequence = localBase
+    base.initVideoId = segments[0].initVideoId
+    base.initAudioId = segments[0].initAudioId
+    base.segments = segments
+    return base
+end function
+
+function mixedEpochState(pub as object) as object
+    state = { sourceUrl: "https://test.ttvnw.net/current.m3u8", closed: false, phase: "ready", sourceTransitions: true, epoch: 29, segments: [] }
+    text = mixedEpochSource()
+    state.window = nativeLiveParsePlaylist(text, state.sourceUrl)
+    saved = []
+    for i = 0 to pub.segments.Count() - 1
+        selected = state.window.segments[i]
+        target = pub.segments[i]
+        saved.Push({ sequence: selected.sequence, duration: selected.duration, durationUs: selected.durationUs, url: selected.url, mapUrl: selected.mapUrl, sourceEpoch: selected.epoch, localEpoch: target.epoch, videoId: target.videoId, audioId: target.audioId, initVideoId: target.initVideoId, initAudioId: target.initAudioId })
+    end for
+    state.segments = saved
+    twitchAdClockCapture(state, "playlist", text, state.sourceUrl)
+    return state
+end function
+
+sub testMixedEpochProjection()
+    m.config = { sourceDelaySeconds: 2, metadata: { bandwidth: 6000000, width: 1920, height: 1080, frameRate: "60.000", videoCodec: "avc1.64002a" } }
+    for each localBase in [0, 4]
+        pub = mixedEpochPublication(localBase)
+        state = mixedEpochState(pub)
+        original = FormatJson(pub)
+        sourceOriginal = FormatJson(state.adClockTimeline)
+        check(loopbackPublicationValid(pub), "mixed source fixture uses valid actual v2 publication")
+        projection = twitchAdClockServerPublication(state, pub)
+        check(projection <> invalid, "mixed source epochs project against actual window/cache binding")
+        if projection <> invalid
+            for i = 0 to 3
+                check(projection.segments[i].epoch = pub.segments[i].epoch and projection.segments[i].startUs = 1767225600000000& + i * 2000000&, "projection adopts exact local labels and unchanged UTC")
+                check(state.adClockTimeline.segments[i].epoch = 27 + pub.segments[i].epoch - localBase, "original source labels remain unchanged")
+            end for
+            for each track in ["video", "audio"]
+                canonical = loopbackManifest(track, pub).ToAsciiString()
+                text = twitchAdClockManifest(track, pub, projection).ToAsciiString()
+                reloaded = twitchAdClockTimeline(text)
+                check(reloaded <> invalid and FormatJson(reloaded) = FormatJson(projection), "both real emitted media playlists round-trip exact anchors/cues/local boundaries")
+                stripped = ""
+                for each line in text.Split(Chr(10))
+                    if line <> "" and line.Left(25) <> "#EXT-X-PROGRAM-DATE-TIME:" and line.Left(17) <> "#EXT-X-DATERANGE:" then stripped += line + Chr(10)
+                end for
+                check(stripped = canonical, "PDT overlay preserves every canonical MAP/discontinuity/media byte")
+                changed = ParseJson(FormatJson(projection))
+                entries = changed.segments
+                for i = 0 to entries.Count() - 1
+                    entry = entries[i]
+                    entry.epoch += 1
+                    entries[i] = entry
+                end for
+                changed.segments = entries
+                check(twitchAdClockManifest(track, pub, changed).ToAsciiString() = canonical, "wrong frozen local labels fall back to canonical")
+            end for
+        end if
+        check(FormatJson(pub) = original and FormatJson(state.adClockTimeline) = sourceOriginal, "projection never mutates source timeline or publication")
+    end for
+    pub = mixedEpochPublication()
+    for each field in ["sourceEpoch", "localEpoch", "durationUs", "sequence", "mapUrl", "url", "duration", "videoId", "audioId", "initVideoId", "initAudioId"]
+        state = mixedEpochState(pub)
+        entries = state.segments
+        entry = entries[2]
+        if loopbackInteger(entry[field])
+            entry[field] += 1
+        else
+            entry[field] += "changed"
+        end if
+        entries[2] = entry
+        state.segments = entries
+        check(twitchAdClockServerPublication(state, pub) = invalid, "changed converted cache binding refused " + field)
+    end for
+    for each field in ["sourceEpoch", "localEpoch", "durationUs", "sequence"]
+        for each bad in [28.0#, "28", invalid, 4294967296&]
+            state = mixedEpochState(pub)
+            entries = state.segments
+            entry = entries[2]
+            entry[field] = bad
+            entries[2] = entry
+            state.segments = entries
+            check(twitchAdClockServerPublication(state, pub) = invalid, "malformed converted cache numeric binding refused " + field)
+        end for
+    end for
+    state = mixedEpochState(pub)
+    timeline = state.adClockTimeline
+    entries = timeline.segments
+    for i = 0 to entries.Count() - 1
+        entry = entries[i]
+        entry.epoch += 1
+        entries[i] = entry
+    end for
+    timeline.segments = entries
+    state.adClockTimeline = timeline
+    check(twitchAdClockServerPublication(state, pub) = invalid, "correct local labels cannot substitute for wrong source epochs")
+    for each suffix in ["03.999999", "02.000000"]
+        bad = mixedEpochSource().Replace("00:00:04.000000Z", "00:00:" + suffix + "Z")
+        check(not twitchAdClockTimelineValid(twitchAdClockTimeline(bad)), "cross-epoch overlapping or backward UTC refused")
+    end for
+    gap = mixedEpochSource().Replace("00:00:04.000000Z", "00:00:05.000000Z").Replace("00:00:06.000000Z", "00:00:08.000000Z")
+    check(twitchAdClockTimelineValid(twitchAdClockTimeline(gap)), "explicit positive cross-epoch gaps stay valid without extrapolation")
+    for each mode in ["closed", "failed", "stale", "disabled", "missing", "duplicate", "window"]
+        state = mixedEpochState(pub)
+        if mode = "closed" then state.closed = true
+        if mode = "failed" then state.phase = "failed"
+        if mode = "stale" then state.sourceUrl += "?replacement"
+        if mode = "disabled" then state.sourceTransitions = false
+        if mode = "missing" then state.adClockTimeline = twitchAdClockTimeline(mixedEpochSource().Replace("#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:00:04.000000Z", "# missing anchor"))
+        if mode = "duplicate"
+            entries = state.segments
+            entries.Push(entries[2])
+            state.segments = entries
+        end if
+        if mode = "window"
+            window = state.window
+            entries = window.segments
+            entry = entries[2]
+            entry.epoch += 1
+            entries[2] = entry
+            window.segments = entries
+            state.window = window
+        end if
+        check(twitchAdClockServerPublication(state, pub) = invalid, "optional metadata owner/selected proof refused " + mode)
+    end for
 end sub
 
 sub check(ok as boolean, message as string)

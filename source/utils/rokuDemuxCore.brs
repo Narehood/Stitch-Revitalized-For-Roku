@@ -380,8 +380,47 @@ function nativeLiveCreate(mediaUrl as string, nowMs as dynamic, sourceDelaySecon
     if steadyMode then clockCap = 4294967235000&
     nlInteger(nowMs, 0&, clockCap)
     nlInteger(sourceDelaySeconds, 0&, 60&)
-    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sourceTransitions: sourceTransitions, localEpoch: 0&, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], initDigest: "", initByteCount: 0, initAliasCount: 0&, pendingWindow: invalid, pendingPlaylistSequence: -1&, assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
+    return { sourceUrl: mediaUrl, origin: origin.origin, approvedOrigins: origins, trustedExperimentalTransport: trustedExperimentalTransport, cacheBudgetBytes: cacheBudgetBytes, steadyMode: steadyMode, sourceTransitions: sourceTransitions, pollFromRequest: false, localEpoch: 0&, sessionId: sessionId, started: false, lastUpstreamProgress: nowMs, lastPublicationProgress: nowMs, quotaStart: nowMs, quotaSteps: 0, quotaTransfers: 0, phase: "playlist", deadline: nowMs + 45000&, lastNow: nowMs, delayUs: sourceDelaySeconds * 1000000&, window: invalid, mapUrl: "", epoch: -1&, tracks: invalid, initIds: [], initDigest: "", initByteCount: 0, initAliasCount: 0&, pendingWindow: invalid, pendingPlaylistSequence: -1&, assets: [], segments: [], generations: [], latest: 0, serial: 0, cacheBytes: 0, peakCacheBytes: 0, op: invalid, input: invalid, temporaryVideo: invalid, pendingSegment: invalid, nextPoll: nowMs, publishedFirst: -1&, publishedLast: -1&, lastPlaylistSequence: -1&, nextGeneration: 1, steps: 0, transfers: 0, playlistCount: 0, initPairCount: 0, segmentPairCount: 0, ownInputFile: false, error: "", failureCategory: 0, closed: false }
 end function
+
+' Called only after the sole playlist GET successfully starts, including retries.
+sub nativeLivePlaylistStarted(state as object, nowMs as dynamic)
+    if not state.pollFromRequest then return
+    nlTime(state, nowMs)
+    nlCheck(state.steadyMode and state.trustedExperimentalTransport and not state.closed and state.phase = "playlist", "playlist polling owner invalid")
+    nlCheck(state.op <> invalid and state.input = invalid, "playlist polling operation missing")
+    nlCheck(state.op.kind = "playlist" and state.op.phase = "get" and state.op.deadline = nowMs + 6000&, "playlist polling operation invalid")
+    state.playlistRequestStartedAt = nowMs + 0&
+    state.playlistRequestPending = true
+end sub
+
+' RFC8216 6.3.4: source reload floor starts at the request, not publication.
+sub nlAcceptPlaylistPoll(state as object, text as string, target as integer, nowMs as dynamic)
+    if not state.pollFromRequest then return
+    nlCheck(state.DoesExist("playlistRequestStartedAt") and state.DoesExist("playlistRequestPending"), "playlist polling start missing")
+    nlInteger(state.playlistRequestStartedAt, 0&, nowMs)
+    nlCheck(state.playlistRequestPending = true and text.Len() > 0 and text.Len() <= 262144, "playlist polling snapshot invalid")
+    nlInteger(target, 1&, 30&)
+    ' Leave room for the existing6s operation inside the15s health deadline.
+    if target >= 9
+        state.pollFromRequest = false
+        nlClearPlaylistPoll(state)
+        return
+    end if
+    interval = target * 1000&
+    if state.DoesExist("playlistSnapshot")
+        if state.playlistSnapshot = text then interval = target * 500&
+    end if
+    state.nextPoll = state.playlistRequestStartedAt + interval
+    state.playlistSnapshot = text
+    state.playlistRequestPending = false
+end sub
+
+sub nlClearPlaylistPoll(state as object)
+    for each key in ["playlistSnapshot", "playlistRequestStartedAt", "playlistRequestPending"]
+        state.Delete(key)
+    end for
+end sub
 
 sub nlTime(state as object, nowMs as dynamic)
     clockCap = 2147400000&
@@ -594,6 +633,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             state.lastPlaylistSequence = parsed.mediaSequence
             nlIncrement(state, "playlistCount")
             state.nextPoll = nowMs + parsed.targetDuration * 500&
+            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
             if state.steadyMode then state.lastUpstreamProgress = nowMs
             return
         end if
@@ -608,6 +648,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         end if
         if state.sourceTransitions and state.started
             nlEpochAcceptWindow(state, parsed, window)
+            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
             state.lastUpstreamProgress = nowMs
             return
         end if
@@ -635,6 +676,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             state.phase = "init"
             if state.initIds.Count() = 2 then state.phase = "segment"
         end if
+        nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
     else
         nlCheck(Type(payload) = "roByteArray", "binary payload must be bytearray")
         nlCheck(payload.Count() > 0 and payload.Count() <= intent.limit, "binary payload bound")
@@ -861,7 +903,7 @@ sub nlPublish(state as object, nowMs as dynamic)
     end if
     state.phase = "ready"
     if window.ended then state.phase = "ended"
-    state.nextPoll = nowMs + window.targetDuration * 500&
+    if not state.pollFromRequest then state.nextPoll = nowMs + window.targetDuration * 500&
     nlPrune(state)
 end sub
 
@@ -993,6 +1035,7 @@ sub nativeLiveRetire(state as object, generationId as dynamic)
 end sub
 
 sub nlAbort(state as object, reason as string)
+    nlClearPlaylistPoll(state)
     state.error = reason
     state.failureCategory = 1 ' Fixed native live/transport/parser failure category.
     if reason.Left(14) = "native-demux: " then state.failureCategory = 2
