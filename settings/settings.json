@@ -155,12 +155,5 @@
         "settingName": "analytics.enabled",
         "type": "bool",
         "default": "false"
-    },
-    {
-        "title": "Support Stitch",
-        "description": "Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!",
-        "settingName": "support",
-        "type": "action",
-        "action": "support_stitch"
     }
 ]

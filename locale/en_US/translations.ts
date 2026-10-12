@@ -958,14 +958,6 @@
             <translation>Share app usage and device details to help improve Stitch. Off by default. Changes take effect on next app start.</translation>
         </message>
         <message>
-            <source>Support Stitch</source>
-            <translation>Support Stitch</translation>
-        </message>
-        <message>
-            <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
-            <translation>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</translation>
-        </message>
-        <message>
             <source>Playlist selection unavailable</source>
             <translation>Playlist selection unavailable</translation>
         </message>

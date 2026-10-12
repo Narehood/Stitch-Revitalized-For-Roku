@@ -356,7 +356,7 @@ sub testSettings(scene as object)
     print "SECTION Settings"
     page = addPage(scene, "Settings")
     s = inspect(page)
-    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 13, "actual Settings uses native MarkupList with all schema rows")
+    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 12, "actual Settings uses native MarkupList with all schema rows")
     check(m.global.fixtureWrites = 0 and m.global.fixtureDeletes = 0, "opening Settings displays defaults without any storage writes")
     check(settingValue(page, "ChatFontSize") = "Large (16)", "new-install chat display defaults to authorized 16")
     check(settingValue(page, "analytics.enabled") = "Off" and settingValue(page, "playback.lowLatency") = "Off", "diagnostics and experimental latency remain default off")
@@ -391,16 +391,13 @@ sub testSettings(scene as object)
     s.options.checkedItem = 3
     check(get_user_setting("ChatFontSize") = "16" and settingValue(page, "ChatFontSize") = "Large (16)", "chat selection stores option id and refreshes current label")
     page.callFunc("fixtureKey", "back")
-    focusSetting(page, "support")
-    check(page.findNode("supportQrPoster").visible and not inspect(page).options.visible, "Support shows actual local QR and hides options")
-    writes = m.global.fixtureWrites
-    page.callFunc("fixtureSelect")
-    check(writes = m.global.fixtureWrites and inspect(page).dialog = invalid, "Support selection preserves its no-op behavior")
+    check(settingIndex(page, "support") = -1, "donation action is absent from the actual Settings menu")
+    check(page.findNode("supportQrPoster") = invalid, "donation QR poster is absent from the actual Settings page")
     section = { children: [{ title: "Nested", settingName: "fixture.nested", type: "bool", default: "false" }] }
     page.callFunc("fixtureHierarchy", section)
     check(inspect(page).levels = 2 and inspect(page).menu.content.getChildCount() = 1, "actual LoadMenu supports retained hierarchy")
     page.callFunc("fixtureKey", "back")
-    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 13 and not page.backPressed, "Back restores parent settings before page back")
+    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 12 and not page.backPressed, "Back restores parent settings before page back")
     page.callFunc("fixtureKey", "back")
     check(page.backPressed, "Back at root emits page back")
     page.backPressed = false

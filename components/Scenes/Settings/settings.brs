@@ -13,7 +13,6 @@ sub init()
     m.settingDesc = m.top.findNode("settingDesc")
     m.settingValue = m.top.findNode("settingValue")
     m.optionList = m.top.findNode("optionList")
-    m.supportQrPoster = m.top.findNode("supportQrPoster")
 
     m.keyboardDialog = invalid
     m.keyboardItem = invalid
@@ -173,7 +172,6 @@ sub settingFocused()
     m.settingDesc.text = settingDescription(item)
     m.settingValue.visible = false
     m.optionList.visible = false
-    m.supportQrPoster.visible = false
     m.optionSetting = invalid
 
     if item.type = invalid
@@ -183,11 +181,7 @@ sub settingFocused()
     else if item.type = "text"
         m.settingValue.text = Substitute(tr("Current: {0}"), settingValueText(item))
         m.settingValue.visible = true
-    else if item.type = "action"
-        if item.action = "support_stitch"
-            m.supportQrPoster.visible = true
-        end if
-    else
+    else if item.type <> "action"
         print "Unknown setting type " + item.type
     end if
 end sub
@@ -225,8 +219,6 @@ sub settingSelected()
             if selectedItem.action = "logout"
                 ' The signed-out account row is information only.
                 if isSignedIn() then confirmSignOut()
-            else if selectedItem.action = "support_stitch"
-                ' No-op: OK press on the QR item does nothing; focus already shows the QR poster.
             else
                 print "Unknown action: " + selectedItem.action
             end if

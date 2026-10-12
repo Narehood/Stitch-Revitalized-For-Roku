@@ -48,12 +48,6 @@
                 focusedColor="0xFFFFFFFF"
                 focusBitmapUri="pkg:/images/twitch-redesign/focus-round6.9.png"
                 focusFootprintBitmapUri="pkg:/images/transparent.9.png" />
-            <Poster
-                id="supportQrPoster"
-                uri="pkg:/images/qr_buymeacoffee.png"
-                width="240"
-                height="240"
-                visible="false" />
         </LayoutGroup>
     </children>
     <script type="text/brightscript" uri="settings.brs" />
