@@ -3,6 +3,13 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.4": [
+            "3.0.2 release (Roku package version 3.0.4)",
+            "Improved: Ad timing is preserved across supported Roku-only stream transitions",
+            "Improved: Lower live latency counts stream processing time toward its next playlist refresh",
+            "Updated: Upstream donation prompts are removed and What's New links to this project's issues",
+            "Lower live latency stays experimental and off by default"
+        ],
         "3.0.3": [
             "3.0.1 release (Roku package version 3.0.3)",
             "New: Lower live latency now reduces delay using the Roku itself, without another computer",

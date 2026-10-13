@@ -2,13 +2,21 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.1](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.1)** adds opt-in lower live latency and playback/sign-in fixes to the modernized channel. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.3 so it updates correctly after the earlier release and alpha builds.
+**[3.0.2](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.2)** improves ad timing and opt-in live playlist refreshes, and removes upstream donation prompts. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.4 so it updates correctly after the earlier release and alpha builds.
 
-**[Download the 3.0.1 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.1/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.0.2 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.2/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.1
+## What's new in 3.0.2
+
+- **Ad timing across stream transitions:** supported Roku-only playback retains verified timestamps and ad cues on both tracks across accepted segment changes. Ambiguous optional timing falls back to ordinary playback. Seamless ad transitions and wider device coverage remain under verification.
+- **Opt-in playlist refreshes:** processing time now counts toward the next source reload, with source-derived refresh intervals and existing resource limits preserved. A further reduction in displayed delay is still being measured.
+- **Donation prompts removed:** the upstream support row and QR image are gone; What's New points directly to this project's GitHub issues page.
+
+Playback-speed catch-up remains separate research and is not enabled in this release.
+
+### Also included from 3.0.1
 
 - **Lower live latency without another computer:** the opt-in setting now serves trimmed live playlists from the Roku while media downloads directly from Twitch. On one Roku TV, direct playback measured about 8–11 seconds behind live rather than about 21; Roku-only streams measured about 16–17 rather than about 25. It remains experimental and off by default, with ad breaks, slower networks and wider devices still under verification.
 - **Playback and sign-in follow-ups:** relay failures fall back to the direct source, transient failures can retry, and stream/quality changes retain bounded recovery. Sign-in is preserved when Twitch reports a non-expiring token.
