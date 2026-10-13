@@ -79,15 +79,18 @@ async function withFixture(action) {
         }
         const main = await fs.readFile(fixture, 'utf8');
         assert.deepEqual(bsc.Parser.parse(main, {mode: bsc.ParseMode.BrightScript}).diagnostics, []);
-        const execute = async (replacement) => {
+        const execute = async (replacement, replacementFile = 'source/utils/twitchAdClock.brs') => {
             const marker = randomUUID();
-            if (replacement) await fs.writeFile(path.join(dir, 'twitchAdClock.brs'), replacement);
+            for (const file of ['source/utils/twitchAdClock.brs', 'source/utils/twitchAdProtocol.brs']) {
+                await fs.writeFile(path.join(dir, path.basename(file)), originals.get(file));
+            }
+            if (replacement) await fs.writeFile(path.join(dir, path.basename(replacementFile)), replacement);
             await fs.writeFile(path.join(dir, 'main.brs'), main.replaceAll('__MARKER__', marker));
             const result = await child([path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), '--no-sg', '--root', dir,
                 ...files.map(file => path.basename(file)), 'main.brs'], dir);
             return {...result, marker};
         };
-        await action({execute, source: originals.get('source/utils/twitchAdClock.brs').toString()});
+        await action({execute, sources: originals});
         for (const [file, bytes] of originals) assert.deepEqual(await fs.readFile(path.join(root, file)), bytes);
     } finally {
         assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
@@ -103,14 +106,18 @@ test('actual presented UTC adapter and immutable source-bound manifest projectio
     });
 });
 
-test('actual epoch and source-epoch guard removals fail despite normal engine exit', {timeout: 75000}, async t => {
-    await withFixture(async ({execute, source}) => {
-        for (const [before, after] of [
-            ['if info.epoch <> 1 then return invalid', 'if info.epoch <> 0 and info.epoch <> 1 then return invalid'],
-            ['if match.epoch <> epoch or match.durationUs <> target.durationUs then return invalid', 'if match.durationUs <> target.durationUs then return invalid']
+test('actual native/source/local epoch and UTC guards fail despite normal engine exit', {timeout: 160000}, async t => {
+    await withFixture(async ({execute, sources}) => {
+        for (const [file, before, after] of [
+            ['source/utils/twitchAdClock.brs', 'if info.epoch <> 1 then return invalid', 'if info.epoch <> 0 and info.epoch <> 1 then return invalid'],
+            ['source/utils/twitchAdClock.brs', 'if match.epoch <> epoch or match.durationUs <> target.durationUs then return invalid', 'if match.durationUs <> target.durationUs then return invalid'],
+            ['source/utils/twitchAdProtocol.brs', 'if match.epoch <> saved.sourceEpoch or selected.epoch <> saved.sourceEpoch then return invalid', 'if selected.epoch <> saved.sourceEpoch then return invalid'],
+            ['source/utils/twitchAdProtocol.brs', 'if anchor.epoch <> target.epoch then return false', "' Deliberately removed local boundary binding"],
+            ['source/utils/twitchAdClock.brs', 'if segment.epoch <> previous.epoch and difference < 0& then return false', "' Deliberately removed cross-epoch UTC nonoverlap"]
         ]) {
+            const source = sources.get(file).toString();
             assert.equal(source.split(before).length, 2, 'unique actual guard mutation');
-            const result = await execute(source.replace(before, after));
+            const result = await execute(source.replace(before, after), file);
             normal(result);
             assert.throws(() => positive(result, result.marker));
             assert.match(result.output, /STITCH_AD_CLOCK_FAIL:/);

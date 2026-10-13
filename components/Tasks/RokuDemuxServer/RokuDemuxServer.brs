@@ -155,8 +155,7 @@ sub serveBoundedLive()
     ' The player starts at the window's first segment, so its length sets
     ' the delay: 14 s measured ~25 s behind live and 8 s ~17 s on a G204X.
     ' Six seconds ran dry about 20 s in before the parsing stalls were fixed.
-    m.liveState.windowUs = 14000000&
-    if m.top.lowLatency then m.liveState.windowUs = 8000000&
+    configureLiveLatency(m.liveState)
     m.result["experimentalUnknownFramingTransport"] = true
     ' Drop the signed private input from the harness's config immediately.
     m.config.Delete("trustedMediaUrl")
@@ -213,6 +212,12 @@ sub serveBoundedLive()
     else if m.result.reason = "not_started"
         m.result.reason = "server_deadline"
     end if
+end sub
+
+sub configureLiveLatency(state as object)
+    state.windowUs = 14000000&
+    state.pollFromRequest = m.top.lowLatency
+    if m.top.lowLatency then state.windowUs = 8000000&
 end sub
 
 function bindLiveListener() as boolean
@@ -431,7 +436,7 @@ function pumpLiveServer(delayMs as integer) as boolean
             m.publications[key] = { "publication": publication, "holdUntilMs": 0&, "activeRequests": 0&, "delivered": false }
             if m.adMetadataEnabled
                 entry = m.publications[key]
-                entry.adProjection = twitchAdClockPublication(m.liveState, publication)
+                entry.adProjection = twitchAdClockServerPublication(m.liveState, publication)
                 entry.adProjectionSeal = FormatJson(entry.adProjection)
                 m.publications[key] = entry
             end if

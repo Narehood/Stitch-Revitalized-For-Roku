@@ -144,6 +144,7 @@ sub nlStart(state as object, intent as object, phase as string, port as object, 
     else
         state.ownInputFile = true
         nlCheck(transfer.AsyncGetToFile(nlInputPath()), "GET could not start")
+        if intent.kind = "playlist" then nativeLivePlaylistStarted(state, nowMs)
     end if
 end sub
 
@@ -250,6 +251,7 @@ function nativeLiveClose(state as object) as boolean
         if asset.leases > 0 then return false
     end for
     if not clean then return false
+    nlClearPlaylistPoll(state)
     state.input = invalid
     state.temporaryVideo = invalid
     state.pendingSegment = invalid

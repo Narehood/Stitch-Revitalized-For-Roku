@@ -142,8 +142,9 @@ function twitchAdClockTimelineValid(timeline as dynamic) as boolean
         if utc <> segment.startUs or utc > 2147483647000000& then return false
         if previous <> invalid
             if segment.sequence <> previous.sequence + 1& or segment.epoch < previous.epoch then return false
+            difference = segment.startUs - previous.startUs - previous.durationUs
+            if segment.epoch <> previous.epoch and difference < 0& then return false
             if segment.epoch = previous.epoch
-                difference = segment.startUs - previous.startUs - previous.durationUs
                 if difference < 0& or difference > 1000& then return false
             end if
         end if
