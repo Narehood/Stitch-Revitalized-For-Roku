@@ -33,7 +33,6 @@ function getChangelog() as object
         ],
         "2.5.0": [
             "Experimental: Lower live latency is available in Settings; it is off by default and improvement remains unmeasured",
-            "New: Donate via Buy Me a Coffee — find the QR code in Settings",
             "Fix: Focus highlight now visible on channel pages and all grid views",
             "Fix: Error tracking now includes more detail to help diagnose crashes faster"
         ],

@@ -130,7 +130,7 @@ sub showChangelogDialog()
 
     lines = m.pendingChangelog
     lines.push("")
-    lines.push("Found a bug or have a suggestion? Visit bit.ly/roku-twitch")
+    lines.push("Found a bug or have a suggestion? Report it at github.com/Narehood/Stitch-Revitalized-For-Roku/issues")
 
     dialog = createObject("roSGNode", "StandardMessageDialog")
     dialog.title = "What's New"

@@ -968,14 +968,6 @@
             <translation>Comparte el uso de la app y detalles del dispositivo para ayudar a mejorar Stitch. Desactivado por defecto. Los cambios se aplican la próxima vez que abras la app.</translation>
         </message>
         <message>
-            <source>Support Stitch</source>
-            <translation>Apoya a Stitch</translation>
-        </message>
-        <message>
-            <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
-            <translation>Stitch es un cliente de Twitch gratuito creado por la comunidad. Si te resulta útil, escanea el código QR para apoyar su desarrollo en Buy Me a Coffee. ¡Gracias!</translation>
-        </message>
-        <message>
             <source>Playlist selection unavailable</source>
             <extracomment>Translation awaits native-speaker review.</extracomment>
             <translation>No se pudo seleccionar la lista de reproducción</translation>
