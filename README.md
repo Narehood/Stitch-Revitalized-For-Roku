@@ -2,13 +2,17 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.2](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.2)** improves ad timing and opt-in live playlist refreshes, and removes upstream donation prompts. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.4 so it updates correctly after the earlier release and alpha builds.
+**[3.0.3](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.3)** is a maintenance release that refreshes the build and test tooling; the channel behaves the same as 3.0.2. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.5 so it updates correctly after the earlier release and alpha builds.
 
-**[Download the 3.0.2 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.2/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.0.3 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.3/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.2
+## What's new in 3.0.3
+
+- **Toolchain maintenance:** builds use BrighterScript 0.73.6 and brighterscript-formatter 1.8.4, and offline tests run on brs-node 2.6.1. Playback, interface and settings are unchanged from 3.0.2.
+
+### Also included from 3.0.2
 
 - **Ad timing across stream transitions:** supported Roku-only playback retains verified timestamps and ad cues on both tracks across accepted segment changes. Ambiguous optional timing falls back to ordinary playback. Seamless ad transitions and wider device coverage remain under verification.
 - **Opt-in playlist refreshes:** processing time now counts toward the next source reload, with source-derived refresh intervals and existing resource limits preserved. A further reduction in displayed delay is still being measured.

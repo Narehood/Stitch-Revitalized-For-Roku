@@ -3,6 +3,11 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.5": [
+            "3.0.3 release (Roku package version 3.0.5)",
+            "Maintenance: Updated build and test tooling",
+            "No playback or interface changes from 3.0.2"
+        ],
         "3.0.4": [
             "3.0.2 release (Roku package version 3.0.4)",
             "Improved: Ad timing is preserved across supported Roku-only stream transitions",
