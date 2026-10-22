@@ -457,6 +457,13 @@ sub testSourceTransitionClassification()
         { ready: true, reason: "live_helper_failed", helper: {}, expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: invalid, expected: "worker_finished" }
     ]
+    for each status in [401, 403, 500, 502, 503, 599]
+        cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: status, expected: "source_transition", label: "recoverable HTTP status " + status.ToStr() })
+    end for
+    for each status in [200, 206, 301, 400, 404, 416, 429, 0, -1, 600, "503", true, {}, 503.5]
+        cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: status, hasRange: true, expected: "worker_finished", label: "deterministic or malformed HTTP result" })
+    end for
+    cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: 200, hasRange: false, expected: "worker_finished", label: "inconsistent successful GET result" })
     for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity", "native-live: GET status or range unsupported"]
         for each field in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
             for each value in [false, invalid, "true", 1]
@@ -481,6 +488,8 @@ sub testSourceTransitionClassification()
         result = cleanupFor(id)
         result.reason = item.reason
         result.helperFailureReason = item.helper
+        if item.DoesExist("status") then result.upstreamStatus = item.status
+        if item.DoesExist("hasRange") then result.upstreamHasRange = item.hasRange
         if item.DoesExist("badField")
             if item.badValue = invalid
                 result.Delete(item.badField)

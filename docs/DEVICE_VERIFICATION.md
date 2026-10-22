@@ -18,7 +18,7 @@ The watched package SHA256 was `847d4e758435cfc85ac45c41964ec7a6be11319087d36657
 
 ## October 22 menu Back and lower-latency follow-up
 
-On the same G204X / Roku OS 15.3.4, the actual player quality picker remained visible after a remote Back press. It was an XML child `StandardMessageDialog` outside `Scene.dialog`. The repaired picker is created at runtime, registered as the Scene modal, observes `wasClosed`, and restores the controls on dismissal without requesting a quality change. Native screenshots confirm that Back closes it and leaves the Quality control focused. Top-navigation Back also returns focus to the existing Following page. Cleanup releases only the owned modal; a replacement error dialog keeps ownership and focus.
+On the same G204X / Roku OS 15.3.4, the actual player quality picker remained visible after a remote Back press. It was an XML child `StandardMessageDialog` outside `Scene.dialog`. The repaired picker is created at runtime, registered as the Scene modal, observes `wasClosed`, and restores the controls on dismissal without requesting a quality change. Native screenshots confirm that Back closes it and leaves the Quality control focused. An additional top-navigation Back shortcut returned focus to the existing Following page in this package; the PR 136 follow-up below removes that shortcut. Cleanup releases only the owned modal; a replacement error dialog keeps ownership and focus.
 
 The beta tag was present during an active Roku-only low-latency session. The earlier passive capture recorded a stable Roku-reported offset near 14.8 seconds, with no repeat worker error in the retained samples; the monitoring process ended before its planned 75 minutes, so this is not a completed 75-minute acceptance run.
 
@@ -31,6 +31,12 @@ Follow-up checks passed **113 UI assertions**, **59 player-wrapper assertions**,
 The final regular package, SHA256 `8ce91eaf08af2c637ce5db278b6f6471cb53bcc1bc91ac5ea75e66ae2c04f904`, was restored and opened TheBurntPeanut through Following. Native Back again closed the quality picker and restored its control; playback continued past 229 seconds without a player error, with the Roku-reported offset around 12.8 seconds. Private capture helpers were then stopped, leaving the stream playing. No commit, push or publication was performed.
 
 After TheBurntPeanut went offline, the user requested another live stream. Jynxzi was selected through the real Following card on the same installed package. All **13 samples over one minute** reported playing without error, with position advancing on every sample from **19.541 to 80.541 seconds**. ECP reported AVC video and AAC ADTS audio in a multiplexed HLS stream; this exercises direct playback rather than the Roku-only splitter. The experimental tag was visible, and Roku's segment-latency diagnostic settled at **9,524 ms**. This is Roku-reported live-edge distance, not a new frame-timestamp comparison. Remote Back closed the quality picker and restored its control without interrupting playback. The user confirmed that picture and audio were good. Private sampling and capture were stopped, leaving Jynxzi playing; no deployment, preference change or production code edit was needed for this stream switch.
+
+## PR 136 review follow-up: native acceptance boundaries
+
+The review follow-up keeps the six-second opt-in native window and changes only its requested `PlayStart` from four to zero; default native LIVE keeps four. This addresses devices that honor the offset while preserving the complete minimum window. Earlier G204X measurements above used the previous request and remain historical evidence; no native delay or sustained-playback claim is made for the adjusted request.
+
+The unrelated top-navigation Back change was removed after both hosted CI platforms reproduced player-cleanup and app-exit failures. The player quality-menu repair remains. HTTP GET recovery is now limited to unknown legacy status, 401/403 and 5xx; known framing failures such as 200 plus `Content-Range` are terminal. The live channel card also receives current title, viewers and category through the API boundary. The deployed TV package remains unchanged; these follow-ups have offline regression coverage, while real-service and native acceptance remain separate.
 
 ## Latest Alpha 1 full-app observations
 

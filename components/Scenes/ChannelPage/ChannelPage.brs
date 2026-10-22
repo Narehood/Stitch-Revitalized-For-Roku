@@ -113,10 +113,15 @@ function buildContentNodeFromShelves(rsp)
         rowItem = m.top.contentRequested
         if rowItem.contentType <> "LIVE"
             request = rowItem
+            liveTitle = rsp.liveTitle
+            if GetInterface(liveTitle, "ifString") = invalid then liveTitle = ""
+            if liveTitle = "" then liveTitle = channelName()
             rowItem = createObject("roSGNode", "TwitchContentNode")
             setTwitchContentFields(rowItem, {
                 contentType: "LIVE",
-                contentTitle: channelName(),
+                contentTitle: liveTitle,
+                viewersCount: rsp.liveViewersCount,
+                gameDisplayName: rsp.liveGameDisplayName,
                 streamerLogin: request.streamerLogin,
                 streamerDisplayName: request.streamerDisplayName,
                 streamerId: request.streamerId,

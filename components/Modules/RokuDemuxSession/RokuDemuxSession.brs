@@ -199,9 +199,17 @@ function sessionWorkerFailureReason(result as object) as string
     ' Restart a new timeline; never reuse the refused epoch or its init/cache.
     ' A slow or stalled upstream fetch (seen when an ad break starts), or a
     ' stall long enough to fall behind the retained upstream history, is
-    ' transient too: a fresh session restarts at the live edge. A rejected GET
-    ' also needs fresh playback resolution; never accept its rejected bytes.
-    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" or result.helperFailureReason = "native-live: upstream operation deadline" or result.helperFailureReason = "native-live: upstream progress deadline" or result.helperFailureReason = "native-live: continuity window segment bound" or result.helperFailureReason = "native-live: continuity history unavailable" or result.helperFailureReason = "native-live: source sequence gap" or result.helperFailureReason = "native-live: GET status or range unsupported" then return "source_transition"
+    ' transient too: a fresh session restarts at the live edge.
+    if result.helperFailureReason = "native-live: GET status or range unsupported"
+        ' Refresh unknown legacy failures, expired authorization and server errors.
+        ' A deterministic framing rejection must not spend the reconnect budget.
+        status = result.upstreamStatus
+        if status = invalid then return "source_transition"
+        if not rokuDemuxInteger(status) then return "worker_finished"
+        if status = 401 or status = 403 or (status >= 500 and status <= 599) then return "source_transition"
+        return "worker_finished"
+    end if
+    if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" or result.helperFailureReason = "native-live: upstream operation deadline" or result.helperFailureReason = "native-live: upstream progress deadline" or result.helperFailureReason = "native-live: continuity window segment bound" or result.helperFailureReason = "native-live: continuity history unavailable" or result.helperFailureReason = "native-live: source sequence gap" then return "source_transition"
     return "worker_finished"
 end function
 

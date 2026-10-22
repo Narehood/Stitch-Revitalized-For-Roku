@@ -495,10 +495,6 @@ end sub
 function onKeyEvent(key, press) as boolean
     if not press then return false
     if key = "back"
-        if m.menu.isInFocusChain() and m.activeNode <> invalid
-            m.activeNode.setFocus(true)
-            return true
-        end if
         ' The rail does not consume Back; return to the page it was entered
         ' from, whose focus handler restores the remembered RowList item.
         if m.recentBar <> invalid and m.recentBar.itemHasFocus = true and m.activeNode <> invalid

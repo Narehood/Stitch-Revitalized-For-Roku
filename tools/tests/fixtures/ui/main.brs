@@ -44,18 +44,44 @@ sub testRetainedSelection(scene as object, fixtureGlobal as object)
     setTwitchContentFields(content, cardFields("USER", "went-live"))
     page.contentRequested = content
     s = inspect(page)
-    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2 }
+    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2, liveTitle: "A live stream title", liveViewersCount: 2468, liveGameDisplayName: "Fixture Game" }
     page.callFunc("fixtureSelect", 0)
     selected = page.contentSelected
     check(page.playContent and selected.contentType = "LIVE", "fresh live status turns an offline channel request into playable LIVE content")
     check(selected.streamerLogin = content.streamerLogin and selected.streamerDisplayName = content.streamerDisplayName, "fresh live card preserves channel identity")
     check(content.contentType = "USER" and not content.isSameNode(selected), "building the live card preserves the original navigation request")
-    content.contentType = "VOD"
+    check(selected.contentTitle = "A live stream title" and selected.gameDisplayName = "Fixture Game" and selected.viewersDisplay = "2.4K Viewers", "new LIVE card carries current title category and formatted viewers")
+    card = createObject("roSGNode", "VideoItem")
+    scene.appendChild(card)
+    ' Keep the actual card text handlers; only thumbnail fetching is local.
+    rendered = createObject("roSGNode", "TwitchContentNode")
+    setTwitchContentFields(rendered, selected.getFields())
+    rendered.previewImageURL = "pkg:/images/default_banner.png"
+    card.itemContent = rendered
+    check(card.findNode("itemLabel").text = "A live stream title", "the real LIVE card renders its stream title")
+    check(card.findNode("itemViewers").text = "2.4K Viewers", "the real LIVE card renders its viewer count")
+    check(card.findNode("itemSubtitle").text.InStr("Fixture Game") >= 0, "the real LIVE card renders its category")
+    card.callFunc("onDestroy")
+    scene.removeChild(card)
+    disposePage(scene, page)
+    page = addPage(scene, "ChannelPage")
+    content = createObject("roSGNode", "TwitchContentNode")
+    setTwitchContentFields(content, cardFields("VOD", "went-live"))
     content.contentId = "old-recording"
-    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2 }
+    content.contentTitle = "Old recording title"
+    content.gameDisplayName = "Old recording game"
+    content.viewersCount = 9000
+    page.contentRequested = content
+    s = inspect(page)
+    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2, liveTitle: "A current live title", liveViewersCount: 2468, liveGameDisplayName: "Fixture Game" }
     page.callFunc("fixtureSelect", 0)
     check(page.contentSelected.contentType = "LIVE" and page.contentSelected.contentId <> "old-recording", "Live now opened through a Search VOD cannot replay that recording")
     check(content.contentType = "VOD" and content.contentId = "old-recording", "live playback leaves the original VOD navigation identity intact")
+    check(page.contentSelected.contentTitle = "A current live title" and page.contentSelected.gameDisplayName = "Fixture Game" and page.contentSelected.viewersCount = 2468, "VOD navigation gets live metadata instead of recording metadata")
+    check(content.contentTitle = "Old recording title" and content.gameDisplayName = "Old recording game" and content.viewersCount = 9000, "live metadata leaves the original recording unchanged")
+    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2 }
+    page.callFunc("fixtureSelect", 0)
+    check(page.contentSelected.contentTitle = content.streamerDisplayName and page.contentSelected.gameDisplayName = "" and page.contentSelected.viewersCount = 0, "missing live metadata falls back without carrying recording metadata")
     disposePage(scene, page)
 end sub
 
@@ -307,8 +333,6 @@ sub testRoute(scene as object)
     check(route.after.id = "Browse" and route.active = "Browse" and route.focus = "Browse", "Following child Browse action executes actual hero navigation and menu state")
     check(route.before.callFunc("fixtureRead").disposed and route.task.control = "stop", "hero routing disposes the departing page")
     check(route.afterStale.isSameNode(route.after), "disposed Following menuRequest cannot reroute the active page")
-    check(not route.backRelease and route.menuKeptFocus, "releasing Back leaves menu focus unchanged")
-    check(route.backHandled and route.pageRegainedFocus and route.samePage, "Back from MenuBar restores the current page without navigating away")
 end sub
 
 sub testSearch(scene as object)

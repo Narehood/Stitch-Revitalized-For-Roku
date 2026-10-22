@@ -19,6 +19,9 @@ function getChannelHomeQuery() as object
         followerCount: channel?.followers?.totalCount ?? 0,
         profileImageUrl: channel?.profileImageUrl,
         isLive: channel?.stream <> invalid,
+        liveTitle: channel?.broadcastSettings?.title ?? "",
+        liveViewersCount: channel?.stream?.viewersCount ?? 0,
+        liveGameDisplayName: channel?.stream?.game?.displayName ?? "",
         videoShelves: channel?.videoShelves?.edges ?? []
     }
     m.top.control = TaskControl.STOP

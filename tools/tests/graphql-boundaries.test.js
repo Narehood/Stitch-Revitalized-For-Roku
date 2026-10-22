@@ -42,7 +42,7 @@ const following = (live, offline, shelfCount = 0) => rsp => {
     assert.deepEqual(rsp.offlinefollows.map(item => item.streamerlogin), offline);
     assert.equal(rsp.shelves.length, shelfCount);
 };
-const channelOffline = { description: '', followercount: 0, islive: false, profileimageurl: null, videoshelves: [] };
+const channelOffline = { description: '', followercount: 0, islive: false, profileimageurl: null, videoshelves: [], livetitle: '', liveviewerscount: 0, livegamedisplayname: '' };
 
 // attributed: the expected outcome depends on matching an error to the null
 // field it explains. The negative control below disables only that matching.
@@ -109,7 +109,10 @@ const cases = [
     ['channel not found', 'getChannelHomeQuery', false, { params: { id: 'fixture' } }, { data: { channel: null } }, rsp => assert.deepEqual(rsp, channelOffline)],
     ['channel partial', 'getChannelHomeQuery', true, { params: { id: 'fixture' } },
         { data: { channel: { description: 'About', followers: { totalCount: 12 }, profileImageUrl: 'avatar', stream: { id: 'live' }, videoShelves: null } }, errors: [at('channel', 'videoShelves')] },
-        rsp => assert.deepEqual(rsp, { description: 'About', followercount: 12, islive: true, profileimageurl: 'avatar', videoshelves: [] })],
+        rsp => assert.deepEqual(rsp, { ...channelOffline, description: 'About', followercount: 12, islive: true, profileimageurl: 'avatar' })],
+    ['channel live metadata', 'getChannelHomeQuery', false, { params: { id: 'fixture' } },
+        { data: { channel: { broadcastSettings: { title: 'A live stream title' }, stream: { id: 'live', viewersCount: 2468, game: { displayName: 'Fixture Game' } }, videoShelves: { edges: [] } } } },
+        rsp => { assert.equal(rsp.livetitle, 'A live stream title'); assert.equal(rsp.liveviewerscount, 2468); assert.equal(rsp.livegamedisplayname, 'Fixture Game'); }],
 
     ['game errors-only', 'getGameDirectoryQuery', false, { params: { gameAlias: 'Fixture' } }, errorsOnly, isInvalid],
     ['game data null', 'getGameDirectoryQuery', false, { params: { gameAlias: 'Fixture' } }, dataNull, isInvalid],

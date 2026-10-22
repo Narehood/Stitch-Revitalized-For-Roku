@@ -6,6 +6,7 @@
     try
         testLateBindingAndOrdinaryPaths()
         testChoiceReadyAndBack()
+        testNativeLiveStartupWindow()
         testCancelledStartAndDisposal()
         testDirectSwitch()
         testLowLatencyRelay()
@@ -941,6 +942,35 @@ sub testLateBindingAndOrdinaryPaths()
     check(m.scene.dialog = invalid and player.callFunc("fixtureRead").video.control = "play", "Python proxied combined content follows ordinary playback without opt-in")
     check(player.content.isProxied and not player.content.ForwardQueryStringParams and calls(session, "start").count() = 0, "optional service flags remain intact")
     closePlayer(player)
+end sub
+
+sub testNativeLiveStartupWindow()
+    for each opted in [false, true]
+        setting = "false"
+        if opted then setting = "true"
+        set_user_setting("playback.lowLatency", setting)
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        deliver(player, content("roku-demux"))
+        chooseRoku(player)
+        ready(session, player.callFunc("fixtureRead").sessionId)
+        video = player.callFunc("fixtureRead").video
+        expected = 4
+        if opted then expected = 0
+        check(video.content.PlayStart = expected, "native startup requests the correct offset for its latency mode")
+        if opted
+            for each count in [3, 8]
+                segments = []
+                for index = 0 to count - 1
+                    segments.push({ sequence: index + 0&, durationUs: 2000000&, mapUrl: "https://fixture.invalid/init.mp4", epoch: 0& })
+                end for
+                window = nlWindow({ ended: false, segments: segments, targetDuration: 2 }, 0&, false, false, 6000000&)
+                check(window.durationUs - video.content.PlayStart * 1000000& >= 6000000&, "actual selected window retains six seconds after the requested native start")
+            end for
+        end if
+        closePlayer(player)
+    end for
+    set_user_setting("playback.lowLatency", "true")
 end sub
 
 sub testChoiceReadyAndBack()

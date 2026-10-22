@@ -337,9 +337,12 @@ sub playContent(isRecovery = false as boolean)
             ' when shorter, so the lower-latency relay shortens the playlist.
             ' https://developer.roku.com/dev/docs/specs/media (live edge spec)
             contentNodeToPlay.PlayStart = 2147483647
-            ' The on-Roku splitter publishes ~14 s windows in bursts. Starting
-            ' at the default edge leaves a 6 s cushion that runs dry ~20 s in.
-            if m.rokuSessionId <> "" then contentNodeToPlay.PlayStart = 4
+            ' Retain the default splitter's startup offset. The shorter opt-in
+            ' window requests its first segment so all available headroom remains.
+            if m.rokuSessionId <> ""
+                contentNodeToPlay.PlayStart = 4
+                if m.rokuLowLatency then contentNodeToPlay.PlayStart = 0
+            end if
         else if isClipContent
             contentNodeToPlay.ignoreStreamErrors = false
             contentNodeToPlay.switchingStrategy = "no-adaptation"

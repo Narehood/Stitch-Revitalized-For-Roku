@@ -75,9 +75,13 @@ async function buildPackage(dir, marker) {
         'components/Modules/RecentlyWatchedBar/RecentlyWatchedItem.brs',
     ]) await copyFile(dir, file);
     for (const folder of [
-        'fonts', 'images', 'components/Modules/StatusPanel', 'components/Modules/TwitchContentNode',
+        'fonts', 'images', 'components/Modules/StatusPanel', 'components/Modules/TwitchContentNode', 'components/Modules/VideoItem', 'components/Modules/EmojiLabel',
         'components/Modules/CirclePoster', 'components/Modules/MenuBar/ButtonGroupHoriz',
     ]) await copyTree(dir, folder);
+    // The interpreter cannot compile the native Unicode emoji regex. Keep the
+    // actual label/card handlers and use the existing pattern-source boundary.
+    await addFile(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs',
+        await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/EmojiLabelRegex.brs')));
 
     // These are explicit I/O/view boundaries, never substitute tested handlers.
     // Native Task worker startup can crash in canvas; Groups retain real native
@@ -139,7 +143,7 @@ end sub
     // playback remain outside this fixture; no copied navigation implementation.
     await addFile(dir, 'components/HeroActual.brs', await selectFunctions('components/heroScene.brs', [
         'buildNode', 'discardScene', 'teardownAllScenes', 'openPage', 'onMenuRequest',
-          'isContentTab', 'hideStartupStatus', 'showChangelogDialog', 'onKeyEvent',
+        'isContentTab', 'hideStartupStatus', 'showChangelogDialog',
     ]));
 }
 
