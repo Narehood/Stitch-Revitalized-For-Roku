@@ -94,6 +94,13 @@ async function buildPackage(dir, marker) {
     const detailProbe = `function fixtureRead() as object
     return { task: m.GetContentTask, shell: m.GetShellTask, disposed: m.disposed, rowlist: m.rowlist, status: m.status, signedIn: m.signedIn }
 end function
+sub fixtureSelect(row as integer)
+    ' Only the read-only RowList selection fields are an input boundary.
+    original = m.rowlist
+    m.rowlist = { content: original.content, focusedChild: { id: "fixture" }, rowItemSelected: [row, 0] }
+    handleItemSelected()
+    m.rowlist = original
+end sub
 `;
     for (const name of ['Following', 'GamePage', 'ChannelPage']) {
         const replacements = [rowBoundary];
@@ -118,7 +125,7 @@ end sub
 end function
 `, [rowBoundary, ['<DynamicMiniKeyboard', '<KeyboardBoundary']]);
     await addComponent(dir, 'components/Modules/MenuBar', 'MenuBar', `function fixtureRead() as object
-    return { tabs: m.menuOptions, icons: m.iconOptions, caption: m.iconCaption, label: m.iconCaptionLabel, disposed: m.disposed }
+    return { tabs: m.menuOptions, icons: m.iconOptions, caption: m.iconCaption, label: m.iconCaptionLabel, disposed: m.disposed, loginTask: m.loginIconTask, profileId: get_user_setting("id", "") }
 end function
 `);
     await addComponent(dir, 'components/Modules/RecentlyWatchedBar', 'RecentlyWatchedBar', `function fixtureRead() as object
@@ -132,7 +139,7 @@ end sub
     // playback remain outside this fixture; no copied navigation implementation.
     await addFile(dir, 'components/HeroActual.brs', await selectFunctions('components/heroScene.brs', [
         'buildNode', 'discardScene', 'teardownAllScenes', 'openPage', 'onMenuRequest',
-        'isContentTab', 'hideStartupStatus', 'showChangelogDialog',
+          'isContentTab', 'hideStartupStatus', 'showChangelogDialog', 'onKeyEvent',
     ]));
 }
 

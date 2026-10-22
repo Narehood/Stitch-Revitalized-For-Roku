@@ -54,7 +54,7 @@
     <field id="showSearchIcon" type="bool" value="true" onChange="updateMenuOptions" />
     <field id="showSettingsIcon" type="bool" value="true" onChange="updateMenuOptions" />
     <field id="showLoginIcon" type="bool" value="true" onChange="updateMenuOptions" />
-    <field id="updateUserIcon" type="bool" value="false" />
+    <field id="updateUserIcon" type="bool" value="false" alwaysNotify="true" />
     <!-- Id of the tab whose page is open; shown as active when not focused -->
     <field id="activeItem" type="string" value="" />
     <!-- Moves the tab focus marker to this id without selecting it -->

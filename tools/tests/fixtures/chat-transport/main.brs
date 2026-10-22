@@ -54,6 +54,7 @@ sub main()
     __CONNECTION_TESTS__
     __SEND_TESTS__
     __JOB_TESTS__
+    __MODERATION_TESTS__
     if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions"
 end sub
 
@@ -156,10 +157,149 @@ sub runJobTests()
     check(getGlobalAA().sentText.instr("oauth:") < 0 and getGlobalAA().sentText.instr("FixtureSentinelA1") < 0, "failed first send never transmits account credentials")
 end sub
 
+' Twitch moderation through the actual parser, connection loop and publisher.
+' The socket returns scripted lines; the wait boundary stands in for the renderer.
+sub runModerationTests()
+    deleted = ircModerationEvent(ircParseMessage("@login=bob;room-id=1;target-msg-id=B2-ID :tmi.twitch.tv CLEARMSG #canned :FixtureDeletedText"))
+    check(deleted <> invalid and deleted.kind = "message" and deleted.id = "b2-id", "CLEARMSG targets one normalized message ID")
+    check(ircModerationEvent(ircParseMessage("@login=bob;room-id=1 :tmi.twitch.tv CLEARMSG #canned :FixtureDeletedText")) = invalid, "CLEARMSG without a target is ignored")
+    room = ircModerationEvent(ircParseMessage("@room-id=1;tmi-sent-ts=1642715695392 :tmi.twitch.tv CLEARCHAT #canned"))
+    check(room <> invalid and room.kind = "room", "CLEARCHAT naming nobody clears the room")
+    purge = ircModerationEvent(ircParseMessage("@ban-duration=350;room-id=1;target-user-id=202 :tmi.twitch.tv CLEARCHAT #canned :Bob"))
+    check(purge <> invalid and purge.kind = "user" and purge.userId = "202" and purge.login = "bob", "CLEARCHAT naming a user purges by ID and login")
+    check(ircModerationEvent(ircParseMessage(":tmi.twitch.tv CLEARCHAT #canned :bad login")) = invalid, "a malformed purge target is ignored, never widened to the room")
+    check(ircModerationEvent(ircParseMessage("@target-user-id= :tmi.twitch.tv CLEARCHAT #canned")) = invalid, "an empty purge target is ignored, never widened to the room")
+    check(ircModerationEvent(ircParseMessage(":a!a@a PRIVMSG #canned :hi")) = invalid, "chat messages are not moderation")
+    tagless = ircMessageIdentity(ircParseMessage(":Fallback!fallback@host PRIVMSG #canned :no tags"))
+    check(tagless.id = "" and tagless.userId = "" and tagless.login = "fallback", "tagless messages keep only their login identity")
+    check(not ircModerationMatches(tagless, { kind: "message", id: "", userId: "", login: "" }), "an absent message ID matches no deletion")
+    check(not ircModerationMatches(tagless, { kind: "user", id: "", userId: "", login: "other" }), "a purge of another login keeps the message")
+    check(ircModerationMatches(tagless, { kind: "user", id: "", userId: "202", login: "fallback" }), "a purge without a retained user ID falls back to login")
+    check(ircModerationMatches(invalid, room) and not ircModerationMatches(invalid, purge), "only a room clear matches a message without identity")
+
+    ' Messages wait behind a 60-second delay while the renderer is busy. Deletion,
+    ' purge, unknown and malformed notices arrive; later messages must survive.
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.clockStep = 10
+    state.liveAt = 8
+    state.stopAt = 60
+    m.top.delaySeconds = 60
+    state.script = [
+        ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+        privmsg("a1", "101", "alice", "first") + privmsg("b2", "202", "bob", "spam") + privmsg("c3", "303", "carol", "keep")
+        "@login=bob;room-id=1;target-msg-id=b2 :tmi.twitch.tv CLEARMSG #canned :FixtureDeletedText" + chr(13) + chr(10) + "@login=x;target-msg-id=ffff-unknown :tmi.twitch.tv CLEARMSG #canned :gone" + chr(13) + chr(10) + ":tmi.twitch.tv CLEARMSG #canned :untargeted" + chr(13) + chr(10) + ":tmi.twitch.tv CLEARCHAT #canned :bad login" + chr(13) + chr(10)
+        privmsg("d4", "202", "bob", "again") + privmsg("e5", "404", "dave", "hello") + "@ban-duration=60;room-id=1;target-user-id=202 :tmi.twitch.tv CLEARCHAT #canned :bob" + chr(13) + chr(10)
+        privmsg("f6", "202", "bob", "after timeout")
+    ]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.publishedBeforeLive = 3, "moderation publishes while the renderer is busy and the delay holds every message")
+    check(deliveredIds() = "a1,c3,e5,f6", "deleted queued message must never be delivered; purge removes only earlier messages")
+    check(stampsEqual(3), "delivered comments carry the moderation they survived")
+    events = publishedEvents()
+    check(publishedSeq() = 3 and events.count() = 3, "malformed notices publish nothing")
+    if events.count() = 3
+        check(events[0].kind = "message" and events[0].id = "b2" and events[0].seq = 1, "deletion publishes its message ID first")
+        check(events[1].kind = "message" and events[1].id = "ffff-unknown", "an unknown ID still reaches displayed messages harmlessly")
+        check(events[2].kind = "user" and events[2].userId = "202" and events[2].login = "bob" and events[2].seq = 3, "purge publishes user ID and login in order")
+    end if
+
+    ' A room clear empties the queue; a message after it is delivered.
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.clockStep = 10
+    state.liveAt = 5
+    state.stopAt = 30
+    m.top.delaySeconds = 60
+    state.script = [
+        ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+        privmsg("a1", "101", "alice", "first") + privmsg("b2", "202", "bob", "second") + "@room-id=1 :tmi.twitch.tv CLEARCHAT #canned" + chr(13) + chr(10) + privmsg("g7", "505", "erin", "after clear")
+    ]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(deliveredIds() = "g7", "room clear removes every queued message and keeps later ones")
+    events = publishedEvents()
+    check(publishedSeq() = 1 and events.count() = 1 and stampsEqual(1), "room clear is published before later delivery")
+    if events.count() = 1 then check(events[0].kind = "room", "room clear publishes a room event")
+
+    ' The published window stays bounded; numbering continues across reconnects.
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 3
+    burst = ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+    for index = 1 to 40
+        burst += "@target-msg-id=m" + index.toStr() + " :tmi.twitch.tv CLEARMSG #canned :x" + chr(13) + chr(10)
+    end for
+    state.script = [burst]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    events = publishedEvents()
+    check(m.moderationLog.count() = 32 and events.count() = 32 and publishedSeq() = 40, "the moderation window holds the latest 32 events")
+    if events.count() = 32 then check(events[0].seq = 9 and events[0].id = "m9" and events[31].id = "m40", "the window drops only the oldest events")
+    state.receiveCalls = 0
+    state.waits = 0
+    state.readMode = "script"
+    state.script = ["@target-msg-id=late :tmi.twitch.tv CLEARMSG #canned :x" + chr(13) + chr(10)]
+    m.top.stopRequested = false
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(publishedSeq() = 41 and m.moderationLog.count() = 32, "a reconnect continues numbering instead of repeating applied sequences")
+end sub
+
+function privmsg(id as string, userId as string, login as string, text as string) as string
+    return "@display-name=" + login + ";id=" + id + ";user-id=" + userId + " :" + login + "!" + login + "@" + login + ".tmi.twitch.tv PRIVMSG #canned :" + text + chr(13) + chr(10)
+end function
+
+' Stands in for Chat.onNewCommentObj: records each delivery and acknowledges it.
+sub scriptedRenderer(state as object)
+    if state.waits < state.liveAt and m.top.moderation <> invalid then state.publishedBeforeLive = m.top.moderation.seq
+    if m.top.nextCommentObj <> invalid
+        delivered = state.delivered
+        delivered.push(m.top.nextCommentObj)
+        state.delivered = delivered
+        m.top.nextCommentObj = invalid
+        m.top.readyForNextComment = true
+    end if
+    if state.waits = state.liveAt
+        m.top.forceLive = true
+        m.top.readyForNextComment = true
+    end if
+    if state.waits >= state.stopAt then m.top.stopRequested = true
+end sub
+
+function publishedEvents() as object
+    if m.top.moderation = invalid then return []
+    return m.top.moderation.events
+end function
+
+function publishedSeq() as integer
+    if m.top.moderation = invalid then return 0
+    return m.top.moderation.seq
+end function
+
+function deliveredIds() as string
+    ids = []
+    for each comment in getGlobalAA().delivered
+        ids.push(comment.identity.id)
+    end for
+    return ids.join(",")
+end function
+
+function stampsEqual(seq as integer) as boolean
+    delivered = getGlobalAA().delivered
+    if delivered.count() = 0 then return false
+    for each comment in delivered
+        if comment.moderationSeq <> seq then return false
+    end for
+    return true
+end function
+
 sub resetBoundary()
     m.top = { stopRequested: false, readyForNextComment: false, delaySeconds: 0, forceLive: false, channel: "canned", connectionState: "connecting" }
     m.port = invalid
     m.anonymousOnly = false
+    m.moderationSeq = 0
+    m.moderationLog = []
     state = getGlobalAA()
     state.socketCreated = 0
     state.socketCloses = 0
@@ -187,6 +327,10 @@ sub resetBoundary()
     state.writeLimit = 4096
     state.sleeps = 0
     state.registryReads = 0
+    state.script = []
+    state.liveAt = 0
+    state.delivered = []
+    state.publishedBeforeLive = 0
 end sub
 
 function fixtureCreateObject(name as string) as dynamic
@@ -265,6 +409,10 @@ end function
 function fixtureWait(milliseconds as integer, port as dynamic) as dynamic
     state = getGlobalAA()
     state.waits++
+    if state.readMode = "script"
+        scriptedRenderer(state)
+        return invalid
+    end if
     if state.waits >= state.stopAt then m.top = { stopRequested: true, readyForNextComment: false, delaySeconds: 0, forceLive: false }
     return invalid
 end function
@@ -301,6 +449,12 @@ function receiveData(limit as integer) as string
     state = getGlobalAA()
     state.receiveCalls++
     state.readSuccess = false
+    if state.readMode = "script"
+        ' Past the script every read is EAGAIN, never EOF.
+        if state.receiveCalls > state.script.count() then return ""
+        state.readSuccess = true
+        return state.script[state.receiveCalls - 1]
+    end if
     if state.readMode = "error"
         state.hardError = true
         return ""

@@ -115,7 +115,28 @@ sub testEmojiLabel()
     s = failing.callFunc("fixtureRead")
     check(s.failed and s.builds = 1 and s.parts = 1, "after a failed compile text stays plain and compiling is not retried")
 
+    first.maxWidth = 80
+    first.repeatCount = -1
+    check(not first.callFunc("fixtureRead").scrolling, "long-title activation returns before scrolling starts")
+    settle(300)
+    check(first.callFunc("fixtureRead").scrolling, "the reading pause starts scrolling asynchronously")
+    first.repeatCount = 0
+    check(not first.callFunc("fixtureRead").scrolling, "focus loss stops scrolling")
+    first.repeatCount = -1
+    first.repeatCount = 0
+    settle(300)
+    check(not first.callFunc("fixtureRead").scrolling, "focus loss cancels a pending start")
+    first.repeatCount = -1
+    setText(first, "Replacement title")
+    ' Deliver a fire already queued before cancellation through the real handler.
+    first.callFunc("fixtureScrollStart")
+    settle(300)
+    check(not first.callFunc("fixtureRead").scrolling, "text replacement cancels the old title's pending start")
+    first.repeatCount = 0
+    first.repeatCount = -1
     first.callFunc("onDestroy")
+    settle(300)
+    check(not first.callFunc("fixtureRead").scrolling, "disposal cancels a pending scroll start")
     check(not first.callFunc("fixtureRead").compiled, "disposal releases the compiled pattern")
     for each label in [first, second, failing]
         m.scene.removeChild(label)

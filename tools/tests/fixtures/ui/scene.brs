@@ -21,6 +21,12 @@ function fixtureRoute() as object
     value = { before: before, after: after, active: m.menu.activeItem, focus: m.menu.focusItem, task: task }
     before.menuRequest = "Following"
     value.afterStale = m.activeNode
+    m.menu.setFocus(true)
+    value.backRelease = onKeyEvent("back", false)
+    value.menuKeptFocus = m.menu.isInFocusChain()
+    value.backHandled = onKeyEvent("back", true)
+    value.pageRegainedFocus = m.activeNode.isInFocusChain() and not m.menu.isInFocusChain()
+    value.samePage = m.activeNode.isSameNode(after)
     teardownAllScenes()
     return value
 end function

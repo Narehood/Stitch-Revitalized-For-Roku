@@ -196,10 +196,14 @@ function nativeLiveHandleUrlEvent(state as object, event as object, nowMs as dyn
     if Type(event) <> "roUrlEvent" or state.op = invalid then return false
     op = state.op
     if event.GetSourceIdentity() <> op.identity then return false
+    responseStatus = invalid
+    responseHeaders = invalid
     try
         nlTime(state, nowMs)
         nlCheck(event.GetInt() = 1 and nowMs < op.deadline, "URL completion or deadline invalid")
-        count = nlHeaders(event.GetResponseHeadersArray(), event.GetResponseCode(), op.limit, op.phase = "head", state.trustedExperimentalTransport)
+        responseStatus = event.GetResponseCode()
+        responseHeaders = event.GetResponseHeadersArray()
+        count = nlHeaders(responseHeaders, responseStatus, op.limit, op.phase = "head", state.trustedExperimentalTransport)
         if op.phase = "head"
             port = op.transfer.GetMessagePort()
             intent = { kind: op.kind, url: op.url, limit: op.limit }
@@ -230,6 +234,26 @@ function nativeLiveHandleUrlEvent(state as object, event as object, nowMs as dyn
             end if
         end if
     catch e
+        ' Keep only bounded metadata before cancellation releases the request.
+        ' Never retain the signed URL, raw headers or response body.
+        if responseStatus <> invalid
+            context = { status: responseStatus, kind: op.kind, phase: op.phase }
+            if Type(responseHeaders) = "roArray"
+                hasRange = false
+                inspectable = true
+                for each header in responseHeaders
+                    if Type(header) <> "roAssociativeArray"
+                        inspectable = false
+                        exit for
+                    end if
+                    for each name in header
+                        if LCase(name) = "content-range" then hasRange = true
+                    end for
+                end for
+                if inspectable then context.hasContentRange = hasRange
+            end if
+            state.httpFailure = context
+        end if
         clean = nlCancelInput(state)
         reason = nlSafeError(e.message)
         if not clean then reason = "native-live: cancellation or input cleanup failed"

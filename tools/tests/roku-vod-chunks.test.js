@@ -105,11 +105,12 @@ async function withFixture(run) {
         const execute = async (mode = 'goldens') => {
             const runMarker = randomUUID();
             await fs.writeFile(path.join(dir, 'main.brs'), harness.replace('__MODE__', mode).replaceAll('__MARKER__', runMarker));
-            const largeWork = mode === 'work';
-            const entry = largeWork ? path.join(fixture,'../roku-vod-large/engine.js') : path.join(root,'node_modules/brs-node/bin/brs.cli.js');
-            const result = await child([entry, '--no-sg', '--root', dir, ...(largeWork ? ['--worker-marker',runMarker] : []),
+            // The bounded adapter avoids brs-node copying the whole buffer on every indexed read.
+            // Keep the same actual helpers, full-byte assertions, worker proof and finite deadline.
+            const entry = path.join(fixture, '../roku-vod-large/engine.js');
+            const result = await child([entry, '--no-sg', '--root', dir, '--worker-marker', runMarker,
                 ...sourceNames.map(name => `${name}.brs`), 'main.brs'], dir);
-            return {...result, marker: runMarker, workerAdapter:largeWork};
+            return {...result, marker: runMarker, workerAdapter: true};
         };
         await run({dir, source, expected, marker, execute});
         for (const [name, bytes] of source) assert.deepEqual(await fs.readFile(path.join(root, `source/utils/${name}.brs`)), bytes, `owned/frozen ${name} unchanged during execution`);

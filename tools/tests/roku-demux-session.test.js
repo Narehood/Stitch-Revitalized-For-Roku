@@ -129,6 +129,7 @@ end sub
           <field id="stopRequested" type="boolean" value="false" />
           </interface><script uri="SessionWorkerBoundary.brs" /></component>`);
         await add('components/SessionWorkerBoundary.brs', 'sub onControl()\n    if m.top.control = "run" then m.top.state = "run"\n    if m.top.control = "stop" then m.top.state = "stop"\nend sub\n');
+        await add('components/RokuVodDemuxServer.xml', '<component name="RokuVodDemuxServer" extends="SessionWorkerBoundary" />');
         await add('components/SessionVideoBoundary.xml', '<component name="SessionVideoBoundary" extends="Group"><interface><field id="control" type="string" /><field id="state" type="string" value="none" /></interface></component>');
         // Uncalled taskFactory branches need known compile declarations only;
         // none of these inert Groups perform Task/network/Video work.

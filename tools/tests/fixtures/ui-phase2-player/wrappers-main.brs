@@ -299,10 +299,9 @@ sub testLiveControls()
     if marked then marked = buttons[0] = "1080p60 (current)" and buttons[1] = "720p60" and buttons[2] = "480p" and buttons[3] = "Cancel"
     check(s.dialogTitle = "Video quality" and s.dialogMessage.count() = 1 and s.dialogMessage[0] = "Now playing: 1080p60", "the dialog is titled and states the playing quality")
     check(marked, "options keep their order, the current one is marked and Cancel is last")
-    ' Engine boundary: brs-engine never gives a child StandardMessageDialog
-    ' focus (it does via Scene.dialog), so the choice is made through the
-    ' dialog's own buttonSelected field instead of Down/OK.
-    video.findNode("QualityDialog").buttonSelected = 1
+    check(s.ownsDialog, "the quality picker is registered as the Scene modal for native Back handling")
+    ' Exercise the dialog's selection callback independently of native button rendering.
+    s.dialog.buttonSelected = 1
     waitSeen("QualityChangeRequestFlag", 1, "the quality request")
     check(video.QualityChangeRequest = 1 and video.selectedQuality = "720p60" and not video.callFunc("fixtureRead").dialogVisible, "choosing the second option requests index 1 as before")
 
@@ -313,6 +312,30 @@ sub testLiveControls()
     press("back")
     waitRead(video, "dialogVisible", false, "Back to close the dialog")
     check(seen("QualityChangeRequestFlag").count() = 1, "closing the dialog requests no change")
+    check(not video.callFunc("fixtureRead").ownsDialog and video.callFunc("fixtureRead").fade = "start", "Back releases the modal and restarts the controls timer")
+    press("ok")
+    waitRead(video, "dialogVisible", true, "the quality dialog after Back")
+    video.callFunc("fixtureRead").dialog.close = true
+    waitRead(video, "dialogVisible", false, "the native dialog close event")
+    check(not video.callFunc("fixtureRead").ownsDialog and seen("QualityChangeRequestFlag").count() = 1, "native dialog dismissal cancels without requesting a quality")
+    press("ok")
+    waitRead(video, "dialogVisible", true, "the quality dialog before replacement")
+    replacement = createObject("roSGNode", "StandardMessageDialog")
+    replacement.title = "Playback error"
+    replacement.buttons = ["Try again"]
+    m.scene.dialog = replacement
+    waitRead(video, "dialogVisible", false, "quality dismissal after another modal replaces it")
+    settle(200)
+    check(m.scene.dialog.isSameNode(replacement), "quality dismissal preserves a replacement modal")
+    check(replacement.isInFocusChain(), "a replacement modal receives focus after the quality picker closes")
+    m.scene.dialog = invalid
+    video.setFocus(true)
+    press("ok")
+    waitRead(video, "dialogVisible", true, "the quality dialog before disposal")
+    video.callFunc("onDestroy")
+    check(not video.callFunc("fixtureRead").ownsDialog, "disposal releases an open quality modal")
+    removeWrapper(video)
+    video = addWrapper("StitchVideo")
 
     ' The tag reflects this wrapper's session only.
     video.lowLatency = true

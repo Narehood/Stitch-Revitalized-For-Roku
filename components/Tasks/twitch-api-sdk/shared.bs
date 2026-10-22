@@ -46,6 +46,46 @@ function TwitchGraphQLRequest(data)
     return rsp
 end function
 
+' GraphQL can return errors alongside usable partial data. A field failed when
+' the response has no data object, omits a field on the path, or nulls one with
+' an error at or beneath it. A field nulled without an error is a valid empty
+' result, such as an unknown channel.
+function graphQLFieldFailed(rsp as dynamic, path as object) as boolean
+    if type(rsp) <> "roAssociativeArray" then return true
+    value = rsp.data
+    walked = []
+    for each key in path
+        if type(value) <> "roAssociativeArray" then return true
+        if not value.doesExist(key) then return true
+        value = value[key]
+        walked.push(key)
+        if value = invalid then return graphQLErrorAt(rsp.errors, walked)
+    end for
+    return false
+end function
+
+' An error without a path cannot be attributed, so it counts against every field.
+function graphQLErrorAt(errors as dynamic, fieldPath as object) as boolean
+    if type(errors) <> "roArray" then return false
+    for each graphQLError in errors
+        errorPath = invalid
+        if type(graphQLError) = "roAssociativeArray" then errorPath = graphQLError.path
+        if type(errorPath) <> "roArray" or errorPath.count() = 0 then return true
+        if errorPath.count() >= fieldPath.count()
+            matches = true
+            for i = 0 to fieldPath.count() - 1
+                segment = errorPath[i]
+                if GetInterface(segment, "ifString") = invalid or LCase(segment) <> LCase(fieldPath[i])
+                    matches = false
+                    exit for
+                end if
+            end for
+            if matches then return true
+        end if
+    end for
+    return false
+end function
+
 sub TwitchHelixApiRequest()
     ? "HelixAPIRequest"
     access_token = ""

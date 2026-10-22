@@ -6,17 +6,23 @@ on:
     paths:
       - 'fmp4-demux-proxy/**'
       - '.github/workflows/docker-publish.yml'
+      - '.github/workflows/proxy-ci.yml'
     tags: ['proxy-v*']
   pull_request:
     branches: [main]
     paths:
       - 'fmp4-demux-proxy/**'
       - '.github/workflows/docker-publish.yml'
+      - '.github/workflows/proxy-ci.yml'
 
 permissions:
   contents: read
 
 jobs:
+  validate-python:
+    name: Validate Python source and runtime dependencies
+    uses: ./.github/workflows/proxy-ci.yml
+
   validate:
     name: Build container and check health
     runs-on: ubuntu-latest
@@ -43,7 +49,7 @@ jobs:
 
   publish:
     name: Publish main or release image
-    needs: validate
+    needs: [validate, validate-python]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

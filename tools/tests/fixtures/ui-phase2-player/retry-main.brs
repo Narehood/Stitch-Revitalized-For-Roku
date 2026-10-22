@@ -15,8 +15,80 @@ sub main()
     testDisposedRetryIgnored()
     testChatNotice()
     testAuthorizationCopy()
+    testBookmarkStart()
 
     fixtureEnd()
+end sub
+
+sub testBookmarkStart()
+    set_setting("active_user", "fixture-user")
+    for each order in ["bookmarks-first", "content-first", "failed", "timeout", "explicit"]
+        set_user_setting("VideoBookmarks", FormatJson({ v1: "15" }))
+        player = openPlayer("VOD")
+        books = player.callFunc("fixtureRead").bookmarksTask
+        if order = "bookmarks-first"
+            set_user_setting("VideoBookmarks", FormatJson({ v1: "42" }))
+            books.response = { bookmarks: { v1: "42" } }
+        end if
+        task = contentTask(player)
+        task.response = playable("720p60")
+        if order <> "bookmarks-first"
+            check(player.callFunc("fixtureRead").bookmarkPending and player.callFunc("fixtureRead").video = invalid, "signed-in VOD waits for bookmarks: " + order)
+            if order = "content-first"
+                set_user_setting("VideoBookmarks", FormatJson({ v1: "42" }))
+                books.response = { bookmarks: { v1: "42" } }
+            else if order = "failed"
+                books.response = invalid
+            else if order = "explicit"
+                player.callFunc("fixtureResume", 77)
+            end if
+        end if
+        video = waitVideo(player, invalid)
+        expected = 15
+        if order = "bookmarks-first" or order = "content-first" then expected = 42
+        if order = "explicit" then expected = 77
+        check(video.content.PlayStart = expected, "first VOD position honors bookmarks or finite fallback: " + order)
+        check(not player.callFunc("fixtureRead").bookmarkPending and player.callFunc("fixtureRead").bookmarkTimer = invalid, "bookmark wait is released after starting: " + order)
+        if order = "timeout" or order = "explicit"
+            set_user_setting("VideoBookmarks", FormatJson({ v1: "99" }))
+            books.response = { bookmarks: { v1: "99" } }
+            settle(100)
+            check(player.callFunc("fixtureRead").video.isSameNode(video) and video.content.PlayStart = expected, "late bookmarks never replace or seek active playback: " + order)
+        end if
+        closePlayer(player)
+    end for
+
+    for each contentType in ["LIVE", "CLIP", "VOD"]
+        if contentType = "VOD" then set_setting("active_user", "$default$")
+        player = openPlayer(contentType)
+        task = contentTask(player)
+        task.response = playable("720p60")
+        video = waitVideo(player, invalid)
+        check(video <> invalid and not player.callFunc("fixtureRead").bookmarkPending, "anonymous VOD, LIVE and CLIP never wait: " + contentType)
+        closePlayer(player)
+    end for
+
+    set_setting("active_user", "fixture-user")
+    for each action in ["back", "dispose", "replace"]
+        player = openPlayer("VOD")
+        books = player.callFunc("fixtureRead").bookmarksTask
+        task = contentTask(player)
+        task.response = playable("720p60")
+        timer = player.callFunc("fixtureRead").bookmarkTimer
+        if action = "back"
+            player.callFunc("requestBack")
+        else if action = "dispose"
+            player.callFunc("onDestroy")
+        else
+            player.contentRequested = request("LIVE")
+        end if
+        check(not player.callFunc("fixtureRead").bookmarkPending and timer.control = "stop", "leaving a pending VOD cancels its timer: " + action)
+        books.response = { bookmarks: { v1: "99" } }
+        settle(100)
+        check(player.callFunc("fixtureRead").video = invalid, "late bookmark completion cannot play abandoned content: " + action)
+        closePlayer(player)
+    end for
+    set_setting("active_user", "$default$")
 end sub
 
 function request(contentType as string) as object

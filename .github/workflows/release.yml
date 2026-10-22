@@ -25,6 +25,21 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Audit dependencies against reviewed policy
+      run: npm run audit
+
+    - name: Lint channel source
+      run: npm run lint
+
+    - name: Check channel formatting
+      run: npm run fmt:check
+
+    - name: Execute offline fixtures and tooling regressions
+      run: npm test
+
+    - name: Compile device tests
+      run: npm run test:compile
+
     - name: Create package
       run: npm run package
       

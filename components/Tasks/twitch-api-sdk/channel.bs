@@ -8,7 +8,7 @@ function getChannelHomeQuery() as object
             "skipPlayToken": false
         }
     })
-    if rsp = invalid
+    if graphQLFieldFailed(rsp, ["channel"])
         m.top.response = invalid
         m.top.control = TaskControl.STOP
         return invalid

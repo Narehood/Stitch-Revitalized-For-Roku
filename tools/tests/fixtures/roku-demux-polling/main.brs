@@ -118,7 +118,7 @@ sub wiringPF()
         m.top.lowLatency = opted
         configureLiveLatency(state)
         if opted
-            checkPF(state.pollFromRequest and state.windowUs = 8000000&, "trusted lowLatency selects8s and request polling")
+            checkPF(state.pollFromRequest and state.windowUs = 6000000&, "trusted lowLatency selects6s and request polling")
         else
             checkPF(not state.pollFromRequest and state.windowUs = 14000000&, "trusted default retains14s and original polling")
             startPF(state, 1000&)
@@ -126,6 +126,19 @@ sub wiringPF()
             drainPF(state, 5000&)
             checkPF(state.nextPoll = 8000& and not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt"), "default retains publication relative half target without snapshot")
         end if
+        closePF(state)
+        state = newPF(false)
+        m.top.lowLatency = opted
+        configureLiveLatency(state)
+        startPF(state, 1000&)
+        completePF(state, playlistPF(10, 8, 6, true), 1400&)
+        window = state.window
+        if opted
+            checkPF(window.segments.Count() = 3 and window.durationUs = 6006000& and window.segments[0].sequence = 15&, "lowLatency actually selects the newest three complete segments")
+        else
+            checkPF(window.segments.Count() = 7 and window.durationUs = 14014000& and window.segments[0].sequence = 11&, "default actually retains its fourteen second window")
+        end if
+        checkPF(window.segments[window.segments.Count() - 1].sequence = 17& and window.sourceOffsetUs = 0&, "both modes preserve the newest source tail with no added source delay")
         closePF(state)
     end for
 end sub

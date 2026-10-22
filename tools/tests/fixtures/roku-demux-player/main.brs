@@ -39,7 +39,7 @@ end function
 
 sub manualIntentPick(player as object, index as integer)
     video = player.callFunc("fixtureRead").video
-    video.findNode("QualityDialog").buttonSelected = index
+    video.callFunc("fixtureQualityDialog").buttonSelected = index
     settle(60)
     ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
 end sub
@@ -716,9 +716,9 @@ sub testRepeatedRetainedQualityChoices()
     requestPort = createObject("roMessagePort")
     video.observeField("QualityChangeRequest", requestPort)
 
-    ' The engine cannot focus a child StandardMessageDialog. Its real
-    ' buttonSelected field still invokes the unchanged wrapper handler.
-    video.findNode("QualityDialog").buttonSelected = 1
+    ' Inspect the runtime modal through a read-only fixture export. Its real
+    ' buttonSelected field invokes the unchanged wrapper handler.
+    video.callFunc("fixtureQualityDialog").buttonSelected = 1
     settle(60)
     firstEvent = wait(1000, requestPort)
     firstId = player.callFunc("fixtureRead").sessionId
@@ -727,7 +727,7 @@ sub testRepeatedRetainedQualityChoices()
     check(firstId <> originalId and started.count() = 2 and started[1].descriptor.qualityId = "720p60", "first pick starts the exact 720 descriptor")
     check(player.callFunc("fixtureRead").video.isSameNode(video) and not video.QualityChangeRequestFlag, "consuming the first choice clears the flag on the same retained wrapper")
 
-    video.findNode("QualityDialog").buttonSelected = 2
+    video.callFunc("fixtureQualityDialog").buttonSelected = 2
     settle(60)
     secondEvent = wait(1000, requestPort)
     secondId = player.callFunc("fixtureRead").sessionId
@@ -768,7 +768,7 @@ sub testRepeatedRetainedQualityChoices()
     player.callFunc("onDestroy")
     oldRequest = video.QualityChangeRequest
     oldQuality = video.selectedQuality
-    video.findNode("QualityDialog").buttonSelected = 0
+    video.callFunc("fixtureQualityDialog").buttonSelected = 0
     player.callFunc("fixtureQualityEvent", staleEvent)
     player.callFunc("fixtureQualityEvent")
     check(video.QualityChangeRequest = oldRequest and video.selectedQuality = oldQuality and calls(session, "start").count() = 3, "disposed wrapper and player reject late selections and quality callbacks")

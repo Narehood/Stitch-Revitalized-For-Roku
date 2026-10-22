@@ -93,6 +93,9 @@ sub main()
     if m.top.channel = "" then return
     m.port = createObject("roMessagePort")
     m.anonymousOnly = false
+    ' Sequence numbers span reconnects so the renderer never reapplies or skips one.
+    m.moderationSeq = 0
+    m.moderationLog = []
     failures = 0
     while not m.top.stopRequested and failures < 6
         m.top.connectionState = "connecting"
@@ -179,8 +182,12 @@ sub runChatConnection(transport as object)
                     ' Retain pending messages until their delay elapses. Dropping the oldest
                     ' on a busy channel would keep every message perpetually too young.
                     if queue.count() < 250
+                        message.identity = ircMessageIdentity(message)
                         queue.push({ comment: message, receivedAt: createObject("roTimespan") })
                     end if
+                else if command = "CLEARMSG" or command = "CLEARCHAT"
+                    moderation = ircModerationEvent(message)
+                    if moderation <> invalid then publishModeration(queue, moderation)
                 end if
             end for
         end if
@@ -202,9 +209,24 @@ sub runChatConnection(transport as object)
             if age >= delay
                 nextComment = queue.shift()
                 lastDelivery.mark()
+                ' The renderer checks moderation newer than this stamp while the comment is in flight.
+                nextComment.comment.moderationSeq = m.moderationSeq
                 m.top.readyForNextComment = false
                 m.top.nextCommentObj = nextComment.comment
             end if
         end if
     end while
+end sub
+
+' Moderation bypasses the stream delay and the comment handshake. The bounded
+' recent window is republished whole so a coalesced field update loses nothing.
+sub publishModeration(queue as object, event as object)
+    for index = queue.count() - 1 to 0 step -1
+        if ircModerationMatches(queue[index].comment.identity, event) then queue.delete(index)
+    end for
+    m.moderationSeq++
+    event.seq = m.moderationSeq
+    m.moderationLog.push(event)
+    if m.moderationLog.count() > 32 then m.moderationLog.shift()
+    m.top.moderation = { seq: m.moderationSeq, events: m.moderationLog }
 end sub

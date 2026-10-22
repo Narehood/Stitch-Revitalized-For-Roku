@@ -39,7 +39,6 @@
         <TwitchApiTask
             id="bookmarksTask"
             functionName="getTwitchBookmarks"
-            control="run"
         />
     </children>
 

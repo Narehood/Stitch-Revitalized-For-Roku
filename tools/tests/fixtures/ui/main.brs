@@ -8,6 +8,8 @@ sub main()
     screen.show()
     fixtureGlobal = screen.getGlobalNode()
     testFollowing(scene, fixtureGlobal)
+    testRetainedSelection(scene, fixtureGlobal)
+    testLateAccountResponse(scene, fixtureGlobal)
     testBrowse(scene)
     testDetailPages(scene)
     testRoute(scene)
@@ -20,6 +22,87 @@ sub main()
     else
         print "STITCH_UI_FAIL:"; m.failures; " failures; "; m.assertions; " assertions"
     end if
+end sub
+
+sub testRetainedSelection(scene as object, fixtureGlobal as object)
+    fixtureGlobal.fixtureSigned = true
+    page = addPage(scene, "Following")
+    s = inspect(page)
+    s.task.response = { liveFollows: [cardFields("LIVE", "live-one")], offlineFollows: [cardFields("USER", "offline-one")] }
+    page.callFunc("fixtureSelect", 0)
+    check(page.playContent and page.contentSelected.contentType = "LIVE", "Following live selection requests direct playback")
+    page.setFocus(true)
+    page.callFunc("fixtureSelect", 1)
+    check(not page.playContent and page.contentSelected.contentType = "USER", "retained Following offline selection clears direct playback")
+    page.callFunc("fixtureSelect", 0)
+    check(page.playContent and page.contentSelected.contentType = "LIVE", "retained Following can play live again")
+    disposePage(scene, page)
+    fixtureGlobal.fixtureSigned = false
+
+    page = addPage(scene, "ChannelPage")
+    content = createObject("roSGNode", "TwitchContentNode")
+    setTwitchContentFields(content, cardFields("USER", "went-live"))
+    page.contentRequested = content
+    s = inspect(page)
+    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2 }
+    page.callFunc("fixtureSelect", 0)
+    selected = page.contentSelected
+    check(page.playContent and selected.contentType = "LIVE", "fresh live status turns an offline channel request into playable LIVE content")
+    check(selected.streamerLogin = content.streamerLogin and selected.streamerDisplayName = content.streamerDisplayName, "fresh live card preserves channel identity")
+    check(content.contentType = "USER" and not content.isSameNode(selected), "building the live card preserves the original navigation request")
+    content.contentType = "VOD"
+    content.contentId = "old-recording"
+    s.task.response = { isLive: true, videoShelves: [], description: "", followerCount: 2 }
+    page.callFunc("fixtureSelect", 0)
+    check(page.contentSelected.contentType = "LIVE" and page.contentSelected.contentId <> "old-recording", "Live now opened through a Search VOD cannot replay that recording")
+    check(content.contentType = "VOD" and content.contentId = "old-recording", "live playback leaves the original VOD navigation identity intact")
+    disposePage(scene, page)
+end sub
+
+sub testLateAccountResponse(scene as object, fixtureGlobal as object)
+    fixtureGlobal.fixtureSigned = true
+    menu = addMenu(scene)
+    menu.updateUserIcon = true
+    oldTask = inspect(menu).loginTask
+    check(oldTask <> invalid, "signed-in icon starts a metadata request")
+    menu.updateUserIcon = true
+    replacement = inspect(menu).loginTask
+    check(oldTask.control = "stop" and not oldTask.isSameNode(replacement), "a replacement icon lookup destroys the old task")
+    oldTask.response = { data: [{ id: "old", display_name: "Old", profile_image_url: "pkg:/images/default_banner.png" }] }
+    fixtureGlobal.fixtureSigned = false
+    menu.updateUserIcon = true
+    check(replacement.control = "stop" and inspect(menu).loginTask = invalid, "sign-out destroys pending account metadata")
+    icon = inspect(menu).icons.findNode("LoginPage")
+    anonymousIcon = icon.iconUri
+    replacement.response = { data: [{ id: "old", display_name: "Old", profile_image_url: "pkg:/images/default_banner.png" }] }
+    check(icon.iconUri = anonymousIcon, "late signed-in response cannot overwrite the signed-out icon")
+    disposePage(scene, menu)
+    fixtureGlobal.fixtureSigned = true
+    menu = addMenu(scene)
+    menu.updateUserIcon = true
+    stale = inspect(menu).loginTask
+    fixtureGlobal.fixtureSigned = false
+    stale.response = { data: [{ id: "wrong-profile", display_name: "Old", profile_image_url: "pkg:/images/default_banner.png" }] }
+    check(inspect(menu).profileId = "", "a response for a different active profile cannot write account metadata even before its icon update")
+    disposePage(scene, menu)
+    fixtureGlobal.fixtureSigned = true
+    menu = addMenu(scene)
+    menu.updateUserIcon = true
+    stale = inspect(menu).loginTask
+    fixtureGlobal.addFields({ fixtureUser: "another-user" })
+    stale.response = { data: [{ id: "wrong-profile", display_name: "Old", profile_image_url: "pkg:/images/default_banner.png" }] }
+    check(inspect(menu).profileId = "", "a lookup cannot write metadata into a different signed-in profile")
+    menu.updateUserIcon = true
+    inspect(menu).loginTask.response = { data: [{ id: "current-profile", display_name: "Current", profile_image_url: "pkg:/images/default_banner.png" }] }
+    check(inspect(menu).profileId = "current-profile", "the current profile still receives its own metadata")
+    disposePage(scene, menu)
+    fixtureGlobal.removeField("fixtureUser")
+    fixtureGlobal.fixtureSigned = false
+    fixtureGlobal.addFields({ fixtureAvatar: "pkg:/images/default_banner.png" })
+    menu = addMenu(scene)
+    check(inspect(menu).icons.findNode("LoginPage").iconUri = fixtureGlobal.constants.defaultIcons.login, "an anonymous launch ignores stale account metadata already in its profile")
+    disposePage(scene, menu)
+    fixtureGlobal.removeField("fixtureAvatar")
 end sub
 
 sub testFollowing(scene as object, fixtureGlobal as object)
@@ -102,6 +185,7 @@ sub testBrowse(scene as object)
     page = addPage(scene, "Browse")
     s = inspect(page)
     check(s.status.state = "loading" and s.featured <> invalid and s.categories <> invalid and s.live <> invalid, "Browse launches a finite section set")
+    check(s.featured.request.requireShelves = true, "Browse requires its shelves even when the account part of the shared query succeeds")
     s.featured.response = invalid
     s = inspect(page)
     check(s.status.state = "loading" and s.failed = 1, "Browse waits for pending siblings after one failure")
@@ -223,6 +307,8 @@ sub testRoute(scene as object)
     check(route.after.id = "Browse" and route.active = "Browse" and route.focus = "Browse", "Following child Browse action executes actual hero navigation and menu state")
     check(route.before.callFunc("fixtureRead").disposed and route.task.control = "stop", "hero routing disposes the departing page")
     check(route.afterStale.isSameNode(route.after), "disposed Following menuRequest cannot reroute the active page")
+    check(not route.backRelease and route.menuKeptFocus, "releasing Back leaves menu focus unchanged")
+    check(route.backHandled and route.pageRegainedFocus and route.samePage, "Back from MenuBar restores the current page without navigating away")
 end sub
 
 sub testSearch(scene as object)

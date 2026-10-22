@@ -24,10 +24,10 @@ function extractTransport(source) {
 }
 
 function extractConnection(source) {
-    const matches = [...source.matchAll(/^sub runChatConnection\(transport as object\)\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
-    assert.equal(matches.length, 1, 'expected one complete production connection function');
-    assert.equal([...matches[0][0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
-    return matches[0][0];
+    const matches = [...source.matchAll(/^sub (?:runChatConnection\(transport as object\)|publishModeration\(queue as object, event as object\))\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
+    assert.equal(matches.length, 2, 'expected complete production connection and moderation functions');
+    for (const match of matches) assert.equal([...match[0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
+    return matches.map(match => match[0]).join('\n');
 }
 
 function extractSendLogin(source) {
@@ -44,7 +44,7 @@ function extractJob(source) {
     return matches[0][0].replace(/^sub main\(\)/, 'sub runChatJob()');
 }
 
-async function runFixture(body, connection = '', sendLogin = '', job = '') {
+async function runFixture(body, connection = '', sendLogin = '', job = '', moderation = false) {
     // The interpreter has no native TCP/WebSocket implementation. Replace only
     // object creation and waiting with explicit, deterministic OS boundaries.
     // All production connection/send/login decisions, deadlines and cleanup execute.
@@ -57,7 +57,8 @@ async function runFixture(body, connection = '', sendLogin = '', job = '') {
     const main = (await fs.readFile(fixture, 'utf8')).replace('__PASS_MARKER__', marker)
         .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '')
         .replace('__SEND_TESTS__', sendLogin ? 'runSendTests()' : '')
-        .replace('__JOB_TESTS__', job ? 'runJobTests()' : '');
+        .replace('__JOB_TESTS__', job ? 'runJobTests()' : '')
+        .replace('__MODERATION_TESTS__', moderation ? 'runModerationTests()' : '');
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     try {
         await fs.writeFile(path.join(dir, 'transport.brs'), bounded);
@@ -149,3 +150,34 @@ test('ignoring a failed login send is rejected by the actual send/login/retry fi
     assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: invalid secure send must fail login before credentials are sent/);
     assert.throws(() => acceptResult(result));
 });
+
+test('actual connection removes deleted and purged queued messages before delayed delivery and publishes moderation promptly', async t => {
+    const source = await fs.readFile(production, 'utf8');
+    const result = await runFixture(extractTransport(source), extractConnection(source), '', '', true);
+    const count = acceptResult(result);
+    assert.doesNotMatch(result.output, /FixtureDeletedText|after timeout/, 'moderation and chat text must not be logged');
+    t.diagnostic(`${count} transport/parser assertions; scripted IRC lines on the canned socket, the wait boundary acknowledges deliveries`);
+});
+
+for (const [name, gate, replacement, expected] of [
+    ['ignoring CLEARMSG and CLEARCHAT', /^ {16}else if command = "CLEARMSG" or command = "CLEARCHAT"\r?\n[^\r\n]*\r?\n[^\r\n]*\r?\n/m, '',
+        /STITCH_CHAT_TRANSPORT_FAIL: deleted queued message must never be delivered/],
+    ['publishing moderation only when the renderer is ready', 'if moderation <> invalid then publishModeration(queue, moderation)',
+        'if moderation <> invalid and m.top.readyForNextComment then publishModeration(queue, moderation)',
+        /STITCH_CHAT_TRANSPORT_FAIL: moderation publishes while the renderer is busy/],
+    ['omitting the in-flight moderation stamp', 'nextComment.comment.moderationSeq = m.moderationSeq', 'nextComment.comment.moderationSeq = 0',
+        /STITCH_CHAT_TRANSPORT_FAIL: delivered comments carry the moderation they survived/],
+    ['an unbounded moderation window', 'if m.moderationLog.count() > 32 then m.moderationLog.shift()', '',
+        /STITCH_CHAT_TRANSPORT_FAIL: the moderation window holds the latest 32 events/],
+]) {
+    test(`${name} is rejected by the actual moderation fixture`, async () => {
+        const source = await fs.readFile(production, 'utf8');
+        const connection = extractConnection(source);
+        const occurrences = typeof gate === 'string' ? connection.split(gate).length - 1
+            : [...connection.matchAll(new RegExp(gate.source, 'gm'))].length;
+        assert.equal(occurrences, 1, 'mutation must target one production statement');
+        const result = await runFixture(extractTransport(source), connection.replace(gate, replacement), '', '', true);
+        assert.match(result.output, expected);
+        assert.throws(() => acceptResult(result));
+    });
+}

@@ -55,10 +55,13 @@ sub init()
     if m.loadingText <> invalid then m.loadingText.text = tr("Loading stream…")
 
     ' Quality dialog
-    m.qualityDialog = m.top.findNode("QualityDialog")
+    m.qualityDialog = CreateObject("roSGNode", "StandardMessageDialog")
+    m.qualityDialog.visible = false
+    m.qualityDialogOpen = false
     applyDialogPalette(m.qualityDialog)
     ' Set up quality dialog observer once during initialization
     m.qualityDialog.observeFieldScopedEx("buttonSelected", "onQualityButtonSelect")
+    m.qualityDialog.observeFieldScoped("wasClosed", "onQualityDialogClosed")
 
     ' State variables
     m.currentFocusedButton = 2 ' 0=back, 1=chat, 2=play/pause, 3=quality
@@ -519,9 +522,7 @@ sub onQualityButtonSelect()
     totalButtons = m.qualityDialog.buttons.count()
     changeIndex = invalid
 
-    ' Hide dialog first
-    m.qualityDialog.visible = false
-    m.qualityDialog.setFocus(false)
+    onQualityDialogClosed()
 
     ' Check if Cancel was selected (last button)
     if selectedIndex = totalButtons - 1
@@ -537,19 +538,28 @@ sub onQualityButtonSelect()
         ' ? "[StitchVideo] Invalid selection index: "; selectedIndex
     end if
 
-    ' Restore focus to video component
-    m.top.setFocus(true)
-
-    ' If overlay is visible, restart fade timer
-    if m.isOverlayVisible
-        focusButton(m.currentFocusedButton)
-        m.fadeAwayTimer.control = "stop"
-        m.fadeAwayTimer.control = "start"
-    end if
     ' Emit last: the parent may destroy this node during its callback.
     if changeIndex <> invalid
         m.top.QualityChangeRequest = changeIndex
         m.top.QualityChangeRequestFlag = true
+    end if
+end sub
+
+sub onQualityDialogClosed()
+    if m.disposed or not m.qualityDialogOpen then return
+    m.qualityDialogOpen = false
+    m.qualityDialog.visible = false
+    m.qualityDialog.setFocus(false)
+    scene = m.top.getScene()
+    if scene <> invalid and scene.dialog <> invalid
+        if not scene.dialog.isSameNode(m.qualityDialog) then return
+        scene.dialog = invalid
+    end if
+    m.top.setFocus(true)
+    if m.isOverlayVisible
+        focusButton(m.currentFocusedButton)
+        m.fadeAwayTimer.control = "stop"
+        m.fadeAwayTimer.control = "start"
     end if
 end sub
 
@@ -630,9 +640,11 @@ sub showQualityDialog()
         m.fadeAwayTimer.control = "stop"
         setupQualityDialog()
 
-        ' Show dialog and give it focus
-        ' (Observer is already set up in init() function)
+        ' Scene.dialog owns native Back handling and restores the player on close.
+        m.qualityDialogOpen = true
         m.qualityDialog.visible = true
+        scene = m.top.getScene()
+        if scene <> invalid then scene.dialog = m.qualityDialog
         m.qualityDialog.setFocus(true)
     else
         ' ? "[StitchVideo] No quality options available"
@@ -744,16 +756,7 @@ function onKeyEvent(key, press) as boolean
         ' If quality dialog is visible, only handle back to close it
         if m.qualityDialog.visible
             if key = "back" or key = "down"
-                m.qualityDialog.visible = false
-                m.qualityDialog.setFocus(false)
-                m.top.setFocus(true)
-
-                ' Restart fade timer if overlay is visible
-                if m.isOverlayVisible
-                    focusButton(m.currentFocusedButton)
-                    m.fadeAwayTimer.control = "stop"
-                    m.fadeAwayTimer.control = "start"
-                end if
+                onQualityDialogClosed()
                 return true
             end if
             ' Let dialog handle all other keys
@@ -844,7 +847,13 @@ sub onDestroy()
     end if
     if m.qualityDialog <> invalid
         m.qualityDialog.unobserveFieldScoped("buttonSelected")
+        m.qualityDialog.unobserveFieldScoped("wasClosed")
+        m.qualityDialogOpen = false
         m.qualityDialog.visible = false
+        scene = m.top.getScene()
+        if scene <> invalid and scene.dialog <> invalid
+            if scene.dialog.isSameNode(m.qualityDialog) then scene.dialog = invalid
+        end if
     end if
     m.top.unobserveField("position")
     m.top.unobserveField("state")

@@ -72,6 +72,12 @@ async function buildPackage(dir, marker, mode = 'normal') {
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
         'components/Modules/CustomVideo', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
+    const qualityXmlPath = 'components/Modules/StitchVideo/StitchVideo.xml';
+    const qualityXml = await fs.readFile(path.join(dir, qualityXmlPath), 'utf8');
+    await addFile(dir, qualityXmlPath, qualityXml
+        .replace('</interface>', '<function name="fixtureQualityDialog" /></interface>')
+        .replace('</component>', '<script uri="pkg:/components/QualityProbe.brs" /></component>'));
+    await addFile(dir, 'components/QualityProbe.brs', 'function fixtureQualityDialog() as object\n    return m.qualityDialog\nend function\n');
     for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Actual EmojiLabel rendering code; pattern construction is an explicit
     // existing engine boundary. Transport/bookmarks/registry never start.
