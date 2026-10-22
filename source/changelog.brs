@@ -3,6 +3,15 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.6": [
+            "3.0.4 release (Roku package version 3.0.6)",
+            "Fix: Roku Back closes the player quality menu",
+            "Fix: Channel selection, live cards, loading and Retry focus",
+            "Fix: Account changes, chat deletions and long title scrolling",
+            "Fix: Signed-in VOD playback waits briefly for saved bookmarks",
+            "Improved: Recovery from temporary live stream errors",
+            "Improved: Shorter Roku-only low-latency window; experimental and off by default"
+        ],
         "3.0.5": [
             "3.0.3 release (Roku package version 3.0.5)",
             "Maintenance: Updated build and test tooling",
