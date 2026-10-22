@@ -78,7 +78,7 @@ async function addEmojiLabel(dir, probe = '') {
 
 const wrapperProbes = {
     StitchVideo: `function fixtureRead() as object
-    return { overlay: m.isOverlayVisible, focused: m.currentFocusedButton, caption: m.captionLabel.text, captionVisible: m.caption.visible, controlsX: m.controls.translation[0], scrimWidth: m.scrim.width, tagVisible: m.latencyTag.visible, tagText: m.latencyTag.text, live: m.top.findNode("liveLabel").text, dialogVisible: m.qualityDialog.visible, dialogTitle: m.qualityDialog.title, dialogMessage: m.qualityDialog.message, dialogButtons: m.qualityDialog.buttons }
+    return { overlay: m.isOverlayVisible, focused: m.currentFocusedButton, caption: m.captionLabel.text, captionVisible: m.caption.visible, controlsX: m.controls.translation[0], scrimWidth: m.scrim.width, tagVisible: m.latencyTag.visible, tagText: m.latencyTag.text, live: m.top.findNode("liveLabel").text, dialogVisible: m.qualityDialog.visible, dialogTitle: m.qualityDialog.title, dialogMessage: m.qualityDialog.message, dialogButtons: m.qualityDialog.buttons, dialog: m.qualityDialog, ownsDialog: m.top.getScene().dialog <> invalid, fade: m.fadeAwayTimer.control, focusedChild: m.top.focusedChild }
 end function
 `,
     CustomVideo: `function fixtureRead() as object
@@ -126,8 +126,12 @@ async function buildRetryPackage(dir, marker) {
     for (const file of ['GetTwitchContent.xml', 'GetTwitchContentBoundary.brs', 'TwitchApiTask.xml',
         'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
     await addComponent(dir, 'components/Scenes/VideoPlayer', 'VideoPlayer', `function fixtureRead() as object
-    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask }
+    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer }
 end function
+sub fixtureResume(position as integer)
+    m.resumePosition = position
+    playContent()
+end sub
 sub fixtureButtonAgain()
     onErrorDialogButton()
 end sub
@@ -165,10 +169,13 @@ end function
     await addEmojiLabel(dir, `function fixtureRead() as object
     builds = 0
     if m.fixtureBuilds <> invalid then builds = m.fixtureBuilds
-    return { builds: builds, compiled: m.emojiRegex <> invalid, failed: m.emojiRegexFailed = true, parts: m.components.getChildCount() }
+    return { builds: builds, compiled: m.emojiRegex <> invalid, failed: m.emojiRegexFailed = true, parts: m.components.getChildCount(), scrolling: m.animation.control = "start" }
 end function
 sub fixtureFailCompile()
     m.fixtureFail = true
+end sub
+sub fixtureScrollStart()
+    onScrollStart()
 end sub
 function fixtureCompile() as boolean
     return emojiPattern() <> invalid
@@ -180,6 +187,28 @@ function fixtureText() as string
         if child.subtype() = "Label" then text = text + child.text
     end for
     return text
+end function
+`);
+}
+
+async function buildModerationPackage(dir, marker) {
+    await addCommon(dir, 'Chat Moderation Fixture', marker, 'chat-main.brs');
+    await addFile(dir, 'source/support.brs', ''); // This fixture supplies its own assertion and port helpers.
+    await addFile(dir, 'source/main.brs', (await fs.readFile(path.join(__dirname, 'fixtures/chat-moderation/main.brs'), 'utf8')).replace('__PASS_MARKER__', marker));
+    await addFile(dir, 'components/ModerationHost.xml', '<component name="ModerationHost" extends="Scene" />');
+    await copyFile(dir, 'source/utils/ircParser.brs');
+    await addEmojiLabel(dir);
+    for (const file of ['ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
+    await addComponent(dir, 'components/Modules/Chat', 'Chat', `function fixtureJob() as dynamic
+    return m.chat
+end function
+function fixtureRead() as object
+    rows = []
+    for each message in m.chatPanel.getChildren(-1, 0)
+        identity = message.chatIdentity
+        rows.push({ id: identity.id, userId: identity.userId, login: identity.login, advance: message.chatAdvance, y: message.translation[1] })
+    end for
+    return { rows: rows, seq: m.moderationSeq, translation: m.translation, start: m.lower_bound - m.line_height, job: m.chat <> invalid }
 end function
 `);
 }
@@ -223,7 +252,7 @@ async function runFixture(prefix, build) {
         assert.equal(result.timedOut, false, `fixture timed out\n${failure}`);
         assert.equal(result.exceeded, false, `fixture exceeded output limit\n${failure}`);
         assert.equal(result.code, 0, `fixture exited ${result.code} (${result.signal})\n${failure}`);
-        assert.doesNotMatch(result.output, /STITCH_UI_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
+        assert.doesNotMatch(result.output, /STITCH_UI_FAIL:|STITCH_CHAT_MODERATION_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
         assert.match(result.output, /EXIT_USER_NAV/, `fixture did not close normally\n${failure}`);
         const summaries = [...result.output.matchAll(/STITCH_UI_PASS:[0-9a-f-]+:\s*(\d+) assertions/g)];
         assert.equal(summaries.length, 1, `expected exactly one success summary\n${failure}`);
@@ -252,4 +281,9 @@ test('error dialog Try again makes one fresh request and keeps position, quality
 test('chat name contrast cache, EmojiLabel pattern cache and token contrast', { timeout: 90000 }, async t => {
     const count = await runFixture('stitch-ui-phase2-chat-', buildChatPackage);
     t.diagnostic(`${count} assertions; the emoji pattern source is an engine boundary; chat transport never starts`);
+});
+
+test('chat removes displayed and in-flight moderation targets, preserves later messages and releases observers', { timeout: 90000 }, async t => {
+    const count = await runFixture('stitch-ui-chat-moderation-', buildModerationPackage);
+    t.diagnostic(`${count} current Chat handler assertions; parsed IRC notices and an inert transport, no live chat or pixels`);
 });

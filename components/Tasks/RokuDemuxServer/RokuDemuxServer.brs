@@ -217,7 +217,7 @@ end sub
 sub configureLiveLatency(state as object)
     state.windowUs = 14000000&
     state.pollFromRequest = m.top.lowLatency
-    if m.top.lowLatency then state.windowUs = 8000000&
+    if m.top.lowLatency then state.windowUs = 6000000&
 end sub
 
 function bindLiveListener() as boolean
@@ -1024,6 +1024,18 @@ sub recordSafeLiveFailure()
     if not loopbackString(reason) then return
     if not CreateObject("roRegex", "^native-(live|demux): [A-Za-z0-9 /_.-]{1,150}$", "").IsMatch(reason) then return
     m.result["helperFailureReason"] = reason
+    context = m.liveState.httpFailure
+    if type(context) <> "roAssociativeArray" then return
+    if loopbackInteger(context.status)
+        if context.status >= -1000 and context.status <= 599 then m.result["upstreamStatus"] = context.status
+    end if
+    if loopbackString(context.kind)
+        if context.kind = "playlist" or context.kind = "init" or context.kind = "segment" then m.result["upstreamKind"] = context.kind
+    end if
+    if loopbackString(context.phase)
+        if context.phase = "head" or context.phase = "get" then m.result["upstreamPhase"] = context.phase
+    end if
+    if loopbackBoolean(context.hasContentRange) then m.result["upstreamHasRange"] = context.hasContentRange
 end sub
 
 ' Optional on legacy fixture states; never fabricate an observed successful alias.

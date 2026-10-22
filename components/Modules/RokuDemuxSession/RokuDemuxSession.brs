@@ -200,6 +200,15 @@ function sessionWorkerFailureReason(result as object) as string
     ' A slow or stalled upstream fetch (seen when an ad break starts), or a
     ' stall long enough to fall behind the retained upstream history, is
     ' transient too: a fresh session restarts at the live edge.
+    if result.helperFailureReason = "native-live: GET status or range unsupported"
+        ' Refresh unknown legacy failures, expired authorization and server errors.
+        ' A deterministic framing rejection must not spend the reconnect budget.
+        status = result.upstreamStatus
+        if status = invalid then return "source_transition"
+        if not rokuDemuxInteger(status) then return "worker_finished"
+        if status = 401 or status = 403 or (status >= 500 and status <= 599) then return "source_transition"
+        return "worker_finished"
+    end if
     if result.helperFailureReason = "native-live: selected discontinuity change unsupported" or result.helperFailureReason = "native-live: continuity window crosses map or discontinuity" or result.helperFailureReason = "native-live: selected window crosses map or discontinuity" or result.helperFailureReason = "native-live: upstream operation deadline" or result.helperFailureReason = "native-live: upstream progress deadline" or result.helperFailureReason = "native-live: continuity window segment bound" or result.helperFailureReason = "native-live: continuity history unavailable" or result.helperFailureReason = "native-live: source sequence gap" then return "source_transition"
     return "worker_finished"
 end function
@@ -221,6 +230,19 @@ function sessionWorkerDiagnostic(result as object) as object
         kind = type(result[field], 3)
         if kind = "Boolean" or kind = "roBoolean" then summary[field] = result[field]
     end for
+    value = result.upstreamStatus
+    kind = type(value, 3)
+    if kind = "Integer" or kind = "LongInteger" or kind = "roInt"
+        if value >= -1000 and value <= 599 then summary["upstreamStatus"] = value
+    end if
+    if rokuDemuxString(result.upstreamKind)
+        if result.upstreamKind = "playlist" or result.upstreamKind = "init" or result.upstreamKind = "segment" then summary["upstreamKind"] = result.upstreamKind
+    end if
+    if rokuDemuxString(result.upstreamPhase)
+        if result.upstreamPhase = "head" or result.upstreamPhase = "get" then summary["upstreamPhase"] = result.upstreamPhase
+    end if
+    kind = type(result.upstreamHasRange, 3)
+    if kind = "Boolean" or kind = "roBoolean" then summary["upstreamHasRange"] = result.upstreamHasRange
     ' These fixed parser/transport messages distinguish common failures without
     ' copying arbitrary exception text into the console.
     if rokuDemuxString(result.helperFailureReason)

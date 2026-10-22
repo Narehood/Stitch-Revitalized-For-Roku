@@ -11,6 +11,7 @@ end sub
 
 sub setPageStatus(state as string, title = "" as string, message = "" as string, actionIds = [] as object)
     if m.status = invalid then return
+    statusHadFocus = m.status.isInFocusChain()
     m.statusActionIds = actionIds
     labels = []
     for each actionId in actionIds
@@ -22,7 +23,7 @@ sub setPageStatus(state as string, title = "" as string, message = "" as string,
     m.status.state = state
     if labels.count() = 0
         ' Hidden or loading panels cannot hold focus; return it to the content.
-        if m.status.isInFocusChain() and m.rowlist <> invalid then m.rowlist.setFocus(true)
+        if statusHadFocus and m.rowlist <> invalid then m.rowlist.setFocus(true)
     else if m.top.isInFocusChain()
         m.status.setFocus(true)
     end if

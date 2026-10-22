@@ -236,6 +236,7 @@ sub handleItemSelected()
         handleLiveItemSelected()
     else
         ' Regular navigation for other content types
+        m.top.playContent = false
         m.top.contentSelected = selectedItem
     end if
 end sub

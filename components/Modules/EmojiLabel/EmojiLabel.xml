@@ -68,6 +68,7 @@ multi-line text. You can only use EmojiLabel for single lines at a time. -->
         <function name="getAllComponents" />
     </interface>
     <children>
+        <Timer id="scrollStartTimer" duration="0.2" repeat="false" />
         <Timer
             id='timer'
             repeat='true' />

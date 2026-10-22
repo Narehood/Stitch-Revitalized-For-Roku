@@ -17,7 +17,7 @@ const snapshotFiles = ['components/Scenes/VideoPlayer/VideoPlayer.brs',
     'components/Scenes/VideoPlayer/VideoPlayer.xml', 'components/Scenes/VideoPlayer/RokuPlayback.brs',
     'components/heroScene.brs', 'components/heroScene.xml',
     'components/Modules/StitchVideo/StitchVideo.brs', 'components/Modules/StitchVideo/StitchVideo.xml',
-    'components/Modules/VideoErrorHandler/VideoErrorHandler.brs'];
+    'components/Modules/VideoErrorHandler/VideoErrorHandler.brs', 'source/utils/rokuDemuxCore.brs'];
 const lowLatencyScript = 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs';
 // Each removes one relay fix; [file, actual text, mutated text, expected failure].
 const lowLatencyMutations = {
@@ -72,6 +72,19 @@ async function buildPackage(dir, marker, mode = 'normal') {
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
         'components/Modules/CustomVideo', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
+    const qualityXmlPath = 'components/Modules/StitchVideo/StitchVideo.xml';
+    const qualityXml = await fs.readFile(path.join(dir, qualityXmlPath), 'utf8');
+    await addFile(dir, qualityXmlPath, qualityXml
+        .replace('</interface>', '<function name="fixtureQualityDialog" /></interface>')
+        .replace('</component>', '<script uri="pkg:/components/QualityProbe.brs" /></component>'));
+    await addFile(dir, 'components/QualityProbe.brs', 'function fixtureQualityDialog() as object\n    return m.qualityDialog\nend function\n');
+    const liveCore = await fs.readFile(path.join(root, 'source/utils/rokuDemuxCore.brs'), 'utf8');
+    const liveWindowBodies = ['nlCheck', 'nlWindow'].map(name => {
+        const match = liveCore.match(new RegExp(`^(?:sub|function) ${name}\\b[^]*?^end (?:sub|function)\\r?$`, 'm'));
+        assert.ok(match, `actual ${name} body required`);
+        return match[0];
+    }).join('\n\n');
+    await addFile(dir, 'source/ActualLiveWindow.brs', liveWindowBodies);
     for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Actual EmojiLabel rendering code; pattern construction is an explicit
     // existing engine boundary. Transport/bookmarks/registry never start.
@@ -173,6 +186,12 @@ async function buildPackage(dir, marker, mode = 'normal') {
         assert.equal(script.split(guard).length, 2, 'one actual remembered manual LIVE quality match required');
         await addFile(dir, playerPath, script.replace(guard, ''));
     }
+    if (mode === 'late-native-start') {
+        const script = await fs.readFile(path.join(dir, playerPath), 'utf8');
+        const start = 'if m.rokuLowLatency then contentNodeToPlay.PlayStart = 0';
+        assert.equal(script.split(start).length, 2, 'one opted-in native startup offset');
+        await addFile(dir, playerPath, script.replace(start, 'if m.rokuLowLatency then contentNodeToPlay.PlayStart = 4'));
+    }
     let main = await fixture('main.brs');
     if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
@@ -192,6 +211,10 @@ async function buildPackage(dir, marker, mode = 'normal') {
         const summaryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
             || line.trim() === 'testChoiceReadyAndBack()').join('\n');
         main = main.replace(start, summaryOnly);
+    } else if (mode === 'native-live-start' || mode === 'late-native-start') {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testNativeLiveStartupWindow()'));
+        main = main.replace(start, start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testNativeLiveStartupWindow()').join('\n'));
     } else if (mode === 'manual-live-quality' || mode === 'lost-manual-live-quality') {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testLiveManualQualityIntent()'));
@@ -325,6 +348,15 @@ test('actual player callbacks start eligible Roku playback, session ready, retry
     const { result, marker } = await runFixture();
     const count = acceptResult(result, marker);
     t.diagnostic(`${count} actual SceneGraph assertions; Session and network are explicit inert IO boundaries; no decoder/hardware proof`);
+});
+
+test('opted-in native startup retains the complete minimum window and rejects a late start', { timeout: 90000 }, async t => {
+    const actual = await runFixture('native-live-start');
+    t.diagnostic(`${acceptResult(actual.result, actual.marker)} assertions using actual Player startup and actual Core window selection`);
+    const late = await runFixture('late-native-start');
+    assertNormalExit(late.result, 'late-native-start');
+    assert.match(late.result.output, /STITCH_UI_FAIL:actual selected window retains six seconds after the requested native start/);
+    assert.throws(() => acceptResult(late.result, late.marker));
 });
 
 test('manual LIVE quality intent survives a missing recovery rung and rejects genuine intent loss', { timeout: 150000 }, async t => {

@@ -75,9 +75,13 @@ async function buildPackage(dir, marker) {
         'components/Modules/RecentlyWatchedBar/RecentlyWatchedItem.brs',
     ]) await copyFile(dir, file);
     for (const folder of [
-        'fonts', 'images', 'components/Modules/StatusPanel', 'components/Modules/TwitchContentNode',
+        'fonts', 'images', 'components/Modules/StatusPanel', 'components/Modules/TwitchContentNode', 'components/Modules/VideoItem', 'components/Modules/EmojiLabel',
         'components/Modules/CirclePoster', 'components/Modules/MenuBar/ButtonGroupHoriz',
     ]) await copyTree(dir, folder);
+    // The interpreter cannot compile the native Unicode emoji regex. Keep the
+    // actual label/card handlers and use the existing pattern-source boundary.
+    await addFile(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs',
+        await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/EmojiLabelRegex.brs')));
 
     // These are explicit I/O/view boundaries, never substitute tested handlers.
     // Native Task worker startup can crash in canvas; Groups retain real native
@@ -94,6 +98,13 @@ async function buildPackage(dir, marker) {
     const detailProbe = `function fixtureRead() as object
     return { task: m.GetContentTask, shell: m.GetShellTask, disposed: m.disposed, rowlist: m.rowlist, status: m.status, signedIn: m.signedIn }
 end function
+sub fixtureSelect(row as integer)
+    ' Only the read-only RowList selection fields are an input boundary.
+    original = m.rowlist
+    m.rowlist = { content: original.content, focusedChild: { id: "fixture" }, rowItemSelected: [row, 0] }
+    handleItemSelected()
+    m.rowlist = original
+end sub
 `;
     for (const name of ['Following', 'GamePage', 'ChannelPage']) {
         const replacements = [rowBoundary];
@@ -118,7 +129,7 @@ end sub
 end function
 `, [rowBoundary, ['<DynamicMiniKeyboard', '<KeyboardBoundary']]);
     await addComponent(dir, 'components/Modules/MenuBar', 'MenuBar', `function fixtureRead() as object
-    return { tabs: m.menuOptions, icons: m.iconOptions, caption: m.iconCaption, label: m.iconCaptionLabel, disposed: m.disposed }
+    return { tabs: m.menuOptions, icons: m.iconOptions, caption: m.iconCaption, label: m.iconCaptionLabel, disposed: m.disposed, loginTask: m.loginIconTask, profileId: get_user_setting("id", "") }
 end function
 `);
     await addComponent(dir, 'components/Modules/RecentlyWatchedBar', 'RecentlyWatchedBar', `function fixtureRead() as object

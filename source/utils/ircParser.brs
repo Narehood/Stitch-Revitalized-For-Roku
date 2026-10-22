@@ -200,6 +200,53 @@ function ircLoginLines(channel as string, secure as boolean, username as string,
     return lines
 end function
 
+' Moderation identities are short ASCII tokens: message UUIDs, numeric user IDs
+' and logins. Anything else is treated as absent.
+function ircIdentity(value as dynamic) as string
+    if getInterface(value, "ifString") = invalid then return ""
+    if value = "" or value.len() > 64 then return ""
+    value = lcase(value)
+    for index = 0 to value.len() - 1
+        char = asc(value.mid(index, 1))
+        if (char < 48 or char > 57) and (char < 97 or char > 122) and char <> 45 and char <> 95 then return ""
+    end for
+    return value
+end function
+
+' Retained with each chat message so later moderation can remove it.
+function ircMessageIdentity(message as object) as object
+    login = invalid
+    if message.source <> invalid then login = message.source.nick
+    return { id: ircIdentity(message.tags.id), userId: ircIdentity(message.tags.user_id), login: ircIdentity(login) }
+end function
+
+' CLEARMSG removes one message. CLEARCHAT removes one user's messages, or every
+' message when it names nobody. Malformed notices are ignored, never widened.
+function ircModerationEvent(message as object) as dynamic
+    command = message.command.command
+    if command = "CLEARMSG"
+        id = ircIdentity(message.tags.target_msg_id)
+        if id = "" then return invalid
+        return { kind: "message", id: id, userId: "", login: "" }
+    end if
+    if command <> "CLEARCHAT" then return invalid
+    if message.parameters = "" and not message.tags.doesExist("target_user_id")
+        return { kind: "room", id: "", userId: "", login: "" }
+    end if
+    userId = ircIdentity(message.tags.target_user_id)
+    login = ircIdentity(message.parameters)
+    if userId = "" and login = "" then return invalid
+    return { kind: "user", id: "", userId: userId, login: login }
+end function
+
+function ircModerationMatches(identity as dynamic, event as object) as boolean
+    if event.kind = "room" then return true
+    if identity = invalid then return false
+    if event.kind = "message" then return event.id <> "" and identity.id = event.id
+    if event.userId <> "" and identity.userId = event.userId then return true
+    return event.login <> "" and identity.login = event.login
+end function
+
 function ircBoundedDelay(delaySeconds as dynamic, forceLive as boolean) as float
     if forceLive then return 0
     if type(delaySeconds) <> "Float" and type(delaySeconds) <> "Double" and type(delaySeconds) <> "Integer" and type(delaySeconds) <> "roFloat" and type(delaySeconds) <> "roInt" then return 0

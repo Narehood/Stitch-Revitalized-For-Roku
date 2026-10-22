@@ -3,6 +3,7 @@ sub handleContent()
     if m.top.contentRequested = invalid then return
     if m.rokuSession = invalid then initRokuPlayback()
     stopPlaybackForDialog()
+    m.bookmarkStartDone = false
     m.rokuChosen = false
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     ' The stopped wrapper stays until the new item plays. Without its playback
@@ -180,6 +181,7 @@ end function
 ' and lower-latency preparation.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    if waitForBookmarks(isRecovery) then return
     stopAdMetadata()
     resetLiveRecoveryHealth()
     if prepareRokuPlayback(isRecovery) then return
@@ -335,9 +337,12 @@ sub playContent(isRecovery = false as boolean)
             ' when shorter, so the lower-latency relay shortens the playlist.
             ' https://developer.roku.com/dev/docs/specs/media (live edge spec)
             contentNodeToPlay.PlayStart = 2147483647
-            ' The on-Roku splitter publishes ~14 s windows in bursts. Starting
-            ' at the default edge leaves a 6 s cushion that runs dry ~20 s in.
-            if m.rokuSessionId <> "" then contentNodeToPlay.PlayStart = 4
+            ' Retain the default splitter's startup offset. The shorter opt-in
+            ' window requests its first segment so all available headroom remains.
+            if m.rokuSessionId <> ""
+                contentNodeToPlay.PlayStart = 4
+                if m.rokuLowLatency then contentNodeToPlay.PlayStart = 0
+            end if
         else if isClipContent
             contentNodeToPlay.ignoreStreamErrors = false
             contentNodeToPlay.switchingStrategy = "no-adaptation"
@@ -388,7 +393,53 @@ sub playContent(isRecovery = false as boolean)
     end if
 end sub
 
+function waitForBookmarks(isRecovery as boolean) as boolean
+    if m.bookmarkStartDone = true then return false
+    if m.top.content = invalid or m.top.contentRequested = invalid then return false
+    if m.top.contentRequested.contentType <> "VOD" then return false
+    if isRecovery or m.resumePosition <> invalid or m.bookmarksReady or m.bookmarksTask = invalid or get_setting("active_user", "$default$") = "$default$"
+        m.bookmarkStartDone = true
+        cancelBookmarkWait()
+        return false
+    end if
+    m.bookmarkPlayPending = true
+    if m.bookmarkWaitTimer = invalid then m.bookmarkWaitTimer = createTimer(2.5, "onBookmarkWaitExpired")
+    return true
+end function
+
+sub onBookmarksResponse(event = invalid as dynamic)
+    if m.disposed or m.bookmarksTask = invalid then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.bookmarksTask) then return
+    end if
+    m.bookmarksReady = true
+    m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
+    if m.bookmarkPlayPending = true
+        cancelBookmarkWait()
+        playContent()
+    end if
+end sub
+
+sub onBookmarkWaitExpired()
+    if m.disposed or m.bookmarkPlayPending <> true then return
+    m.bookmarkStartDone = true
+    cancelBookmarkWait()
+    ' Keep the cached position on failure or timeout; never seek a playing video later.
+    m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
+    playContent()
+end sub
+
+sub cancelBookmarkWait()
+    m.bookmarkPlayPending = false
+    if m.bookmarkWaitTimer <> invalid
+        m.bookmarkWaitTimer.control = "stop"
+        m.bookmarkWaitTimer.unobserveField("fire")
+        m.bookmarkWaitTimer = invalid
+    end if
+end sub
+
 sub exitPlayer()
+    cancelBookmarkWait()
     stopAdMetadata()
     resetLiveRecoveryHealth()
     ' If allowBreak is true, this is a real user/back exit. During internal
@@ -466,6 +517,13 @@ sub init()
     initRokuPlayback()
     initLowLatencyPlayback()
     m.bookmarksTask = m.top.findNode("bookmarksTask")
+    m.bookmarksReady = true
+    m.bookmarkStartDone = false
+    if m.bookmarksTask <> invalid and get_setting("active_user", "$default$") <> "$default$"
+        m.bookmarksReady = false
+        m.bookmarksTask.observeField("response", "onBookmarksResponse")
+        m.bookmarksTask.control = "run"
+    end if
     m.chatWindow = m.top.findNode("chat")
     if m.chatWindow <> invalid
         m.chatWindow.fontSize = get_user_setting("ChatFontSize")
@@ -1347,6 +1405,7 @@ function tryNativePlaybackFallback() as boolean
 end function
 
 sub stopPlaybackForDialog()
+    cancelBookmarkWait()
     resetLiveRecoveryHealth()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
     cleanupReconnectTask()
@@ -1400,6 +1459,7 @@ sub onDestroy()
     if m.disposed then return
     m.disposed = true
     m.isExiting = true
+    cancelBookmarkWait()
     destroyRokuPlayback()
     stopLowLatencyRelay()
     m.bookmarksTask = destroyTask(m.bookmarksTask, "response")

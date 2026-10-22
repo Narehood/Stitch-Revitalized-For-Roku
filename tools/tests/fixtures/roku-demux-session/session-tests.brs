@@ -421,6 +421,16 @@ sub testSourceTransitionClassification()
         { ready: true, reason: "live_helper_failed", helper: "native-live: selected discontinuity change unsupported", expected: "source_transition", label: "selected epoch" }
         { ready: true, reason: "live_helper_failed", helper: "native-live: continuity window crosses map or discontinuity", expected: "source_transition", label: "continuity window" }
         { ready: true, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity", expected: "source_transition", label: "selected window" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", expected: "source_transition", label: "GET status or range unsupported" }
+        { ready: false, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", expected: "worker_finished", label: "GET before ready" }
+        { ready: true, vod: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", expected: "worker_finished", label: "GET on ready VOD" }
+        { ready: true, reason: "native_exception", helper: "native-live: GET status or range unsupported", expected: "worker_finished", label: "GET wrong result reason" }
+        { ready: true, reason: {}, helper: "native-live: GET status or range unsupported", expected: "worker_finished", label: "GET nonstring result reason" }
+        { ready: true, reason: "live_helper_failed", helper: "native-demux: GET status or range unsupported", expected: "worker_finished", label: "GET foreign helper prefix" }
+        { ready: true, reason: "live_helper_failed", helper: "prefix native-live: GET status or range unsupported", expected: "worker_finished", label: "GET extra prefix" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported extra", expected: "worker_finished", label: "GET extra suffix" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported https://private.invalid/DIAGNOSTIC_SECRET_TOKEN", expected: "worker_finished", label: "GET private suffix" }
+        { ready: true, reason: "live_helper_failed", helper: "native-live: HEAD status or range unsupported", expected: "worker_finished", label: "HEAD stays outside GET recovery" }
         { ready: false, reason: "live_helper_failed", helper: "native-live: selected discontinuity change unsupported", expected: "worker_finished" }
         { ready: false, reason: "live_helper_failed", helper: "native-live: continuity window crosses map or discontinuity", expected: "worker_finished" }
         { ready: false, reason: "live_helper_failed", helper: "native-live: selected window crosses map or discontinuity", expected: "worker_finished" }
@@ -447,7 +457,14 @@ sub testSourceTransitionClassification()
         { ready: true, reason: "live_helper_failed", helper: {}, expected: "worker_finished" }
         { ready: true, reason: "live_helper_failed", helper: invalid, expected: "worker_finished" }
     ]
-    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity"]
+    for each status in [401, 403, 500, 502, 503, 599]
+        cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: status, expected: "source_transition", label: "recoverable HTTP status " + status.ToStr() })
+    end for
+    for each status in [200, 206, 301, 400, 404, 416, 429, 0, -1, 600, "503", true, {}, 503.5]
+        cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: status, hasRange: true, expected: "worker_finished", label: "deterministic or malformed HTTP result" })
+    end for
+    cases.push({ ready: true, reason: "live_helper_failed", helper: "native-live: GET status or range unsupported", status: 200, hasRange: false, expected: "worker_finished", label: "inconsistent successful GET result" })
+    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity", "native-live: GET status or range unsupported"]
         for each field in ["cleanupOk", "listenerClosed", "connectionClosed", "helperClosed", "cacheReferencesReleased"]
             for each value in [false, invalid, "true", 1]
                 cases.push({ ready: true, reason: "live_helper_failed", helper: helper, expected: "worker_finished", badField: field, badValue: value })
@@ -456,14 +473,23 @@ sub testSourceTransitionClassification()
     end for
     for each item in cases
         manager = newManager()
-        id = manager.callFunc("startSession", sessionDescriptor())
+        descriptor = sessionDescriptor()
+        if item.DoesExist("vod") then descriptor = vodSessionDescriptor()
+        id = manager.callFunc("startSession", descriptor)
         worker = manager.callFunc("fixtureRead").worker
-        if item.ready then worker.ready = readyFor(id)
+        if item.ready
+            ready = readyFor(id)
+            if item.DoesExist("vod") then ready = vodReadyFor(id, descriptor)
+            worker.ready = ready
+            check(manager.event.status = "ready", "classification matrix uses an actually ready session")
+        end if
         port = CreateObject("roMessagePort")
         manager.observeField("event", port)
         result = cleanupFor(id)
         result.reason = item.reason
         result.helperFailureReason = item.helper
+        if item.DoesExist("status") then result.upstreamStatus = item.status
+        if item.DoesExist("hasRange") then result.upstreamHasRange = item.hasRange
         if item.DoesExist("badField")
             if item.badValue = invalid
                 result.Delete(item.badField)
@@ -482,7 +508,7 @@ sub testSourceTransitionClassification()
         finishManager(manager)
     end for
 
-    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity"]
+    for each helper in ["native-live: selected discontinuity change unsupported", "native-live: continuity window crosses map or discontinuity", "native-live: selected window crosses map or discontinuity", "native-live: GET status or range unsupported"]
         manager = newManager()
         first = manager.callFunc("startSession", sessionDescriptor("old-epoch"))
         worker = manager.callFunc("fixtureRead").worker
@@ -620,6 +646,15 @@ end function
 
 function sessionDescriptor(choice = "default" as string) as object
     return { "version": 1, "sourceUrl": "https://use14.playlist.ttvnw.net/canned/" + choice + ".m3u8?token=canned%2B", "qualityId": "720p60", "approvedOrigins": ["https://use14.playlist.ttvnw.net"], "metadata": { "videoCodec": "avc1.4D4020", "audioCodec": "mp4a.40.2", "width": 1280, "height": 720, "frameRate": "60.000", "bandwidth": 3322199, "isHD": true } }
+end function
+
+function vodSessionDescriptor() as object
+    live = sessionDescriptor()
+    return { version: 2, mode: "vod", vodId: "123456789", usherUrl: "https://usher.ttvnw.net/vod/v2/123456789.m3u8?fixture=canned", sourceUrl: "https://d123.cloudfront.net/vod/720.m3u8?fixture=canned", qualityId: "720p60", approvedOrigin: "https://d123.cloudfront.net", metadata: live.metadata }
+end function
+
+function vodReadyFor(id as string, descriptor as object) as object
+    return { sessionId: id, boundAddressText: "127.0.0.1", boundPort: 49371, metadata: descriptor.metadata, decoderApproved: true, actualInitValidated: true, requestedDecoderFormat: { codec: "mpeg4 avc", profile: "main", level: "3.2" }, mode: "vod", totalDurationUs: 60000000&, masterPath: "/vod/" + id + "/master.m3u8" }
 end function
 
 function sessionIdentifier(value as string) as boolean

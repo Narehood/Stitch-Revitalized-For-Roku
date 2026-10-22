@@ -129,6 +129,7 @@ end sub
           <field id="stopRequested" type="boolean" value="false" />
           </interface><script uri="SessionWorkerBoundary.brs" /></component>`);
         await add('components/SessionWorkerBoundary.brs', 'sub onControl()\n    if m.top.control = "run" then m.top.state = "run"\n    if m.top.control = "stop" then m.top.state = "stop"\nend sub\n');
+        await add('components/RokuVodDemuxServer.xml', '<component name="RokuVodDemuxServer" extends="SessionWorkerBoundary" />');
         await add('components/SessionVideoBoundary.xml', '<component name="SessionVideoBoundary" extends="Group"><interface><field id="control" type="string" /><field id="state" type="string" value="none" /></interface></component>');
         // Uncalled taskFactory branches need known compile declarations only;
         // none of these inert Groups perform Task/network/Video work.
@@ -277,9 +278,9 @@ end sub
             assert.throws(() => requirePositive(guardFailure, marker));
             t.diagnostic(`actual ${name} transition guard removal is rejected`);
         }
-        const transitionReturn = 'then return "source_transition"';
+        const transitionReturn = 'or result.helperFailureReason = "native-live: source sequence gap" then return "source_transition"';
         assert.equal(fixtureSource.split(transitionReturn).length, 2, 'three known exact reasons share one transition result');
-        await add(managerPath, fixtureSource.replace(transitionReturn, 'then return "old_source_transition"'));
+        await add(managerPath, fixtureSource.replace(transitionReturn, transitionReturn.replace('return "source_transition"', 'return "old_source_transition"')));
         const oldTransitionZip = path.join(dir, 'old-source-transition-mutation.zip');
         await zipFolder(packageDir, oldTransitionZip);
         const oldTransitionFailure = await run(oldTransitionZip, 'positive', dir);
@@ -299,6 +300,16 @@ end sub
         assert.match(selectedWindowFailure.output, /SESSION_ASSERT_FAIL: transition classification requires exact ready reason and safe cleanup: selected window/);
         assert.throws(() => requirePositive(selectedWindowFailure, marker));
         t.diagnostic('actual exact selected-window classifier removal is rejected normally');
+        const httpStatusGate = 'if status = 401 or status = 403 or (status >= 500 and status <= 599) then return "source_transition"';
+        assert.equal(fixtureSource.split(httpStatusGate).length, 2, 'one recoverable HTTP status gate');
+        await add(managerPath, fixtureSource.replace(httpStatusGate, 'if status <> invalid then return "source_transition"'));
+        const broadHttpZip = path.join(dir, 'broad-http-recovery-mutation.zip');
+        await zipFolder(packageDir, broadHttpZip);
+        const broadHttpFailure = await run(broadHttpZip, 'positive', dir);
+        requireNormal(broadHttpFailure);
+        assert.match(broadHttpFailure.output, /SESSION_ASSERT_FAIL: transition classification requires exact ready reason and safe cleanup: deterministic or malformed HTTP result/);
+        assert.throws(() => requirePositive(broadHttpFailure, marker));
+        t.diagnostic('broad recovery of deterministic HTTP failures is rejected');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));

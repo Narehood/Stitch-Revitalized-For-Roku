@@ -248,10 +248,14 @@ function onKeyEvent(key as string, press as boolean) as boolean
 end function
 
 function buildIcon(icon)
+    accountIcon = m.global.constants.defaultIcons.login
+    if get_setting("active_user", "$default$") <> "$default$"
+        accountIcon = get_user_setting("profile_image_url", accountIcon)
+    end if
     map = {
         "search": m.global.constants.defaultIcons.search,
         "settings": m.global.constants.defaultIcons.settings,
-        "loginpage": get_user_setting("profile_image_url", m.global.constants.defaultIcons.login)
+        "loginpage": accountIcon
     }
     newItem = createObject("roSGNode", "Button")
     newItem.id = icon
@@ -399,9 +403,17 @@ function tabWidth(text as string, font as object) as integer
     return width + (m.buttonInset * 2)
 end function
 
-sub handleUserLoginResponse()
+sub handleUserLoginResponse(event = invalid as dynamic)
+    if m.disposed or m.loginIconTask = invalid then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.loginIconTask) then return
+    end if
     ? "[MenuBar] - handleUserLoginResponse()"
     search = m.loginIconTask.response
+    requestedUser = m.loginIconUser
+    m.loginIconTask = destroyTask(m.loginIconTask, "response")
+    m.loginIconUser = invalid
+    if requestedUser = invalid or requestedUser <> get_setting("active_user", "$default$") then return
     if search <> invalid and search.data <> invalid
         for each stream in search.data
             set_user_setting("id", stream.id)
@@ -418,9 +430,14 @@ sub handleUserLoginResponse()
 end sub
 
 sub handleUserLogin()
+    if m.disposed then return
     if m.top.updateUserIcon
-        if get_setting("active_user", "$default$") <> "$default$"
+        m.loginIconTask = destroyTask(m.loginIconTask, "response")
+        m.loginIconUser = invalid
+        activeUser = get_setting("active_user", "$default$")
+        if activeUser <> "$default$"
             ? "[MenuBar] - handleUserLogin()"
+            m.loginIconUser = activeUser
             m.loginIconTask = createApiTask("TwitchHelixApiRequest", "handleUserLoginResponse", {
                 params: {
                     endpoint: "users",
@@ -457,4 +474,5 @@ sub onDestroy()
         m.iconOptions.unobserveField("buttonSelected")
     end if
     m.loginIconTask = destroyTask(m.loginIconTask, "response")
+    m.loginIconUser = invalid
 end sub

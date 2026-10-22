@@ -12,7 +12,13 @@ whole-input tails, addressing, cross-track overlap, encryption, continuity,
 work/byte caps, forged plans, cancellation, close and output failure are actual
 helper assertions. Four deliberately mutated helpers must fail normal assertions.
 
-One fresh brs-node child has a 40-second deadline and 1MiB output ceiling; no
+Each fresh brs-node child uses the bounded numeric-byte-read adapter from
+roku-vod-large/engine.js. It reads the actual backing bytes instead of copying
+the entire buffer on each indexed read; production helpers and their assertions
+are unchanged. The large-fixture regression separately compares the adapter
+with the ordinary engine. Fresh worker markers are required in every mode.
+
+Each child has a 40-second deadline and 1MiB output ceiling; no
 network, SceneGraph, deployment, media decoder or device is involved. These are
 logical buffer and offline conversion checks, not native heap or throughput
 measurements and not an enabled recorded-playback path.

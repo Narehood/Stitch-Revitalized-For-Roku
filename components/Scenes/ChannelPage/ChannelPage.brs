@@ -111,6 +111,24 @@ function buildContentNodeFromShelves(rsp)
         row = createObject("RoSGNode", "ContentNode")
         row.title = tr("Live now")
         rowItem = m.top.contentRequested
+        if rowItem.contentType <> "LIVE"
+            request = rowItem
+            liveTitle = rsp.liveTitle
+            if GetInterface(liveTitle, "ifString") = invalid then liveTitle = ""
+            if liveTitle = "" then liveTitle = channelName()
+            rowItem = createObject("roSGNode", "TwitchContentNode")
+            setTwitchContentFields(rowItem, {
+                contentType: "LIVE",
+                contentTitle: liveTitle,
+                viewersCount: rsp.liveViewersCount,
+                gameDisplayName: rsp.liveGameDisplayName,
+                streamerLogin: request.streamerLogin,
+                streamerDisplayName: request.streamerDisplayName,
+                streamerId: request.streamerId,
+                streamerProfileImageUrl: request.streamerProfileImageUrl,
+                previewImageURL: Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", request.streamerLogin)
+            })
+        end if
         row.appendChild(rowItem)
         contentCollection.appendChild(row)
     end if

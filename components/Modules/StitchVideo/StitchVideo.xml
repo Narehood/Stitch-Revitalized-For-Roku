@@ -117,9 +117,6 @@
             </Group>
         </Group>
 
-        <!-- Quality Dialog -->
-        <StandardMessageDialog id="QualityDialog" visible="false" />
-
         <!-- Loading Overlay -->
         <Group id="loadingOverlay" translation="[640,360]" visible="true">
             <LayoutGroup

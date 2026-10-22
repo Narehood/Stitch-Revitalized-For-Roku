@@ -5,6 +5,7 @@ sub init()
     m.chatStatus = m.top.findNode("chatStatus")
     m.maskgroup = m.top.findNode("maskGroup")
     m.chat = invalid
+    m.moderationSeq = 0
     m.EmoteJob = invalid
     m.emoteChannel = ""
     ' Rendering helpers built once per chat instance, not per message or word.
@@ -115,9 +116,11 @@ sub startChatJob()
     if m.chat <> invalid or m.top.channel = "" then return
     m.chat = createObject("roSGNode", "ChatJob")
     m.top.appendChild(m.chat)
+    m.moderationSeq = 0
     m.chat.forceLive = m.top.forceLive
     m.chat.delaySeconds = m.top.delaySeconds
     m.chat.observeField("nextCommentObj", "onNewCommentObj")
+    m.chat.observeField("moderation", "onModeration")
     m.chat.observeField("connectionState", "onConnectionStateChange")
     m.chat.channel = m.top.channel
     updateChatStatus("connecting")
@@ -128,6 +131,7 @@ sub stopChatJob()
     if m.chat <> invalid
         m.chat.stopRequested = true
         destroyTask(m.chat, "nextCommentObj")
+        destroyTask(m.chat, "moderation")
         m.top.removeChild(m.chat)
         m.chat = destroyTask(m.chat, "connectionState")
     end if
@@ -350,9 +354,73 @@ sub onNewCommentObj()
     if m.chat <> invalid then m.chat.readyForNextComment = true
 end sub
 
+' Moderation applies to displayed messages at once, independent of the stream
+' delay. A gap before the published window cannot be resolved, so it clears all.
+sub onModeration()
+    if m.chat = invalid then return
+    update = m.chat.moderation
+    if update = invalid or update.events = invalid then return
+    events = update.events
+    if events.count() > 0 and events[0].seq > m.moderationSeq + 1 then removeModerated({ kind: "room" })
+    for each event in events
+        if event.seq > m.moderationSeq
+            m.moderationSeq = event.seq
+            removeModerated(event)
+        end if
+    end for
+end sub
+
+' Older messages move down by the space each removed message used, so the
+' newest message stays anchored where the next one is placed.
+sub removeModerated(event as object)
+    if event.kind = "room"
+        for each message in m.chatPanel.getChildren(-1, 0)
+            m.chatPanel.removeChild(message)
+        end for
+        m.translation = m.lower_bound - m.line_height
+        return
+    end if
+    children = m.chatPanel.getChildren(-1, 0)
+    shift = 0
+    for index = children.count() - 1 to 0 step -1
+        message = children[index]
+        if moderationMatches(message.chatIdentity, event)
+            shift += message.chatAdvance
+            m.chatPanel.removeChild(message)
+        else if shift > 0
+            message.translation = [message.translation[0], message.translation[1] + shift]
+        end if
+    end for
+end sub
+
+' Mirrors ircModerationMatches in the transport, whose parser this component does not load.
+function moderationMatches(identity as dynamic, event as object) as boolean
+    if event.kind = "room" then return true
+    if identity = invalid then return false
+    if event.kind = "message" then return event.id <> "" and identity.id = event.id
+    if event.userId <> "" and identity.userId = event.userId then return true
+    return event.login <> "" and identity.login = event.login
+end function
+
+' A comment can be in flight when moderation arrives. The transport stamps the
+' last moderation it applied to its queue, so only newer events can still match.
+function moderatedInFlight(comment as object) as boolean
+    delivered = comment.moderationSeq
+    update = m.chat.moderation
+    if delivered = invalid or update = invalid or update.events = invalid then return false
+    events = update.events
+    ' Events that left the bounded window cannot be checked; withhold the comment.
+    if events.count() > 0 and events[0].seq > delivered + 1 then return true
+    for each event in events
+        if event.seq > delivered and moderationMatches(comment.identity, event) then return true
+    end for
+    return false
+end function
+
 sub renderComment()
     if m.chat.nextCommentObj <> invalid
         comment = m.chat.nextCommentObj
+        if moderatedInFlight(comment) then return
         display_name = comment.tags.display_name
         message = comment.parameters
         color = ""
@@ -425,6 +493,10 @@ sub renderComment()
             m.chatPanel.removeChild(m.chatPanel.getChild(0))
         end if
         y_translation = group.localBoundingRect().height + m.line_gap
+        identity = comment.identity
+        if identity = invalid then identity = { id: "", userId: "", login: "" }
+        ' Moderation finds this message by identity and closes the space it used.
+        group.addFields({ chatIdentity: identity, chatAdvance: y_translation })
         if m.translation + y_translation > m.chatPanel.height
             for each chatmessage in m.chatPanel.getChildren(-1, 0)
                 if (chatmessage.translation[1] + chatmessage.localBoundingRect().height) < 0 ' Wait until it's off the screen to remove it.

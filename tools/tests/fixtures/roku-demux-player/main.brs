@@ -6,6 +6,7 @@
     try
         testLateBindingAndOrdinaryPaths()
         testChoiceReadyAndBack()
+        testNativeLiveStartupWindow()
         testCancelledStartAndDisposal()
         testDirectSwitch()
         testLowLatencyRelay()
@@ -39,7 +40,7 @@ end function
 
 sub manualIntentPick(player as object, index as integer)
     video = player.callFunc("fixtureRead").video
-    video.findNode("QualityDialog").buttonSelected = index
+    video.callFunc("fixtureQualityDialog").buttonSelected = index
     settle(60)
     ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
 end sub
@@ -716,9 +717,9 @@ sub testRepeatedRetainedQualityChoices()
     requestPort = createObject("roMessagePort")
     video.observeField("QualityChangeRequest", requestPort)
 
-    ' The engine cannot focus a child StandardMessageDialog. Its real
-    ' buttonSelected field still invokes the unchanged wrapper handler.
-    video.findNode("QualityDialog").buttonSelected = 1
+    ' Inspect the runtime modal through a read-only fixture export. Its real
+    ' buttonSelected field invokes the unchanged wrapper handler.
+    video.callFunc("fixtureQualityDialog").buttonSelected = 1
     settle(60)
     firstEvent = wait(1000, requestPort)
     firstId = player.callFunc("fixtureRead").sessionId
@@ -727,7 +728,7 @@ sub testRepeatedRetainedQualityChoices()
     check(firstId <> originalId and started.count() = 2 and started[1].descriptor.qualityId = "720p60", "first pick starts the exact 720 descriptor")
     check(player.callFunc("fixtureRead").video.isSameNode(video) and not video.QualityChangeRequestFlag, "consuming the first choice clears the flag on the same retained wrapper")
 
-    video.findNode("QualityDialog").buttonSelected = 2
+    video.callFunc("fixtureQualityDialog").buttonSelected = 2
     settle(60)
     secondEvent = wait(1000, requestPort)
     secondId = player.callFunc("fixtureRead").sessionId
@@ -768,7 +769,7 @@ sub testRepeatedRetainedQualityChoices()
     player.callFunc("onDestroy")
     oldRequest = video.QualityChangeRequest
     oldQuality = video.selectedQuality
-    video.findNode("QualityDialog").buttonSelected = 0
+    video.callFunc("fixtureQualityDialog").buttonSelected = 0
     player.callFunc("fixtureQualityEvent", staleEvent)
     player.callFunc("fixtureQualityEvent")
     check(video.QualityChangeRequest = oldRequest and video.selectedQuality = oldQuality and calls(session, "start").count() = 3, "disposed wrapper and player reject late selections and quality callbacks")
@@ -941,6 +942,35 @@ sub testLateBindingAndOrdinaryPaths()
     check(m.scene.dialog = invalid and player.callFunc("fixtureRead").video.control = "play", "Python proxied combined content follows ordinary playback without opt-in")
     check(player.content.isProxied and not player.content.ForwardQueryStringParams and calls(session, "start").count() = 0, "optional service flags remain intact")
     closePlayer(player)
+end sub
+
+sub testNativeLiveStartupWindow()
+    for each opted in [false, true]
+        setting = "false"
+        if opted then setting = "true"
+        set_user_setting("playback.lowLatency", setting)
+        player = openPlayer("LIVE")
+        session = sessionOf(player)
+        deliver(player, content("roku-demux"))
+        chooseRoku(player)
+        ready(session, player.callFunc("fixtureRead").sessionId)
+        video = player.callFunc("fixtureRead").video
+        expected = 4
+        if opted then expected = 0
+        check(video.content.PlayStart = expected, "native startup requests the correct offset for its latency mode")
+        if opted
+            for each count in [3, 8]
+                segments = []
+                for index = 0 to count - 1
+                    segments.push({ sequence: index + 0&, durationUs: 2000000&, mapUrl: "https://fixture.invalid/init.mp4", epoch: 0& })
+                end for
+                window = nlWindow({ ended: false, segments: segments, targetDuration: 2 }, 0&, false, false, 6000000&)
+                check(window.durationUs - video.content.PlayStart * 1000000& >= 6000000&, "actual selected window retains six seconds after the requested native start")
+            end for
+        end if
+        closePlayer(player)
+    end for
+    set_user_setting("playback.lowLatency", "true")
 end sub
 
 sub testChoiceReadyAndBack()

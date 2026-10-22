@@ -35,7 +35,7 @@ sub loadBrowse()
     setPageStatus("loading", tr("Loading channels and categories…"))
 
     ' Fire all three API tasks in parallel — three sections of one scrollable list
-    m.featuredTask = createApiTask("getHomePageQuery", "onFeaturedResponse")
+    m.featuredTask = createApiTask("getHomePageQuery", "onFeaturedResponse", { requireShelves: true })
     m.categoriesTask = createApiTask("getBrowsePageQuery", "onCategoriesResponse")
     m.liveTask = createApiTask("getBrowsePagePopularQuery", "onLiveResponse")
 end sub
@@ -353,9 +353,13 @@ sub appendRows(contentCollection as object)
     end for
 
     if m.rowList.content <> invalid
-        existingSizes = m.rowList.rowItemSize
-        existingLabels = m.rowList.showRowLabel
-        existingHeights = m.rowList.rowHeights
+        ' SceneGraph field arrays are non-resizable on Roku; append to copies.
+        existingSizes = []
+        existingLabels = []
+        existingHeights = []
+        existingSizes.append(m.rowList.rowItemSize)
+        existingLabels.append(m.rowList.showRowLabel)
+        existingHeights.append(m.rowList.rowHeights)
         existingSizes.append(rowItemSize)
         existingLabels.append(showRowLabel)
         existingHeights.append(rowHeights)
