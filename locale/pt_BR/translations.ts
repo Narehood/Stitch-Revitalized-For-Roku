@@ -1007,5 +1007,18 @@
             <source>Ad {0} of {1}</source>
             <translation>Anúncio {0} de {1}</translation>
         </message>
+        <message><source>Twitch watch credit</source><translation>Tempo assistido na Twitch</translation></message>
+        <message><source>Experimental: report live viewing to Twitch while signed in. Rewards, watch streaks and recap credit are not guaranteed. Takes effect when opening a stream.</source><translation>Experimental: informa à Twitch o tempo assistido ao vivo com sua conta conectada. Recompensas, sequências e tempo na retrospectiva não são garantidos. Entra em vigor ao abrir uma transmissão.</translation></message>
+        <message><source>Hype Trains in chat</source><translation>Trens do Hype no chat</translation></message>
+        <message><source>Show the current Hype Train level and progress in live chat. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Mostra o nível e o progresso do Trem do Hype no chat ao vivo. Experimental; as atualizações podem atrasar. Entra em vigor ao abrir uma transmissão.</translation></message>
+        <message><source>Hype Train · Level {0}</source><translation>Trem do Hype · Nível {0}</translation></message>
+        <message><source>Hype Train ended · Level {0}</source><translation>Trem do Hype encerrado · Nível {0}</translation></message>
+        <message><source>{0}% · {1} remaining</source><translation>{0}% · restam {1}</translation></message>
+        <message><source>{0} Bits</source><translation>{0} Bits</translation></message>
+        <message><source>Channel Points reward</source><translation>Recompensa de Pontos do Canal</translation></message>
+        <message><source>Pinned messages in chat</source><translation>Mensagens fixadas no chat</translation></message>
+        <message><source>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Mostra a mensagem fixada acima do chat ao vivo. Pressione Baixo com os controles do player ocultos para ler o texto completo. Experimental; as atualizações podem demorar. Aplicado ao abrir uma transmissão.</translation></message>
+        <message><source>Pinned message</source><translation>Mensagem fixada</translation></message>
+        <message><source>Press Down to read the full message</source><translation>Pressione Baixo para ler a mensagem completa</translation></message>
     </context>
 </TS>

@@ -124,7 +124,7 @@ async function buildRetryPackage(dir, marker) {
     // Inert task boundaries with the production interfaces: no worker,
     // network, socket or registry writes.
     for (const file of ['GetTwitchContent.xml', 'GetTwitchContentBoundary.brs', 'TwitchApiTask.xml',
-        'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
+        'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml', 'TwitchEngagementTask.xml']) await addFile(dir, `components/${file}`, await fixture(file));
     await addComponent(dir, 'components/Scenes/VideoPlayer', 'VideoPlayer', `function fixtureRead() as object
     return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer }
 end function
@@ -142,12 +142,26 @@ sub fixtureSpendRecovery(count as integer)
     m.recoveryAttempts = count
     m.reconnectAttempts = count
 end sub
+function fixtureEngagement() as object
+    return { worker: m.engagementTask, owner: m.engagementOwner, generation: m.engagementGeneration, paused: m.engagementPaused, chat: m.chatWindow }
+end function
 `);
     await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
     for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
+}
+
+async function buildEngagementPackage(dir, marker) {
+    await buildRetryPackage(dir, marker);
+    const helpers = await fixture('retry-main.brs');
+    const bodies = ['request', 'playable', 'openPlayer', 'closePlayer', 'contentTask', 'waitTasks', 'waitVideo'].map(name => {
+        const match = helpers.match(new RegExp(`^(?:sub|function) ${name}\\([^\\n]*\\r?\\n[\\s\\S]*?^end (?:sub|function)(?=\\r?$)`, 'm'));
+        assert.ok(match, `existing player fixture helper missing: ${name}`);
+        return match[0];
+    });
+    await addFile(dir, 'source/main.brs', [await fixture('engagement-main.brs'), ...bodies].join('\n'));
 }
 
 async function buildChatPackage(dir, marker) {
@@ -206,9 +220,27 @@ function fixtureRead() as object
     rows = []
     for each message in m.chatPanel.getChildren(-1, 0)
         identity = message.chatIdentity
-        rows.push({ id: identity.id, userId: identity.userId, login: identity.login, advance: message.chatAdvance, y: message.translation[1] })
+        rows.push({ id: identity.id, userId: identity.userId, login: identity.login, advance: message.chatAdvance, y: message.translation[1], text: fixtureText(message), posters: fixturePosters(message), parts: message.getChildCount() })
     end for
-    return { rows: rows, seq: m.moderationSeq, translation: m.translation, start: m.lower_bound - m.line_height, job: m.chat <> invalid }
+    age = -1
+    if m.hypeAge <> invalid then age = m.hypeAge.totalMilliseconds()
+    return { rows: rows, seq: m.moderationSeq, translation: m.translation, start: m.lower_bound - m.line_height, job: m.chat <> invalid, hypeVisible: m.hypePanel.visible, hypeTitle: m.hypeTitle.text, hypeDetail: m.hypeDetail.text, hypeProgress: m.hypeProgress.width, hypeTimer: m.hypeTimer, hypeAgeMs: age, pinVisible: m.pinPanel.visible, pinText: m.pinText.text, pinAuthor: m.pinAuthor.text, pinY: m.pinPanel.translation[1], pinTimer: m.pinTimer, pinDialog: m.pinDialog }
+end function
+function fixtureText(node as object) as string
+    if node.hasField("text") then return node.text
+    text = ""
+    for each child in node.getChildren(-1, 0)
+        text += fixtureText(child)
+    end for
+    return text
+end function
+function fixturePosters(node as object) as integer
+    if node.subtype() = "Poster" then return 1
+    count = 0
+    for each child in node.getChildren(-1, 0)
+        count += fixturePosters(child)
+    end for
+    return count
 end function
 `);
 }
@@ -286,4 +318,9 @@ test('chat name contrast cache, EmojiLabel pattern cache and token contrast', { 
 test('chat removes displayed and in-flight moderation targets, preserves later messages and releases observers', { timeout: 90000 }, async t => {
     const count = await runFixture('stitch-ui-chat-moderation-', buildModerationPackage);
     t.diagnostic(`${count} current Chat handler assertions; parsed IRC notices and an inert transport, no live chat or pixels`);
+});
+
+test('actual player owns opt-in watch samples independently of chat, rejects stale owners and cleans up workers', { timeout: 90000 }, async t => {
+    const count = await runFixture('stitch-ui-engagement-', buildEngagementPackage);
+    t.diagnostic(`${count} actual Player/Chat assertions; engagement Task is inert, no network, media or reward credit is tested`);
 });

@@ -356,7 +356,7 @@ sub testSettings(scene as object)
     print "SECTION Settings"
     page = addPage(scene, "Settings")
     s = inspect(page)
-    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 12, "actual Settings uses native MarkupList with all schema rows")
+    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 15, "actual Settings uses native MarkupList with all schema rows")
     check(m.global.fixtureWrites = 0 and m.global.fixtureDeletes = 0, "opening Settings displays defaults without any storage writes")
     check(settingValue(page, "ChatFontSize") = "Large (16)", "new-install chat display defaults to authorized 16")
     check(settingValue(page, "analytics.enabled") = "Off" and settingValue(page, "playback.lowLatency") = "Off", "diagnostics and experimental latency remain default off")
@@ -391,13 +391,24 @@ sub testSettings(scene as object)
     s.options.checkedItem = 3
     check(get_user_setting("ChatFontSize") = "16" and settingValue(page, "ChatFontSize") = "Large (16)", "chat selection stores option id and refreshes current label")
     page.callFunc("fixtureKey", "back")
+    for each key in ["playback.watchCredit", "chat.hypeTrain", "chat.pinnedMessages"]
+        focusSetting(page, key)
+        s = inspect(page)
+        check(page.findNode("settingTag").visible and s.options.checkedItem = 0 and settingValue(page, key) = "Off", "engagement setting is experimental and defaults off: " + key)
+        page.callFunc("fixtureKey", "right")
+        s.options.checkedItem = 1
+        check(get_user_setting(key) = "true" and settingValue(page, key) = "On", "engagement option stores an explicit opt-in: " + key)
+        s.options.checkedItem = 0
+        check(get_user_setting(key) = "false", "engagement option supports opting out: " + key)
+        page.callFunc("fixtureKey", "back")
+    end for
     check(settingIndex(page, "support") = -1, "donation action is absent from the actual Settings menu")
     check(page.findNode("supportQrPoster") = invalid, "donation QR poster is absent from the actual Settings page")
     section = { children: [{ title: "Nested", settingName: "fixture.nested", type: "bool", default: "false" }] }
     page.callFunc("fixtureHierarchy", section)
     check(inspect(page).levels = 2 and inspect(page).menu.content.getChildCount() = 1, "actual LoadMenu supports retained hierarchy")
     page.callFunc("fixtureKey", "back")
-    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 12 and not page.backPressed, "Back restores parent settings before page back")
+    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 15 and not page.backPressed, "Back restores parent settings before page back")
     page.callFunc("fixtureKey", "back")
     check(page.backPressed, "Back at root emits page back")
     page.backPressed = false

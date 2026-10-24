@@ -15,6 +15,7 @@
         <field id="control" type="string" alwaysNotify="true" onChange="controlChanged" />
         <field id="streams" type="assocarray" />
         <field id="ChatStarted" type="bool" value="false" />
+        <field id="engagementStatus" type="assocarray" alwaysNotify="true" />
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
     <script type="text/brightscript" uri="RokuPlayback.brs" />

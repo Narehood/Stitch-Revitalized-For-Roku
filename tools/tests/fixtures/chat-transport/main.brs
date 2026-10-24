@@ -85,6 +85,30 @@ sub runConnectionTests()
     socket = fixtureCreateObject("roStreamSocket")
     runChatConnection({ socket: socket, secure: false })
     check(getGlobalAA().receiveCalls = 0 and getGlobalAA().waits = 0, "stopped connection never reads another packet")
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.clockStep = 10
+    state.liveAt = 8
+    state.stopAt = 60
+    m.top.delaySeconds = 60
+    state.script = [
+        ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+        privmsg("before", "101", "alice", "hello")
+        "@id=gift;login=bob;msg-id=submysterygift;system-msg=Bob\sgifted\s5\ssubs! :tmi.twitch.tv USERNOTICE #canned" + chr(13) + chr(10)
+        "@id=resub;login=carol;msg-id=resub;system-msg=Carol\ssubscribed!;emotes=25:0-4 :tmi.twitch.tv USERNOTICE #canned :Kappa thanks!" + chr(13) + chr(10)
+        "@id=empty;msg-id=subgift :tmi.twitch.tv USERNOTICE #canned" + chr(13) + chr(10)
+        privmsg("after", "404", "dave", "bye")
+    ]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(deliveredIds() = "before,gift,resub,after", "USERNOTICE shares the ordered message queue and empty notices are ignored")
+    check(state.deliveredBeforeLive = 0, "notices obey the delay and renderer-ready handshake")
+    delivered = state.delivered
+    if delivered.count() = 4
+        check(delivered[1].parameters = "" and delivered[1].tags.system_msg = "Bob gifted 5 subs!", "system-only gift reaches the renderer")
+        check(delivered[2].parameters = "Kappa thanks!" and delivered[2].tags.emotes["25"][0].startPosition = 0, "resub delivery preserves user text and emote offsets")
+    end if
 end sub
 
 sub runSendTests()
@@ -254,6 +278,7 @@ end function
 sub scriptedRenderer(state as object)
     if state.waits < state.liveAt and m.top.moderation <> invalid then state.publishedBeforeLive = m.top.moderation.seq
     if m.top.nextCommentObj <> invalid
+        if state.waits < state.liveAt then state.deliveredBeforeLive++
         delivered = state.delivered
         delivered.push(m.top.nextCommentObj)
         state.delivered = delivered
@@ -330,6 +355,7 @@ sub resetBoundary()
     state.script = []
     state.liveAt = 0
     state.delivered = []
+    state.deliveredBeforeLive = 0
     state.publishedBeforeLive = 0
 end sub
 
