@@ -134,17 +134,33 @@ function validateVariables(query, variables, label) {
     }
 }
 
+function outgoingPayload(call) {
+    if (!bsc.isVariableExpression(call.callee)) return undefined;
+    const name = call.callee.name.text.toLowerCase();
+    if (name === 'twitchgraphqlrequest') {
+        assert.equal(call.args.length, 1, 'GraphQL wrapper must have one payload');
+        return call.args[0];
+    }
+    if (name === 'engagementhttp' && staticString(call.args[0]) === 'https://gql.twitch.tv/gql') {
+        const encoded = call.args[3];
+        assert.ok(bsc.isCallExpression(encoded) && bsc.isVariableExpression(encoded.callee) && encoded.callee.name.text.toLowerCase() === 'formatjson');
+        assert.equal(encoded.args.length, 1);
+        return encoded.args[0];
+    }
+    return undefined;
+}
+
 function inspectSource(source, filename) {
     const parser = bsc.Parser.parse(source, { mode: filename.endsWith('.bs') ? bsc.ParseMode.BrighterScript : bsc.ParseMode.BrightScript });
     assert.deepEqual(parser.diagnostics, [], `${filename}: request source must parse without errors`);
     const requests = [];
     parser.ast.walk(bsc.createVisitor({
         CallExpression(call) {
-            if (!bsc.isVariableExpression(call.callee) || call.callee.name.text.toLowerCase() !== 'twitchgraphqlrequest') return;
-            assert.equal(call.args.length, 1, `${filename}: GraphQL request must have one payload`);
+            const expression = outgoingPayload(call);
+            if (expression === undefined) return;
             const label = `${filename}:${call.range.start.line + 1}`;
             const seen = new Set();
-            const payload = inspectObject(call.args[0], call, label, seen);
+            const payload = inspectObject(expression, call, label, seen);
             const allowed = new Set(['query', 'variables', 'operationName', 'extensions']);
             for (const key of payload.keys()) assert.ok(allowed.has(key), `${label}: unknown GraphQL envelope key ${key}`);
             assert.ok(payload.has('query') || payload.has('operationName'), `${label}: query or operationName is required`);
@@ -185,7 +201,7 @@ function productionSources() {
             if (entry.isDirectory()) collect(filename);
             else if (/\.(?:brs|bs)$/.test(entry.name)) {
                 const source = fs.readFileSync(filename, 'utf8');
-                if (/\bTwitchGraphQLRequest\s*\(/i.test(source)) sources.set(path.relative(root, filename), source);
+                if (/\b(?:TwitchGraphQLRequest|engagementHttp)\s*\(/i.test(source)) sources.set(path.relative(root, filename), source);
             }
         }
     }
@@ -198,7 +214,7 @@ test('actual outgoing GraphQL requests preserve native Roku wire keys and declar
     const requests = [...productionSources()].flatMap(([filename, source]) => inspectSource(source, filename));
     assert.ok(requests.length > 0, 'the production scan must find outgoing GraphQL requests');
     const keys = new Set(requests.flatMap(request => [...request.keys]));
-    for (const key of ['videoId', 'playerType', 'skipPlayToken', 'operationName', 'persistedQuery', 'sha256Hash', 'disableNotifications', 'targetID']) {
+    for (const key of ['videoId', 'playerType', 'skipPlayToken', 'operationName', 'persistedQuery', 'sha256Hash', 'disableNotifications', 'targetID', 'includeHype']) {
         assert.ok(keys.has(key), `production contract coverage must include ${key}`);
     }
     t.diagnostic(`${requests.length} actual outgoing request sites checked against native literal-key semantics; no live Twitch or decoder claim`);
@@ -211,8 +227,9 @@ test('removing quotes from each actual mixed-case request key is rejected withou
         const mutations = [];
         parser.ast.walk(bsc.createVisitor({
             CallExpression(call) {
-                if (!bsc.isVariableExpression(call.callee) || call.callee.name.text.toLowerCase() !== 'twitchgraphqlrequest') return;
-                call.args[0].walk(bsc.createVisitor({ AAMemberExpression(member) {
+                const expression = outgoingPayload(call);
+                if (expression === undefined) return;
+                expression.walk(bsc.createVisitor({ AAMemberExpression(member) {
                     if (member.keyToken.kind !== bsc.TokenKind.StringLiteral) return;
                     const name = member.keyToken.text.slice(1, -1);
                     if (name !== name.toLowerCase()) mutations.push(member.keyToken);

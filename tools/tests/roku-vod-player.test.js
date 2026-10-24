@@ -81,6 +81,8 @@ async function build(dir, marker, capability, mutation) {
         'TwitchApiTask.xml', 'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) {
         await add(dir, `components/${file}`, await fs.readFile(path.join(sharedFixtures, file)));
     }
+    await add(dir, 'components/TwitchEngagementTask.xml',
+        await fs.readFile(path.join(root, 'tools/tests/fixtures/ui-phase2-player/TwitchEngagementTask.xml')));
     await add(dir, 'source/utils/config.brs', await fs.readFile(path.join(sharedFixtures, 'config.brs')));
     await add(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fs.readFile(path.join(sharedFixtures, 'EmojiLabelRegex.brs')));
     for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs']) {

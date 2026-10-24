@@ -45,11 +45,22 @@ function ircParseMessage(message as dynamic) as dynamic
     if parsed.command.command = "PING" and trailing < 0 and parts.count() > 1
         parsed.parameters = parts[1]
     end if
-    if parsed.command.command = "PRIVMSG"
-        if parts.count() < 2 or parts[1].left(1) <> "#" or trailing < 0 then return invalid
+    command = parsed.command.command
+    if command = "PRIVMSG" or command = "USERNOTICE"
+        if parts.count() < 2 or parts[1].left(1) <> "#" then return invalid
+        if command = "PRIVMSG" and trailing < 0 then return invalid
         if parsed.parameters.len() > 1500 then return invalid
+        if command = "USERNOTICE"
+            systemMessage = parsed.tags.system_msg
+            if systemMessage = invalid then systemMessage = ""
+            if systemMessage.len() > 1500 then return invalid
+            if systemMessage.trim() = "" and parsed.parameters.trim() = "" then return invalid
+        end if
         if not parsed.tags.doesExist("display_name") or parsed.tags.display_name = ""
-            if parsed.source <> invalid and parsed.source.nick <> invalid
+            if command = "USERNOTICE"
+                parsed.tags.display_name = ""
+                if parsed.tags.login <> invalid then parsed.tags.display_name = parsed.tags.login
+            else if parsed.source <> invalid and parsed.source.nick <> invalid
                 parsed.tags.display_name = parsed.source.nick
             else
                 return invalid
@@ -217,6 +228,7 @@ end function
 function ircMessageIdentity(message as object) as object
     login = invalid
     if message.source <> invalid then login = message.source.nick
+    if message.command.command = "USERNOTICE" then login = message.tags.login
     return { id: ircIdentity(message.tags.id), userId: ircIdentity(message.tags.user_id), login: ircIdentity(login) }
 end function
 

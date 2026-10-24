@@ -106,13 +106,160 @@ sub main()
     moderate(chat, nextJob, "@target-msg-id=m13 :tmi.twitch.tv CLEARMSG #canned :x")
     check(rows(chat).count() = 0, "a restarted job's first event is applied")
     deliver(nextJob, privmsg("o15", "707", "hana", "last"), 1)
+
+    ' USERNOTICE can contain a system line, a user's message, or both. A known
+    ' local emote keeps this fixture offline and proves system text stays text.
+    m.global.setField("emoteCache", { Kappa: "pkg:/images/white-square-mask.png" })
+    deliver(nextJob, "@id=gift;login=bob;user-id=808;msg-id=subgift;system-msg=Kappa\sgifted\sa\ssub! :tmi.twitch.tv USERNOTICE #canned", 1)
+    deliver(nextJob, "@id=resub;login=bob;user-id=808;msg-id=resub;system-msg=Bob\ssubscribed!;emotes=25:0-4 :tmi.twitch.tv USERNOTICE #canned :Kappa thanks!", 1)
+    deliver(nextJob, "@id=anonymous;msg-id=anonsubmysterygift;system-msg=An\sanonymous\sviewer\sgifted\s5\ssubs! :tmi.twitch.tv USERNOTICE #canned", 1)
+    deliver(nextJob, "@id=multiline;system-msg=Raid\nfrom\rAlice! :tmi.twitch.tv USERNOTICE #canned", 1)
+    deliver(nextJob, "@id=announcement;display-name=Alice;login=alice;msg-id=announcement :tmi.twitch.tv USERNOTICE #canned :Welcome everyone!", 1)
+    notices = rows(chat)
+    check(ids(notices) = "o15,gift,resub,anonymous,multiline,announcement", "system-only and user-message notices render in order")
+    if notices.count() = 6
+        check(notices[1].text = "Kappa gifted a sub! " and notices[1].posters = 0 and notices[1].parts = 1, "system gift text renders without a fake username or emote substitution")
+        check(notices[2].text.instr("Bob subscribed!") >= 0 and notices[2].text.instr("thanks!") >= 0 and notices[2].posters = 1 and notices[2].parts = 2, "resub renders its system line and separate emote-bearing user message")
+        check(notices[2].login = "bob" and notices[2].userId = "808", "rendered notices retain the actor for moderation")
+        check(notices[3].text = "An anonymous viewer gifted 5 subs! ", "anonymous notices render without account tags")
+        check(notices[4].text = "Raid from Alice! ", "escaped newlines become safe spaces in the system line")
+        check(notices[5].text.instr("Alice") >= 0 and notices[5].text.instr("Welcome everyone!") >= 0, "user-only announcements preserve sender and message")
+        check(notices[2].advance > notices[1].advance, "a notice with user text reserves space for both lines")
+    end if
+    moderate(chat, nextJob, "@target-user-id=808 :tmi.twitch.tv CLEARCHAT #canned :bob")
+    check(ids(rows(chat)) = "o15,anonymous,multiline,announcement", "a user purge removes the user's complete notices")
+    deliver(nextJob, "@id=bits;display-name=Alice;bits=100;emotes=25:0-4 :alice!alice@host PRIVMSG #canned :Kappa cheers!", 2)
+    deliver(nextJob, "@id=reward;display-name=Alice;custom-reward-id=reward-1 :alice!alice@host PRIVMSG #canned :Hello!", 2)
+    events = rows(chat)
+    check(events[4].text.instr("100 Bits") >= 0 and events[4].posters = 1 and events[4].parts = 2, "Bits amount is highlighted without shifting the user's emotes")
+    check(events[5].text.instr("Channel Points reward") >= 0 and events[5].text.instr("Hello!") >= 0, "reward-tagged messages show their context and original text")
+    moderate(chat, nextJob, ":tmi.twitch.tv CLEARCHAT #canned")
+    deliver(nextJob, privmsg("o15", "707", "hana", "last"), 3)
+
+    now = createObject("roDateTime").asSeconds()
+    chat.hypeTrain = { id: "train", level: 3, percent: 18, expiresAt: now + 90&, observedAt: now, status: "active", shared: false }
+    settle(100)
+    banner = chat.callFunc("fixtureRead")
+    check(banner.hypeVisible and banner.hypeTitle.instr("3") >= 0 and banner.hypeDetail.instr("18%") >= 0, "current Hype Train level and progress render in chat")
+    sameHype = chat.hypeTrain
+    chat.hypeTrain = sameHype
+    check(chat.callFunc("fixtureRead").hypeAgeMs < banner.hypeAgeMs, "an unchanged fresh snapshot refreshes the banner's freshness")
+    check(near(banner.hypeProgress, (chat.width - 24) * 0.18), "Hype Train bar uses provider progress and chat width")
+    timer = banner.hypeTimer
+    check(timer <> invalid and timer.control = "start", "the visible snapshot has a live expiry timer")
+    chat.visible = false
+    waitUntil(chat, "job", false, "chat hides while a train is active")
+    check(not chat.callFunc("fixtureRead").hypeVisible and timer.control = "stop", "hiding chat stops its banner timer")
+    chat.visible = true
+    waitUntil(chat, "job", true, "chat reopens while a train is active")
+    nextJob = chat.callFunc("fixtureJob")
+    check(chat.callFunc("fixtureRead").hypeVisible, "a still-fresh train survives chat hide/show")
+    chat.hypeTrain = { id: "train", level: 3, percent: 18, expiresAt: now + 90&, observedAt: now - 46, status: "active", shared: false }
+    settle(50)
+    check(not chat.callFunc("fixtureRead").hypeVisible, "republishing an old source snapshot cannot refresh its freshness")
+    chat.hypeTrain = { id: "train", level: 3, percent: 18, expiresAt: createObject("roDateTime").asSeconds() + 1&, observedAt: now, status: "active", shared: false }
+    settle(1300)
+    check(not chat.callFunc("fixtureRead").hypeVisible and timer.control = "stop", "provider expiry hides the train without requiring another poll")
+    chat.hypeTrain = { id: "train", level: 3, percent: 18, expiresAt: now + 90&, observedAt: now, status: "ended", shared: false }
+    settle(100)
+    check(chat.callFunc("fixtureRead").hypeTitle.instr("ended") >= 0 and chat.callFunc("fixtureRead").hypeDetail = "", "an explicit end displays an end state without a countdown")
     chat.callFunc("onDestroy")
-    nextJob.moderation = { seq: 2, events: [event(1, "message", "m13"), event(2, "room", "")] }
+    check(timer.control = "stop" and chat.callFunc("fixtureRead").hypeTimer = invalid and not chat.callFunc("fixtureRead").hypeVisible, "disposal releases the Hype Train timer")
+    nextJob.moderation = { seq: 4, events: [event(4, "room", "")] }
     settle(300)
     check(ids(rows(chat)) = "o15" and not chat.callFunc("fixtureRead").job, "disposal releases the moderation observer")
     scene.removeChild(chat)
+    checkPins(scene)
     finish()
 end sub
+
+sub checkPins(scene as object)
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.channel = "pins"
+    waitUntil(chat, "job", true, "pinned chat starts")
+    job = chat.callFunc("fixtureJob")
+    m.log = []
+    now = createObject("roDateTime").asSeconds()
+    pin = fixturePin("pin-1", now)
+    chat.pinnedMessage = pin
+    state = chat.callFunc("fixtureRead")
+    check(state.pinVisible and state.pinText = pin.text and state.pinAuthor = "Moderator", "pin preview retains the author and complete source text")
+    timer = state.pinTimer
+    check(timer <> invalid and timer.control = "start", "a visible pin owns an expiry timer")
+    chat.hypeTrain = { id: "train", level: 2, percent: 25, expiresAt: now + 90&, observedAt: now, status: "active" }
+    state = chat.callFunc("fixtureRead")
+    check(state.hypeVisible and state.pinVisible and state.pinY = 76, "pins and Hype Trains occupy separate chat headers")
+    check(chat.callFunc("showPinnedMessage"), "the full pinned message can be opened")
+    dialog = scene.dialog
+    check(dialog <> invalid and chat.callFunc("fixtureRead").pinDialog <> invalid, "the chat owns its full-text dialog")
+    check(not chat.callFunc("showPinnedMessage"), "a second full-text dialog is not opened over the first")
+    chat.pinnedMessage = invalid
+    check(not chat.callFunc("fixtureRead").pinVisible and scene.dialog = invalid and timer.control = "stop", "unpinning closes the full text and stops its timer")
+
+    chat.pinnedMessage = pin
+    check(chat.callFunc("showPinnedMessage"), "a newly visible pin can be opened again")
+    dialog = scene.dialog
+    dialog.buttonSelected = 0
+    settle(50)
+    check(scene.dialog = invalid, "the continue-watching button closes the dialog")
+    chat.visible = false
+    waitUntil(chat, "job", false, "pinned chat hides")
+    check(not chat.callFunc("fixtureRead").pinVisible and timer.control = "stop", "hiding chat hides its pin and stops the timer")
+    chat.visible = true
+    waitUntil(chat, "job", true, "pinned chat reopens")
+    job = chat.callFunc("fixtureJob")
+    check(chat.callFunc("fixtureRead").pinVisible, "a fresh pin survives chat hide and show")
+    old = fixturePin("old", now - 46)
+    chat.pinnedMessage = old
+    chat.pinnedMessage = old
+    check(not chat.callFunc("fixtureRead").pinVisible, "repeated publication cannot make an old pin fresh")
+    expired = fixturePin("expired", now)
+    expired.expiresAt = createObject("roDateTime").asSeconds() + 1&
+    chat.pinnedMessage = expired
+    check(chat.callFunc("showPinnedMessage"), "a timed pin opens while it is current")
+    settle(1350)
+    check(not chat.callFunc("fixtureRead").pinVisible and scene.dialog = invalid and timer.control = "stop", "expiry hides the pin and closes its dialog without another poll")
+
+    chat.pinnedMessage = pin
+    check(chat.callFunc("showPinnedMessage"), "the current pin opens before moderation")
+    moderate(chat, job, "@target-msg-id=pin-1 :tmi.twitch.tv CLEARMSG #pins :deleted")
+    chat.pinnedMessage = pin
+    check(not chat.callFunc("fixtureRead").pinVisible and scene.dialog = invalid, "message deletion suppresses a delayed pin snapshot and closes its dialog")
+    for i = 1 to 33
+        moderate(chat, job, "@target-msg-id=other" + i.toStr() + " :tmi.twitch.tv CLEARMSG #pins :deleted")
+    end for
+    chat.pinnedMessage = pin
+    check(not chat.callFunc("fixtureRead").pinVisible, "a deleted current pin stays suppressed after the moderation window rolls")
+    userPin = fixturePin("user-pin", now)
+    chat.pinnedMessage = userPin
+    check(chat.callFunc("fixtureRead").pinVisible, "deleting one message does not suppress another pin")
+    moderate(chat, job, "@target-user-id=202 :tmi.twitch.tv CLEARCHAT #pins :moderator")
+    check(not chat.callFunc("fixtureRead").pinVisible, "a user purge hides that user's earlier pinned message")
+    newPin = fixturePin("new-pin", now)
+    newPin.sentAt = createObject("roDateTime").asSeconds() + 1&
+    chat.pinnedMessage = newPin
+    check(chat.callFunc("fixtureRead").pinVisible, "a pin of a new message after a purge remains eligible")
+    newPin.sentAt = now - 10
+    newPin.userId = "303"
+    newPin.login = "another"
+    chat.pinnedMessage = newPin
+    moderate(chat, job, ":tmi.twitch.tv CLEARCHAT #pins")
+    check(not chat.callFunc("fixtureRead").pinVisible, "a room clear removes earlier pins from every user")
+    chat.channel = "replacement"
+    check(chat.pinnedMessage = invalid and not chat.callFunc("fixtureRead").pinVisible, "channel replacement clears the previous pin")
+    chat.pinnedMessage = pin
+    check(chat.callFunc("fixtureRead").pinVisible, "channel replacement releases old-channel moderation tombstones")
+    chat.callFunc("showPinnedMessage")
+    chat.callFunc("onDestroy")
+    state = chat.callFunc("fixtureRead")
+    check(timer.control = "stop" and state.pinTimer = invalid and not state.pinVisible and scene.dialog = invalid, "disposal releases the pin timer and full-text dialog")
+    scene.removeChild(chat)
+end sub
+
+function fixturePin(id as string, now as longinteger) as object
+    return { id: id, messageId: id, userId: "202", login: "moderator", senderName: "Moderator", text: "Read this pinned message in full.", sentAt: now - 10, updatedAt: now, expiresAt: invalid, observedAt: now }
+end function
 
 function privmsg(id as string, userId as string, login as string, text as string) as string
     return "@display-name=" + login + ";id=" + id + ";user-id=" + userId + " :" + login + "!" + login + "@" + login + ".tmi.twitch.tv PRIVMSG #canned :" + text + chr(13) + chr(10)

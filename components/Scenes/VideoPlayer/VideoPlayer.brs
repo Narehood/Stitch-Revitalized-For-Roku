@@ -1,6 +1,7 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    stopTwitchEngagement()
     if m.rokuSession = invalid then initRokuPlayback()
     stopPlaybackForDialog()
     m.bookmarkStartDone = false
@@ -181,6 +182,7 @@ end function
 ' and lower-latency preparation.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    pauseTwitchEngagement()
     if waitForBookmarks(isRecovery) then return
     stopAdMetadata()
     resetLiveRecoveryHealth()
@@ -383,12 +385,15 @@ sub playContent(isRecovery = false as boolean)
             m.video.videoTitle = contentNodeToPlay.contentTitle
         end if
 
+        m.engagementGeneration++
+        m.engagementPaused = false
         m.video.visible = true
         m.video.control = "play"
         m.video.SetFocus(true)
 
         if isLiveContent
             initChat()
+            startTwitchEngagement()
         end if
     end if
 end sub
@@ -439,6 +444,8 @@ sub cancelBookmarkWait()
 end sub
 
 sub exitPlayer()
+    pauseTwitchEngagement()
+    if m.allowBreak then stopTwitchEngagement()
     cancelBookmarkWait()
     stopAdMetadata()
     resetLiveRecoveryHealth()
@@ -498,6 +505,9 @@ end sub
 
 function onKeyEvent(key, press) as boolean
     if press
+        if key = "down" and m.chatWindow <> invalid and m.chatWindow.visible
+            return m.chatWindow.callFunc("showPinnedMessage")
+        end if
         if key = "back"
             return requestBack()
         end if
@@ -514,6 +524,11 @@ end function
 
 sub init()
     m.disposed = false
+    m.engagementTask = invalid
+    m.engagementOwner = ""
+    m.engagementGeneration = 0
+    m.engagementSequence = 0
+    m.engagementPaused = true
     initRokuPlayback()
     initLowLatencyPlayback()
     m.bookmarksTask = m.top.findNode("bookmarksTask")
@@ -599,6 +614,7 @@ sub onChatVisibilityChange()
             m.video.chatIsVisible = false
         end if
     end if
+    startTwitchEngagement()
 end sub
 
 ' Placeholder for onPositionChanged, onVideoStateChange, onVideoError, onDurationChanged
@@ -607,6 +623,7 @@ end sub
 ' However, some global actions might be needed here.
 
 sub onPositionChanged()
+    publishTwitchPlayback()
     ' This is observed on m.video.
     ' StitchVideo/CustomVideo have their own onPositionChange for UI.
     ' Can be used for global logic if needed, e.g. global bookmarking not tied to UI.
@@ -640,6 +657,7 @@ end sub
 
 sub onVideoStateChange()
     if m.video = invalid or m.isExiting then return
+    publishTwitchPlayback()
     if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
     if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
@@ -1016,6 +1034,7 @@ sub beginLiveReconnect(reason as string)
 
     ' If a reconnect is already scheduled/in-flight, don't stack them
     if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
+    pauseTwitchEngagement()
 
     resetLiveRecoveryHealth()
 
@@ -1405,6 +1424,7 @@ function tryNativePlaybackFallback() as boolean
 end function
 
 sub stopPlaybackForDialog()
+    pauseTwitchEngagement()
     cancelBookmarkWait()
     resetLiveRecoveryHealth()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
@@ -1458,6 +1478,7 @@ sub onDestroy()
     stopAdMetadata()
     if m.disposed then return
     m.disposed = true
+    stopTwitchEngagement()
     m.isExiting = true
     cancelBookmarkWait()
     destroyRokuPlayback()
@@ -1484,6 +1505,92 @@ sub onDestroy()
     end if
     closeOwnedPlayerDialogs()
     m.errorHandler = invalid
+end sub
+
+' One worker belongs to the selected live channel, independently of the video
+' wrapper, quality, relay and chat transport. No worker exists when disabled.
+sub startTwitchEngagement()
+    if m.disposed or m.isExiting or m.video = invalid then return
+    if m.top.contentRequested = invalid or m.top.contentRequested.contentType <> "LIVE" then return
+    watchEnabled = get_user_setting("playback.watchCredit", "false") = "true" and get_setting("active_user", "$default$") <> "$default$"
+    hypeEnabled = get_user_setting("chat.hypeTrain", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
+    pinsEnabled = get_user_setting("chat.pinnedMessages", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
+    if not watchEnabled and not hypeEnabled and not pinsEnabled
+        stopTwitchEngagement()
+        return
+    end if
+    if m.engagementTask <> invalid and m.engagementTask.watchEnabled <> watchEnabled then stopTwitchEngagement()
+    if m.engagementTask = invalid
+        m.engagementOwner = createObject("roDeviceInfo").getRandomUUID()
+        m.engagementClock = createObject("roTimespan")
+        m.engagementSequence = 0
+        m.engagementTask = createObject("roSGNode", "TwitchEngagementTask")
+        if m.engagementTask = invalid
+            m.engagementOwner = ""
+            m.engagementClock = invalid
+            return
+        end if
+        m.top.appendChild(m.engagementTask)
+        m.engagementTask.owner = m.engagementOwner
+        m.engagementTask.channel = m.top.contentRequested.streamerLogin
+        m.engagementTask.channelId = m.top.contentRequested.streamerId
+        m.engagementTask.watchEnabled = watchEnabled
+        m.engagementTask.hypeEnabled = hypeEnabled
+        m.engagementTask.pinsEnabled = pinsEnabled
+        m.engagementTask.observeField("response", "onTwitchEngagementResponse")
+        publishTwitchPlayback()
+        m.engagementTask.control = "run"
+    else
+        m.engagementTask.hypeEnabled = hypeEnabled
+        m.engagementTask.pinsEnabled = pinsEnabled
+    end if
+end sub
+
+sub publishTwitchPlayback()
+    if m.engagementTask = invalid or m.engagementClock = invalid then return
+    position = invalid
+    playing = false
+    if m.video <> invalid
+        position = m.video.position
+        playing = m.video.state = "playing" and not m.engagementPaused and not m.isExiting and m.top.visible and not m.disposed
+    end if
+    m.engagementSequence++
+    m.engagementTask.sample = { sequence: m.engagementSequence, generation: m.engagementGeneration, timeMs: m.engagementClock.totalMilliseconds(), position: position, playing: playing }
+end sub
+
+sub pauseTwitchEngagement()
+    m.engagementPaused = true
+    publishTwitchPlayback()
+end sub
+
+sub onTwitchEngagementResponse(event = invalid as dynamic)
+    if m.disposed or m.engagementTask = invalid or m.engagementOwner = "" then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.engagementTask) then return
+    end if
+    response = m.engagementTask.response
+    if response = invalid or response.owner <> m.engagementOwner then return
+    m.top.engagementStatus = response
+    if m.chatWindow <> invalid
+        m.chatWindow.hypeTrain = response.hypeTrain
+        m.chatWindow.pinnedMessage = response.pinnedMessage
+    end if
+end sub
+
+sub stopTwitchEngagement()
+    m.engagementOwner = ""
+    if m.engagementTask <> invalid
+        task = m.engagementTask
+        task.stopRequested = true
+        m.engagementTask = destroyTask(task, "response")
+        m.top.removeChild(task)
+    end if
+    m.engagementClock = invalid
+    m.top.engagementStatus = invalid
+    if m.chatWindow <> invalid
+        m.chatWindow.hypeTrain = invalid
+        m.chatWindow.pinnedMessage = invalid
+    end if
 end sub
 
 sub closeOwnedPlayerDialogs()

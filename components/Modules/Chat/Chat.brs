@@ -3,6 +3,25 @@ sub init()
     m.chatPanel = m.top.findNode("chatPanel")
     m.chatBackground = m.top.findNode("chatBackground")
     m.chatStatus = m.top.findNode("chatStatus")
+    m.hypePanel = m.top.findNode("hypePanel")
+    m.hypeTitle = m.top.findNode("hypeTitle")
+    m.hypeDetail = m.top.findNode("hypeDetail")
+    m.hypeTrack = m.top.findNode("hypeTrack")
+    m.hypeProgress = m.top.findNode("hypeProgress")
+    m.hypeTimer = invalid
+    m.hypeAge = invalid
+    m.pinPanel = m.top.findNode("pinPanel")
+    m.pinTitle = m.top.findNode("pinTitle")
+    m.pinAuthor = m.top.findNode("pinAuthor")
+    m.pinText = m.top.findNode("pinText")
+    m.pinHint = m.top.findNode("pinHint")
+    m.pinTitle.text = tr("Pinned message")
+    m.pinHint.text = tr("Press Down to read the full message")
+    m.pinTimer = invalid
+    m.pinAge = invalid
+    m.pinDialog = invalid
+    m.pinModeration = []
+    m.pinSuppressedMessageId = ""
     m.maskgroup = m.top.findNode("maskGroup")
     m.chat = invalid
     m.moderationSeq = 0
@@ -11,6 +30,7 @@ sub init()
     ' Rendering helpers built once per chat instance, not per message or word.
     m.hexColorRegex = CreateObject("roRegex", "^[A-Fa-f0-9]{6}$", "")
     m.urlRegex = CreateObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
+    m.bitsRegex = createObject("roRegex", "^[1-9][0-9]{0,8}$", "")
     m.nameColorCache = {}
     m.linkColor = "0xBF94FFFF"
     if m.global?.constants?.ui?.color?.link <> invalid then m.linkColor = m.global.constants.ui.color.link
@@ -53,6 +73,16 @@ sub setChatPanelSize()
     m.chatBackground.width = m.top.width
     m.chatBackground.height = m.top.height
     m.chatStatus.width = m.top.width - 24
+    m.hypePanel.width = m.top.width
+    m.hypeTitle.width = m.top.width - 24
+    m.hypeDetail.width = m.top.width - 24
+    m.hypeTrack.width = m.top.width - 24
+    m.pinPanel.width = m.top.width
+    for each label in [m.pinTitle, m.pinAuthor, m.pinText, m.pinHint]
+        label.width = m.top.width - 24
+    end for
+    updateHypeTrain()
+    updatePinnedMessage()
     m.font_size = m.top.fontSize
     m.translation = m.chatPanel.height - m.font_size
     m.lower_bound = m.chatPanel.height - m.font_size
@@ -66,6 +96,175 @@ sub onInvisible()
         startChatJob()
     else
         stopChatJob()
+    end if
+    updateHypeTrain()
+    updatePinnedMessage()
+end sub
+
+sub onHypeTrainChange()
+    if m.disposed then return
+    m.hypeAge = createObject("roTimespan")
+    updateHypeTrain()
+end sub
+
+' Polling data is only a snapshot. A missing refresh, hidden panel or expired
+' provider deadline hides the banner rather than extrapolating train progress.
+sub updateHypeTrain()
+    if m.hypePanel = invalid then return
+    hype = m.top.hypeTrain
+    valid = not m.disposed and m.top.visible and m.hypeAge <> invalid and GetInterface(hype, "ifAssociativeArray") <> invalid
+    if valid
+        valid = GetInterface(hype.level, "ifInt") <> invalid and GetInterface(hype.percent, "ifInt") <> invalid
+        valid = valid and (GetInterface(hype.expiresAt, "ifInt") <> invalid or GetInterface(hype.expiresAt, "ifDouble") <> invalid or GetInterface(hype.expiresAt, "ifLongInt") <> invalid)
+        valid = valid and (GetInterface(hype.observedAt, "ifInt") <> invalid or GetInterface(hype.observedAt, "ifDouble") <> invalid or GetInterface(hype.observedAt, "ifLongInt") <> invalid)
+    end if
+    if valid
+        nowSeconds = createObject("roDateTime").asSeconds()
+        remaining = hype.expiresAt - nowSeconds
+        sourceAge = nowSeconds - hype.observedAt
+        valid = m.hypeAge.totalMilliseconds() <= 45000 and sourceAge >= -2 and sourceAge <= 45 and remaining > 0 and remaining <= 3600 and hype.level > 0 and hype.percent >= 0 and hype.percent <= 100
+    end if
+    m.hypePanel.visible = valid
+    layoutChatHeaders()
+    if not valid
+        if m.hypeTimer <> invalid then m.hypeTimer.control = "stop"
+        return
+    end if
+    title = tr("Hype Train · Level {0}")
+    if hype.status = "ended" then title = tr("Hype Train ended · Level {0}")
+    m.hypeTitle.text = title.replace("{0}", hype.level.toStr())
+    seconds = (int(remaining) mod 60).toStr()
+    if seconds.len() < 2 then seconds = "0" + seconds
+    duration = int(remaining / 60).toStr() + ":" + seconds
+    m.hypeDetail.text = tr("{0}% · {1} remaining").replace("{0}", hype.percent.toStr()).replace("{1}", duration)
+    if hype.status = "ended" then m.hypeDetail.text = ""
+    m.hypeProgress.width = (m.top.width - 24) * hype.percent / 100.0
+    if m.hypeTimer = invalid
+        m.hypeTimer = createObject("roSGNode", "Timer")
+        m.hypeTimer.duration = 1
+        m.hypeTimer.repeat = true
+        m.top.appendChild(m.hypeTimer)
+        m.hypeTimer.observeField("fire", "updateHypeTrain")
+    end if
+    if m.hypeTimer.control <> "start" then m.hypeTimer.control = "start"
+end sub
+
+sub layoutChatHeaders()
+    offset = 0
+    if m.hypePanel <> invalid and m.hypePanel.visible then offset = 76
+    if m.pinPanel <> invalid
+        m.pinPanel.translation = [0, offset]
+        if m.pinPanel.visible then offset += 176
+    end if
+    if m.chatStatus <> invalid then m.chatStatus.translation = [12, offset + 12]
+end sub
+
+sub onPinnedMessageChange()
+    if m.disposed then return
+    m.pinAge = createObject("roTimespan")
+    updatePinnedMessage()
+end sub
+
+sub updatePinnedMessage()
+    if m.pinPanel = invalid then return
+    pin = m.top.pinnedMessage
+    valid = not m.disposed and m.top.visible and m.pinAge <> invalid and GetInterface(pin, "ifAssociativeArray") <> invalid
+    if valid
+        valid = GetInterface(pin.id, "ifString") <> invalid and GetInterface(pin.senderName, "ifString") <> invalid and GetInterface(pin.text, "ifString") <> invalid
+        valid = valid and (GetInterface(pin.observedAt, "ifInt") <> invalid or GetInterface(pin.observedAt, "ifDouble") <> invalid or GetInterface(pin.observedAt, "ifLongInt") <> invalid)
+        valid = valid and (GetInterface(pin.updatedAt, "ifInt") <> invalid or GetInterface(pin.updatedAt, "ifDouble") <> invalid or GetInterface(pin.updatedAt, "ifLongInt") <> invalid)
+        valid = valid and GetInterface(pin.messageId, "ifString") <> invalid and GetInterface(pin.userId, "ifString") <> invalid and GetInterface(pin.login, "ifString") <> invalid
+    end if
+    if valid
+        nowSeconds = createObject("roDateTime").asSeconds()
+        age = nowSeconds - pin.observedAt
+        valid = pin.text <> "" and pin.text.len() <= 1500 and pin.senderName.len() <= 128 and pin.id <> "" and age >= -2 and age <= 45 and m.pinAge.totalMilliseconds() <= 45000
+        if pin.expiresAt <> invalid
+            numericExpiry = GetInterface(pin.expiresAt, "ifInt") <> invalid or GetInterface(pin.expiresAt, "ifDouble") <> invalid or GetInterface(pin.expiresAt, "ifLongInt") <> invalid
+            valid = valid and numericExpiry
+            if numericExpiry then valid = valid and pin.expiresAt > nowSeconds
+        end if
+        if valid
+            if pinnedMessageModerated(pin) then m.pinSuppressedMessageId = pin.messageId
+            valid = pin.messageId <> m.pinSuppressedMessageId
+        end if
+    end if
+    m.pinPanel.visible = valid
+    layoutChatHeaders()
+    if not valid
+        closePinnedMessage()
+        if m.pinTimer <> invalid then m.pinTimer.control = "stop"
+        return
+    end if
+    key = pin.id + ":" + pin.updatedAt.toStr()
+    if m.pinDialog <> invalid and m.pinDialogKey <> key then closePinnedMessage()
+    m.pinAuthor.text = pin.senderName
+    m.pinText.text = pin.text
+    if m.pinTimer = invalid
+        m.pinTimer = createObject("roSGNode", "Timer")
+        m.pinTimer.duration = 1
+        m.pinTimer.repeat = true
+        m.top.appendChild(m.pinTimer)
+        m.pinTimer.observeField("fire", "updatePinnedMessage")
+    end if
+    if m.pinTimer.control <> "start" then m.pinTimer.control = "start"
+end sub
+
+function pinnedMessageModerated(pin as object) as boolean
+    if GetInterface(pin.sentAt, "ifInt") = invalid and GetInterface(pin.sentAt, "ifLongInt") = invalid and GetInterface(pin.sentAt, "ifDouble") = invalid then return true
+    identity = { id: pin.messageId, userId: pin.userId, login: pin.login }
+    for each event in m.pinModeration
+        if event.kind = "message"
+            if moderationMatches(identity, event) then return true
+        else if pin.sentAt <= event.at and moderationMatches(identity, event)
+            return true
+        end if
+    end for
+    return false
+end function
+
+function showPinnedMessage() as boolean
+    updatePinnedMessage()
+    if not m.pinPanel.visible then return false
+    scene = m.top.getScene()
+    if scene = invalid or scene.dialog <> invalid then return false
+    pin = m.top.pinnedMessage
+    focus = scene
+    for i = 0 to 31
+        child = focus.focusedChild
+        if child = invalid then exit for
+        if child.isSameNode(focus) then exit for
+        focus = child
+    end for
+    m.pinLastFocus = focus
+    dialog = createObject("roSGNode", "StandardMessageDialog")
+    dialog.title = tr("Pinned message")
+    dialog.message = [pin.senderName, pin.text]
+    dialog.buttons = [tr("Continue watching")]
+    applyDialogPalette(dialog)
+    dialog.observeField("buttonSelected", "closePinnedMessage")
+    dialog.observeField("wasClosed", "closePinnedMessage")
+    m.pinDialog = dialog
+    m.pinDialogKey = pin.id + ":" + pin.updatedAt.toStr()
+    scene.dialog = dialog
+    return true
+end function
+
+sub closePinnedMessage()
+    dialog = m.pinDialog
+    if dialog = invalid then return
+    m.pinDialog = invalid
+    m.pinDialogKey = ""
+    dialog.unobserveField("buttonSelected")
+    dialog.unobserveField("wasClosed")
+    scene = m.top.getScene()
+    if scene <> invalid and scene.dialog <> invalid
+        if scene.dialog.isSameNode(dialog) then scene.dialog = invalid
+    end if
+    focus = m.pinLastFocus
+    m.pinLastFocus = invalid
+    if not m.disposed and m.top.visible and scene <> invalid and focus <> invalid
+        if scene.dialog = invalid and focus.getScene() <> invalid then focus.setFocus(true)
     end if
 end sub
 
@@ -99,6 +298,10 @@ end sub
 
 sub onEnterChannel()
     if m.disposed then return
+    m.top.hypeTrain = invalid
+    m.top.pinnedMessage = invalid
+    m.pinModeration = []
+    m.pinSuppressedMessageId = ""
     stopJobs()
     for each message in m.chatPanel.getChildren(-1, 0)
         m.chatPanel.removeChild(message)
@@ -271,8 +474,8 @@ function buildColon()
     return colon
 end function
 
-function wordOrImage(word, isUrl = false)
-    if m.global.emoteCache.DoesExist(word)
+function wordOrImage(word, isUrl = false, isNotice = false)
+    if not isNotice and m.global.emoteCache.DoesExist(word)
         return buildEmote(m.global.emoteCache[word])
     else
         message_text = createObject("roSGNode", "SimpleLabel")
@@ -280,14 +483,14 @@ function wordOrImage(word, isUrl = false)
         message_text.fontUri = "pkg:/fonts/Archivo-Regular.otf"
         message_text.visible = true
         message_text.text = word + " "
-        if isUrl
+        if isUrl or isNotice
             message_text.color = m.linkColor
         end if
         return message_text
     end if
 end function
 
-function buildMessage(message, x_translation)
+function buildMessage(message, x_translation, isNotice = false)
     message_group = createObject("roSGNode", "Group")
     words = message.Split(" ")
     line_available_space = m.right_bound - x_translation
@@ -300,7 +503,7 @@ function buildMessage(message, x_translation)
         ' Make room for emotes just in case
         isUrl = m.urlRegex.IsMatch(word)
 
-        block = wordOrImage(word, isUrl)
+        block = wordOrImage(word, isUrl, isNotice)
         block_width = block.localBoundingRect().width
         if block_width > m.right_bound
             ? "break it up!"
@@ -314,7 +517,7 @@ function buildMessage(message, x_translation)
                 charNode.fontUri = "pkg:/fonts/Archivo-Regular.otf"
                 charNode.visible = true
                 charNode.text = char
-                if isUrl
+                if isUrl or isNotice
                     charNode.color = m.linkColor
                 end if
                 charWidth = charNode.localBoundingRect().width
@@ -373,6 +576,9 @@ end sub
 ' Older messages move down by the space each removed message used, so the
 ' newest message stays anchored where the next one is placed.
 sub removeModerated(event as object)
+    m.pinModeration.push({ kind: event.kind, id: event.id, userId: event.userId, login: event.login, at: createObject("roDateTime").asSeconds() })
+    if m.pinModeration.count() > 32 then m.pinModeration.shift()
+    updatePinnedMessage()
     if event.kind = "room"
         for each message in m.chatPanel.getChildren(-1, 0)
             m.chatPanel.removeChild(message)
@@ -459,34 +665,52 @@ sub renderComment()
             end if
         end for
 
-        if display_name = "" or message = ""
+        systemMessage = ""
+        if comment.command.command = "USERNOTICE" and comment.tags.system_msg <> invalid
+            systemMessage = comment.tags.system_msg.replace(chr(13), " ").replace(chr(10), " ").trim()
+        else if comment.command.command = "PRIVMSG"
+            if GetInterface(comment.tags.bits, "ifString") <> invalid and m.bitsRegex.isMatch(comment.tags.bits)
+                systemMessage = tr("{0} Bits").replace("{0}", comment.tags.bits)
+            else if comment.tags.custom_reward_id <> invalid and comment.tags.custom_reward_id <> ""
+                systemMessage = tr("Channel Points reward")
+            end if
+        end if
+        hasUserMessage = display_name <> "" and message <> ""
+        if systemMessage = "" and not hasUserMessage
             return
         end if
 
-        x_translation = m.left_bound
-
-        badge_group = buildBadges(badges)
-        badge_group.translation = [x_translation, 0]
-        x_translation += badge_group.localBoundingRect().width + 1
-
-        username = buildUsername(display_name, color)
-        username.translation = [x_translation, 0]
-        x_translation += username.localBoundingRect().width + 1
-
-        colon = buildColon()
-        colon.translation = [x_translation, 0]
-        x_translation += colon.localBoundingRect().width + 1
-
-        message_group = buildMessage(message, x_translation)
-        message_group.translation = [0, 0]
-        x_translation += message_group.localBoundingRect().width + 1
-
         group = createObject("roSGNode", "Group")
+        messageOffset = 0
+        if systemMessage <> ""
+            notice = buildMessage(systemMessage, m.left_bound, true)
+            group.appendChild(notice)
+            messageOffset = notice.localBoundingRect().height + m.line_gap
+        end if
+        ' Keep the user's text separate: Twitch emote offsets refer only to it.
+        if hasUserMessage
+            x_translation = m.left_bound
+            body = createObject("roSGNode", "Group")
+            badge_group = buildBadges(badges)
+            badge_group.translation = [x_translation, 0]
+            x_translation += badge_group.localBoundingRect().width + 1
 
-        group.appendChild(badge_group)
-        group.appendChild(username)
-        group.appendChild(colon)
-        group.appendChild(message_group)
+            username = buildUsername(display_name, color)
+            username.translation = [x_translation, 0]
+            x_translation += username.localBoundingRect().width + 1
+
+            colon = buildColon()
+            colon.translation = [x_translation, 0]
+            x_translation += colon.localBoundingRect().width + 1
+
+            message_group = buildMessage(message, x_translation)
+            body.appendChild(badge_group)
+            body.appendChild(username)
+            body.appendChild(colon)
+            body.appendChild(message_group)
+            body.translation = [0, messageOffset]
+            group.appendChild(body)
+        end if
         group.translation = [m.left_bound, m.translation]
         m.chatPanel.appendChild(group)
         if m.chatPanel.getChildCount() > 160
@@ -514,6 +738,22 @@ end sub
 sub onDestroy()
     if m.disposed then return
     m.disposed = true
+    closePinnedMessage()
+    if m.pinTimer <> invalid
+        m.pinTimer.control = "stop"
+        m.pinTimer.unobserveField("fire")
+        m.top.removeChild(m.pinTimer)
+        m.pinTimer = invalid
+    end if
+    m.pinPanel.visible = false
+    m.pinModeration = []
+    if m.hypeTimer <> invalid
+        m.hypeTimer.control = "stop"
+        m.hypeTimer.unobserveField("fire")
+        m.top.removeChild(m.hypeTimer)
+        m.hypeTimer = invalid
+    end if
+    m.hypePanel.visible = false
     m.top.unobserveField("visible")
     stopJobs()
     m.nameColorCache = {}

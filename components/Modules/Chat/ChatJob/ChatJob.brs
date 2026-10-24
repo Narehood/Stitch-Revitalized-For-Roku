@@ -178,7 +178,7 @@ sub runChatConnection(transport as object)
                         m.anonymousOnly = true
                         return
                     end if
-                else if command = "PRIVMSG"
+                else if command = "PRIVMSG" or command = "USERNOTICE"
                     ' Retain pending messages until their delay elapses. Dropping the oldest
                     ' on a busy channel would keep every message perpetually too young.
                     if queue.count() < 250

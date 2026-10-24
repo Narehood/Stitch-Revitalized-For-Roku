@@ -229,8 +229,9 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before.filter(setting => setting.settingName !== 'support');
     assert.equal(retained.length, 12);
-    assert.equal(after.length, retained.length);
-    assert.equal(map.size, retained.length, 'setting keys must be unique');
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages'];
+    assert.equal(after.length, retained.length + additions.length);
+    assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.has('support'), false, 'donation action is removed');
     for (const setting of retained) {
         const current = map.get(setting.settingName);
@@ -243,6 +244,11 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(map.get('analytics.enabled').default, 'false');
     assert.equal(map.get('playback.lowLatency').default, 'false');
     assert.equal(map.get('playback.lowLatency').experimental, true);
+    for (const key of additions) {
+        assert.equal(map.get(key).type, 'bool', key);
+        assert.equal(map.get(key).default, 'false', key);
+        assert.equal(map.get(key).experimental, true, key);
+    }
 });
 
 test('Account, Login, Settings, dialogs, health checks and late-failure focus run actual native handlers', { timeout: 40000 }, async t => {

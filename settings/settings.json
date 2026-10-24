@@ -43,6 +43,30 @@
         "default": "false"
     },
     {
+        "title": "Twitch watch credit",
+        "description": "Experimental: report live viewing to Twitch while signed in. Rewards, watch streaks and recap credit are not guaranteed. Takes effect when opening a stream.",
+        "experimental": true,
+        "settingName": "playback.watchCredit",
+        "type": "bool",
+        "default": "false"
+    },
+    {
+        "title": "Hype Trains in chat",
+        "description": "Show the current Hype Train level and progress in live chat. Experimental; updates may be delayed. Takes effect when opening a stream.",
+        "experimental": true,
+        "settingName": "chat.hypeTrain",
+        "type": "bool",
+        "default": "false"
+    },
+    {
+        "title": "Pinned messages in chat",
+        "description": "Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.",
+        "experimental": true,
+        "settingName": "chat.pinnedMessages",
+        "type": "bool",
+        "default": "false"
+    },
+    {
         "title": "Chat text size",
         "description": "Size of chat messages. Emotes and badges scale with it.",
         "settingName": "ChatFontSize",
