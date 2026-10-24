@@ -3,6 +3,15 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.8": [
+            "3.0.6 release (Roku package version 3.0.8)",
+            "New: Subscription, gift, raid, Bits and reward notices in live chat",
+            "Experimental: Signed-in Twitch watch credit for live streams",
+            "Experimental: Hype Train banners and pinned messages above live chat",
+            "Pins: Press Down with player controls hidden to read the full message",
+            "Enable watch credit, Hype Trains and pins separately in Settings; all three default to off",
+            "Watch streaks and annual recap credit remain unverified"
+        ],
         "3.0.7": [
             "3.0.5 release (Roku package version 3.0.7)",
             "Maintenance: Updated build tools and optional audio service dependencies",

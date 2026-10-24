@@ -2,13 +2,23 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.5](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.5)** updates build, test and optional audio-service dependencies while retaining the 3.0.4 fixes. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.7 so it updates correctly after the earlier release and alpha builds.
+**[3.0.6](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.6)** adds richer live chat notices and optional watch credit, Hype Train banners and pinned messages. The three network features are experimental and off by default. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.8 so it updates correctly after the earlier release and alpha builds.
 
-**[Download the 3.0.5 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.5/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.0.6 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.6/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.5
+## What's new in 3.0.6
+
+- **Live chat events:** subscription/resubscription, gifted-sub and raid notices now appear with Twitch's system text and optional viewer message. Bits and Channel Points reward messages show their context while preserving text, emotes and moderation.
+- **Twitch watch credit:** an opt-in experiment reports actual signed-in live viewing. Pauses, stalls and seeks add no watch time. Pokémon reward progress advanced in a bounded Roku test; other campaigns, watch streaks, Channel Points and annual recap credit remain unverified.
+- **Hype Trains in chat:** an optional banner shows the current level, progress and remaining time. It works without signing in.
+- **Pinned messages in chat:** an optional panel shows the current moderator pin and author. Press **Down** with player controls hidden to read the full text, then **Back** or **Continue watching** to close it. Pins are plain text and updates can take about 15 seconds.
+- **Recovery:** temporary validation failures retry without ending public chat polling. Earned minutes survive failed pre-submit checks and pauses, and unrelated metadata failures preserve a fresh pin.
+
+Enable **Twitch watch credit**, **Hype Trains in chat** and **Pinned messages in chat** separately in Settings, then reopen a live stream. All three default to off. The viewer interfaces are undocumented and can change independently of Stitch. See the [watch-credit and chat-event notes](docs/TWITCH_WATCH_CREDIT.md) for evidence and limitations.
+
+### Also included from 3.0.5
 
 - **Build and test tools:** BrighterScript 0.73.8, bslint 0.8.47, brs-node 2.6.2 and commitlint 21.2.4. The simulator now handles numeric byte reads correctly without the old fixture workaround.
 - **Optional audio service:** aiohttp 3.14.5 and refreshed Python dependencies, with uv 0.13.5 used in CI and Docker.
@@ -53,6 +63,7 @@ The release also retains the 3.0.0 modernization:
 
 ## Known limitations
 
+- **Watch credit and chat banners:** the three engagement settings remain experimental and off by default. Watch streaks and annual recap inclusion are unverified; the native reward result does not establish every Drops campaign or device. Pins currently display text, with polling delays.
 - **Ad transitions on Roku-only live streams:** at the start and end of an ad, Roku's player can briefly stop and Stitch reconnects automatically after about ten seconds. Making these transitions seamless is the next planned improvement.
 - **Delay behind live:** measured on one Roku TV, direct playback runs about 21 seconds behind Twitch's broadcast timestamps and Roku-only streams about 25 seconds. The opt-in **Lower live latency** setting brings these to about 8–11 and 16–17 seconds.
 - **Formats:** the on-device splitter supports clear AVC/AAC media within its resource bounds. Bundled HEVC and other unsupported recordings or layouts can still require the optional Python service below; Docker is optional for that service.
