@@ -97,7 +97,7 @@ sub main()
     stoppedWorker = worker
     stoppedWorker.control = "stop"
     for i = 1 to 31
-        video.position = i
+        nextVideo.position = i
         settle(1000)
     end for
     current = player.callFunc("fixtureEngagement")
