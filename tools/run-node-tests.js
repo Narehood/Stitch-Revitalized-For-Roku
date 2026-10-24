@@ -15,9 +15,10 @@ const core = 'roku-demux-core.test.js';
 if (!files.includes(core)) throw new Error('Core binary regression is missing');
 if (!files.includes('roku-vod-chunks.test.js')) throw new Error('Recorded chunk regression is missing');
 
-// These complete binary matrices approach their child deadlines on Windows
-// when competing with other engines. VOD chunks are present on that layer.
-const isolated = [core, 'roku-vod-chunks.test.js'].filter(file => files.includes(file));
+// Complete binary matrices and long VOD playlist scans approach their child
+// deadlines on Windows when competing with another engine. Run them alone.
+const isolated = [core, 'roku-vod-chunks.test.js', 'roku-vod-index.test.js',
+    'roku-vod-preflight.test.js', 'roku-vod-protocol.test.js'].filter(file => files.includes(file));
 for (const [limit, batch] of [[1, isolated], [concurrency, files.filter(file => !isolated.includes(file))]]) {
     if (batch.length === 0) continue;
     const result = spawnSync(process.execPath, [
