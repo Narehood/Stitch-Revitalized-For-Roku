@@ -1,22 +1,19 @@
 "use strict";
-// Large-fixture child only. The installed engine copies the entire byte buffer
-// for each numeric read; use its actual bytes and primitive types directly.
+// Large-fixture child only. brs-node 2.6.2 handles byte reads without copying.
+// Observe the first numeric read while delegating every read to the engine.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const sdk = require('brs-node');
 const originalGet = sdk.RoByteArray.prototype.get;
 function install(firstNumericRead) {
-    assert.match(originalGet.toString(), /this\.getElements\(\)/, 'known indexed-read engine boundary');
     let observed = false;
     sdk.RoByteArray.prototype.get = function get(index) {
-        if (sdk.isBoxedNumber(index)) index = index.unbox();
-        if (index.kind !== sdk.ValueKind.Int32 && index.kind !== sdk.ValueKind.Float) {
-            return originalGet.call(this, index);
+        const numeric = sdk.isBoxedNumber(index) ? index.unbox() : index;
+        if (!observed && firstNumericRead && [sdk.ValueKind.Int32, sdk.ValueKind.Int64, sdk.ValueKind.Float, sdk.ValueKind.Double].includes(numeric.kind)) {
+            observed = true;
+            firstNumericRead();
         }
-        if (!observed && firstNumericRead) {observed = true; firstNumericRead();}
-        const offset = index.kind === sdk.ValueKind.Float ? Math.trunc(index.getValue()) : index.getValue();
-        const value = this.getByteArray()[offset];
-        return value === undefined ? sdk.BrsInvalid.Instance : new sdk.Int32(value);
+        return originalGet.call(this, index);
     };
     return originalGet;
 }

@@ -39,11 +39,11 @@ test('old span/input profile and widened whole cap mutants fail actual large ass
 });
 
 
-test('large-only public SDK adapter differentially preserves numeric and fallback reads without dependency edits', async () => {
+test('large-only public SDK instrumentation preserves numeric and fallback reads without dependency edits', async () => {
     const bundle = require.resolve('brs-node');
     const hash = async () => createHash('sha256').update(await fs.readFile(bundle)).digest('hex');
     const beforeHash = await hash(), beforeGet = sdk.RoByteArray.prototype.get;
-    assert.match(beforeGet.toString(), /this\.getElements\(\)/, 'ordinary parent getter stays unadapted');
+    assert.doesNotMatch(beforeGet.toString(), /this\.getElements\(\)/, 'pinned engine no longer copies the buffer per read');
     const child = spawnSync(process.execPath, [path.join(__dirname,'fixtures/roku-vod-large/engine.js'),'--controls'],
         {windowsHide:true,encoding:'utf8',timeout:40000,maxBuffer:1048576});
     assert.equal(child.error,undefined); assert.equal(child.status,0,child.stderr); assert.equal(child.signal,null);
@@ -53,13 +53,13 @@ test('large-only public SDK adapter differentially preserves numeric and fallbac
     assert.deepEqual(JSON.parse(lines[0].slice('VOD_LARGE_ENGINE_CONTROLS '.length)),{assertions:308,restored:true});
     assert.equal(sdk.RoByteArray.prototype.get,beforeGet,'child cannot alter ordinary parent prototype');
     assert.equal(await hash(),beforeHash,'installed engine bundle is untouched');
-    const ordinary=spawnSync(process.execPath,['-e',"const s=require('brs-node');if(!/this\\.getElements\\(\\)/.test(s.RoByteArray.prototype.get.toString()))process.exit(1);console.log('ORDINARY_ENGINE_UNCHANGED');"],
+    const ordinary=spawnSync(process.execPath,['-e',"const s=require('brs-node');if(/this\\.getElements\\(\\)/.test(s.RoByteArray.prototype.get.toString()))process.exit(1);console.log('ORDINARY_ENGINE_UNCHANGED');"],
         {windowsHide:true,encoding:'utf8',timeout:40000,maxBuffer:1048576});
     assert.equal(ordinary.error,undefined); assert.equal(ordinary.status,0,ordinary.stderr);
     assert.equal(ordinary.stdout.trim(),'ORDINARY_ENGINE_UNCHANGED'); assert.equal(ordinary.stderr,'');
 });
 
-test('actual ReadFile,Slice,Append,Count,digests and numeric bytes are identical in ordinary and adapted CLI children', async t => {
+test('actual ReadFile,Slice,Append,Count,digests and numeric bytes are identical in ordinary and instrumented CLI children', async t => {
     const bytes=Buffer.from(Array.from({length:256},(_,i)=>i));
     const expected={sha:createHash('sha256').update(bytes).digest('hex'),hex:bytes.toString('hex'),slice:bytes.subarray(127,131).toString('hex'),
         appended:Buffer.concat([bytes.subarray(127,131),bytes.subarray(127,131)]).toString('hex')};
@@ -90,7 +90,7 @@ sub main()
         checked(data[boxedFloat] = 127, "actual boxed Float truncation")
         boxedDouble = CreateObject("roDouble")
         boxedDouble.SetDouble(1)
-        checked(data[boxedDouble] = invalid, "actual boxed Double original fallback")
+        checked(data[boxedDouble] = 1, "actual boxed Double numeric index")
         stringRefused = false
         try
             unused = data["count"]
@@ -121,7 +121,7 @@ end sub`;
     for(const ordinaryEngine of [true,false]) {
         const result=await packageFixture(['rokuDemuxBulk'],harness,undefined,{'bytes.bin':bytes,'expected.json':JSON.stringify(expected)},ordinaryEngine);
         assert.equal(positive(result,'STITCH_VOD_LARGE',result.marker),271);
-        t.diagnostic(`${ordinaryEngine?'ordinary':'adapted'} CLI:271 actual byte/file/slice/append/digest assertions; no source or native API substitution`);
+        t.diagnostic(`${ordinaryEngine?'ordinary':'instrumented'} CLI:271 actual byte/file/slice/append/digest assertions; no source or native API substitution`);
     }
 });
 

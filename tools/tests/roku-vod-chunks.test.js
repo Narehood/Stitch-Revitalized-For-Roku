@@ -105,7 +105,7 @@ async function withFixture(run) {
         const execute = async (mode = 'goldens') => {
             const runMarker = randomUUID();
             await fs.writeFile(path.join(dir, 'main.brs'), harness.replace('__MODE__', mode).replaceAll('__MARKER__', runMarker));
-            // The bounded adapter avoids brs-node copying the whole buffer on every indexed read.
+            // The engine handles byte reads directly; this entry only records worker/read proof.
             // Keep the same actual helpers, full-byte assertions, worker proof and finite deadline.
             const entry = path.join(fixture, '../roku-vod-large/engine.js');
             const result = await child([entry, '--no-sg', '--root', dir, '--worker-marker', runMarker,

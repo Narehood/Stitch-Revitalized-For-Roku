@@ -12,11 +12,12 @@ whole-input tails, addressing, cross-track overlap, encryption, continuity,
 work/byte caps, forged plans, cancellation, close and output failure are actual
 helper assertions. Four deliberately mutated helpers must fail normal assertions.
 
-Each fresh brs-node child uses the bounded numeric-byte-read adapter from
-roku-vod-large/engine.js. It reads the actual backing bytes instead of copying
-the entire buffer on each indexed read; production helpers and their assertions
-are unchanged. The large-fixture regression separately compares the adapter
-with the ordinary engine. Fresh worker markers are required in every mode.
+Each fresh brs-node child uses the worker/read instrumentation from
+roku-vod-large/engine.js. brs-node 2.6.2 fixes numeric-byte-read copying itself;
+the wrapper now observes the first numeric read and delegates every read unchanged
+to the engine. Production helpers and their assertions are unchanged. The
+large-fixture regression separately compares instrumented and ordinary execution.
+Fresh worker markers are required in every mode.
 
 Each child has a 40-second deadline and 1MiB output ceiling; no
 network, SceneGraph, deployment, media decoder or device is involved. These are

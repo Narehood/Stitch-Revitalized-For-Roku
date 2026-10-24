@@ -2,13 +2,20 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.4](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.4)** fixes playback selection, player menus, browsing, account changes, chat moderation and bookmark startup, and tunes the experimental lower-latency option. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.6 so it updates correctly after the earlier release and alpha builds.
+**[3.0.5](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.5)** updates build, test and optional audio-service dependencies while retaining the 3.0.4 fixes. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.7 so it updates correctly after the earlier release and alpha builds.
 
-**[Download the 3.0.4 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.4/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.0.5 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.5/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.4
+## What's new in 3.0.5
+
+- **Build and test tools:** BrighterScript 0.73.8, bslint 0.8.47, brs-node 2.6.2 and commitlint 21.2.4. The simulator now handles numeric byte reads correctly without the old fixture workaround.
+- **Optional audio service:** aiohttp 3.14.5 and refreshed Python dependencies, with uv 0.13.5 used in CI and Docker.
+- **Dependency audits:** a scoped patched-Zod override is covered by an actual image-rendering regression. The withdrawn braces advisory's temporary exception is removed; the npm policy now grants no exceptions.
+- **Channel behavior:** no intended playback, interface or settings changes from 3.0.4. Lower live latency remains experimental and off by default.
+
+### Also included from 3.0.4
 
 - **Player menus and navigation:** Roku Back closes the quality picker, channel selections preserve the correct playback intent, and Live now cards show the current stream title, viewers and category. Browse row sizing and automatic Retry focus are repaired.
 - **Accounts and API responses:** late account lookups cannot restore old avatars, and failed requests stay distinct from valid empty results.

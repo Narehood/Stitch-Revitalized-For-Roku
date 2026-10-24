@@ -4,11 +4,11 @@ The Roku channel contains BrightScript, assets, and settings; it does not contai
 
 Run `npm run audit` to check the npm graph. The check prints raw audit totals and fails on every unapproved high or critical finding. It does not claim that approved findings have been patched.
 
-## Temporary build dependency exception
+## Build dependencies
 
-As of October 7, 2026, [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) affects `braces` and no patched release is available. The compiler/linter/deployer inherit its high-severity classification. The vulnerable input is a deeply nested glob pattern; these tools receive fixed patterns from repository configuration, not stream URLs, chat, or remote user input. This package is absent from both the Roku ZIP and proxy runtime.
+The temporary development-only `braces` exception was removed after [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) was withdrawn on October 23, 2026. `security/npm-audit-policy.json` currently grants no exceptions.
 
-`security/npm-audit-policy.json` allows only this advisory in development-only `braces` 3.0.3, including its development-only callers. The exception expires November 6, 2026. A new advisory, different version, runtime installation, unresolved dependency edge, invalid audit response, or an available fix must fail the check. Remove the exception when a compatible upstream patch lands. Reviewers must assess this residual risk alongside the modernization diff.
+The simulator's terminal-image/Jimp dependency chain uses patched Zod 4.6.7 or later through a scoped `brs-node` override for [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). A regression exercises the actual terminal renderer and image resize path to verify compatibility with that override.
 
 The simulator's source-map chain uses patched `decode-uri-component` 0.5.0 for [GHSA-vcc3-ghjq-m6fr](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr). Its old CommonJS caller needs the decoder's ESM default export on Node 24. `npm ci` runs a small compatibility adapter that verifies the exact caller version/body and decoder version before changing that import; unexpected versions or source fail installation. The upstream decoder remains untouched. Actual synchronous/asynchronous source-map reads, Unicode/percent/plus paths, the broken original import and bounded malformed input are covered by regressions. Use normal `npm ci`; `--ignore-scripts` skips this required compatibility step.
 
