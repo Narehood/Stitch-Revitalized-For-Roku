@@ -49,7 +49,7 @@ sub bootstrap(mode as string)
     check(m.capture.Count() = 1, "actual server starts exactly one bounded upstream transfer " + mode)
     if m.capture.Count() = 1
         actual = m.capture[0]
-        check(type(actual) = "Boolean" and actual = (mode = "session"), "actual Server forwards strict Session opt-in to Fetch state " + mode)
+        check(GetInterface(actual, "ifBoolean") <> invalid and actual = (mode = "session"), "actual Server forwards strict Session opt-in to Fetch state " + mode)
         if mode = "session" then m.enabledSnapshot = actual
     end if
     r = m.top.result

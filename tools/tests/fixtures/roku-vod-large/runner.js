@@ -1,6 +1,6 @@
 'use strict';
 // Large-fixture runner: same child deadline/output/current-marker guards;
-// only explicit child entry opts into the separately controlled indexed-read adapter.
+// only explicit child entry opts into the separately controlled read instrumentation.
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');

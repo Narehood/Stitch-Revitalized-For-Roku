@@ -21,12 +21,12 @@
     "sign": "node scripts/sign-package.js"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
-    "@rokucommunity/bslint": "^0.8.46",
-    "brighterscript": "0.73.7",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@rokucommunity/bslint": "^0.8.47",
+    "brighterscript": "0.73.8",
     "brighterscript-formatter": "^1.8.4",
-    "brs-node": "2.6.1",
+    "brs-node": "2.6.2",
     "husky": "^9.1.7",
     "rooibos-roku": "^5.17.0",
     "roku-deploy": "^3.18.4"
@@ -49,7 +49,8 @@
     "js-yaml": "^4.3.2",
     "uuid": "^11.1.1",
     "brs-node": {
-      "uuid": "^14.0.0"
+      "uuid": "^14.0.0",
+      "zod": "^4.6.7"
     },
     "brace-expansion@1": "^1.1.21",
     "fast-uri@3": "^3.1.8",

@@ -29,9 +29,9 @@ jobs:
         working-directory: fmp4-demux-proxy
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: '0.12.23'
+          version: '0.13.5'
           working-directory: fmp4-demux-proxy
           python-version: ${{ matrix.python }}
       - run: uv sync --locked --all-extras
