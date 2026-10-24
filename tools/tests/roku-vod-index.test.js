@@ -111,9 +111,18 @@ test('actual recorded index retains all7376 entries, packed offsets, microsecond
 });
 
 test('actual recorded index independently enforces entries,48hour timeline and line-count boundaries', { timeout: 210000 }, async t => {
-    for (const mode of ['entries', 'duration', 'lines']) {
+    // Give each complete boundary input its own existing 60-second child budget.
+    // Two full 8192-entry scans in one child can time out on hosted Windows.
+    const boundaries = [['entries-max', 2], ['entries-over', 1],
+        ['duration-max', 2], ['duration-over', 1], ['lines-max', 1], ['lines-over', 1],
+        ['comment-lines-max', 1], ['comment-lines-over', 1]];
+    for (const [mode, expectedAssertions] of boundaries) {
+        const started = performance.now();
+        t.diagnostic(`running boundary input ${mode}`);
         const { result, marker } = await fixture(mode);
-        t.diagnostic(`${mode}: ${accept(result, marker)} actual boundary assertions`);
+        const count = accept(result, marker);
+        assert.equal(count, expectedAssertions, `complete ${mode} assertions`);
+        t.diagnostic(`${mode}: ${count} actual boundary assertions in ${Math.round(performance.now() - started)} ms`);
     }
 });
 

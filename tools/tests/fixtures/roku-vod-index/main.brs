@@ -131,21 +131,25 @@ sub main()
             indexCheck(rokuVodIndexFind(index, 36880000000&) = 3688 and rokuVodIndexFind(index, 73759999999&) = 7375, "long-integer sparse seek finds exact middle and final entry")
             indexCheck(rokuVodIndexFind(index, 73760000000&) = invalid, "long recording end is half-open")
         end if
-    else if mode = "entries"
+    else if mode = "entries-max"
         accepted = loadIndex("entries-max.bin", source, origin)
         indexCheck(accepted <> invalid, "8192-entry upper boundary accepts when bytes fit")
         if accepted <> invalid then indexCheck(accepted.count = 8192, "entry ceiling exact")
-        refused = loadIndex("entries-over.bin", source, origin)
-        indexCheck(refused = invalid, "8193-entry ceiling refuses")
-    else if mode = "duration"
+    else if mode = "entries-over"
+        indexCheck(loadIndex("entries-over.bin", source, origin) = invalid, "8193-entry ceiling refuses")
+    else if mode = "duration-max"
         accepted = loadIndex("duration-max.bin", source, origin)
         indexCheck(accepted <> invalid, "48-hour upper duration accepts")
         if accepted <> invalid then indexCheck(accepted.totalUs = 172800000000&, "48-hour total uses long integer")
+    else if mode = "duration-over"
         indexCheck(loadIndex("duration-over.bin", source, origin) = invalid, "over48-hour duration refuses")
-    else if mode = "lines"
+    else if mode = "lines-max"
         indexCheck(loadIndex("lines-max.bin", source, origin) <> invalid, "16448-line boundary accepts")
+    else if mode = "lines-over"
         indexCheck(loadIndex("lines-over.bin", source, origin) = invalid, "16449-line boundary refuses")
+    else if mode = "comment-lines-max"
         indexCheck(loadIndex("comment-lines-max.bin", source, origin) <> invalid, "16448 lines with ignored comments accept")
+    else if mode = "comment-lines-over"
         indexCheck(loadIndex("comment-lines-over.bin", source, origin) = invalid, "16449 lines with ignored comments refuse")
     end if
     print "STITCH_VOD_INDEX_RESULT: "; m.marker; " "; FormatJSON({ assertions: m.assertions, failures: m.failures })
