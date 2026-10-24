@@ -23,7 +23,12 @@ async function run(mutation, transportUrl) {
     if (transportUrl) {
         const functions = [...source.matchAll(httpPattern)];
         assert.equal(functions.length, 1);
-        source = functions[0][0];
+        const collector = source.match(/^sub collectEngagementWatch\([^\n]*\r?\n[\s\S]*?^end sub(?=\r?$)/m);
+        assert.ok(collector, 'HTTP sample collector must be present');
+        const authorized = source.match(/^function engagementWatchAuthorized\([^\n]*\r?\n[\s\S]*?^end function(?=\r?$)/m);
+        const account = source.match(/^function engagementAccountCurrent\([^\n]*\r?\n[\s\S]*?^end function(?=\r?$)/m);
+        assert.ok(authorized && account, 'HTTP sampling preserves credential guards');
+        source = [functions[0][0], collector[0], authorized[0], account[0]].join('\n');
         // brs-node returns false unconditionally from these two native TLS
         // setters. Keep their refusal branch testable, then use loopback HTTP.
         for (const [call, replacement] of [

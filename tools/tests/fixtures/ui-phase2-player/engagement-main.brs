@@ -68,6 +68,21 @@ sub main()
     settle(80)
     check(player.engagementStatus.acceptedMinutes = 1 and current.chat.findNode("hypePanel").visible, "a stale response owner cannot replace current engagement state")
 
+    stoppedWorker = worker
+    stoppedWorker.control = "stop"
+    current.chat.visible = false
+    settle(80)
+    current = player.callFunc("fixtureEngagement")
+    worker = current.worker
+    check(worker <> invalid and not worker.isSameNode(stoppedWorker) and current.owner <> owner, "a visibility update replaces a stopped worker with a fresh owner")
+    check(stoppedWorker.stopRequested and stoppedWorker.getParent() = invalid, "replacing a stopped worker detaches and destroys it")
+    stoppedWorker.response = { owner: owner, acceptedMinutes: 99, hypeTrain: hype }
+    settle(80)
+    check(player.engagementStatus = invalid, "a stopped worker's late response observer is released")
+    owner = current.owner
+    current.chat.visible = true
+    settle(80)
+
     player.callFunc("fixtureResume", 0)
     nextVideo = waitVideo(player, video)
     nextVideo.state = "playing"
@@ -78,6 +93,18 @@ sub main()
     current.chat.visible = false
     settle(80)
     check(worker.isSameNode(player.callFunc("fixtureEngagement").worker) and not worker.hypeEnabled, "hiding chat preserves watch credit and disables Hype Train polling")
+
+    stoppedWorker = worker
+    stoppedWorker.control = "stop"
+    for i = 1 to 31
+        video.position = i
+        settle(1000)
+    end for
+    current = player.callFunc("fixtureEngagement")
+    worker = current.worker
+    check(worker <> invalid and not worker.isSameNode(stoppedWorker) and current.owner <> owner, "advancing playback recovers a stopped worker after the bounded restart delay")
+    check(stoppedWorker.stopRequested and stoppedWorker.getParent() = invalid and worker.sample.playing, "automatic recovery releases the old worker and starts fresh playing samples")
+    owner = current.owner
 
     replacement = request("LIVE")
     replacement.streamerLogin = "otherchannel"
@@ -134,6 +161,10 @@ sub main()
     press("down")
     settle(300)
     check(m.scene.dialog <> invalid, "the actual Down key opens the current pin")
+    pinDialog = m.scene.dialog
+    worker.response = { owner: current.owner, pinnedMessage: pin, hypeTrain: invalid, hypeState: "unavailable" }
+    settle(80)
+    check(m.scene.dialog <> invalid and m.scene.dialog.isSameNode(pinDialog), "an unrelated metadata failure leaves the current pin dialog open")
     current.chat.pinnedMessage = invalid
     check(m.scene.dialog = invalid, "removing the pin closes its dialog before playback continues")
     current.chat.pinnedMessage = pin

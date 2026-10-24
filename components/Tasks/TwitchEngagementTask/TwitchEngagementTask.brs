@@ -38,8 +38,12 @@ sub runEngagement()
     m.snapshotValid = false
     m.lastAttemptMs = -60000
     m.pendingBroadcast = ""
+    m.nextMinute = 1
+    m.nextReportCheckMs = 0#
     m.authExpiresMs = 0#
     m.nextValidationMs = 0#
+    m.validationRetryMs = 30000
+    m.authTerminal = false
     if not engagementLogin(m.top.channel) or not engagementId(m.top.channelId) or m.deviceId = ""
         m.watchState = "unavailable"
         publishEngagement()
@@ -53,7 +57,6 @@ sub runEngagement()
         end if
     end if
     publishEngagement()
-    if m.userId = "" and not m.top.hypeEnabled and not m.top.pinsEnabled then return
     while not m.top.stopRequested
         if not engagementAccountCurrent()
             m.watchState = "account_changed"
@@ -63,12 +66,9 @@ sub runEngagement()
             exit while
         end if
         nowMs = m.clock.totalMilliseconds()
-        if m.userId <> "" and nowMs >= m.nextValidationMs
+        if m.top.watchEnabled and m.token <> "" and not m.authTerminal and nowMs >= m.nextValidationMs
             validateEngagementAccount()
-            if m.userId = ""
-                publishEngagement()
-                exit while
-            end if
+            publishEngagement()
         end if
         if nowMs >= m.nextPoll and (m.top.hypeEnabled or m.top.pinsEnabled or m.userId <> "")
             pollEngagement()
@@ -86,20 +86,19 @@ sub runEngagement()
             m.pinState = "disabled"
             publishEngagement()
         end if
-        if m.userId <> "" and m.top.watchEnabled and m.snapshotValid and m.broadcastId <> ""
+        if engagementWatchAuthorized() and m.snapshotValid and m.broadcastId <> ""
             if m.beacon = invalid and nowMs >= m.nextDiscovery
                 discoverEngagementBeacon()
                 m.nextDiscovery = m.clock.totalMilliseconds() + 60000
                 publishEngagement()
             end if
             if m.beacon <> invalid
-                m.watch = engagementWatchStep(m.watch, m.top.sample)
-                if m.watch.due then m.pendingBroadcast = m.broadcastId
-                if m.pendingBroadcast <> "" and m.clock.totalMilliseconds() - m.lastAttemptMs >= 60000
+                collectEngagementWatch()
+                if m.pendingBroadcast <> "" and m.clock.totalMilliseconds() >= m.nextReportCheckMs and m.clock.totalMilliseconds() - m.lastAttemptMs >= 60000 and m.top.sample?.playing = true
                     ' Refresh the actual broadcast before any submission. A new
                     ' broadcast discards the old partial minute and pending send.
                     earnedBroadcast = m.pendingBroadcast
-                    m.pendingBroadcast = ""
+                    m.nextReportCheckMs = m.clock.totalMilliseconds() + 60000
                     pollEngagement()
                     if m.snapshotValid and m.broadcastId = earnedBroadcast and engagementAccountCurrent() and not m.top.stopRequested
                         reportEngagementMinute()
@@ -108,7 +107,6 @@ sub runEngagement()
                 end if
             end if
         else
-            m.pendingBroadcast = ""
             watch = m.watch
             watch.last = invalid
             m.watch = watch
@@ -125,22 +123,50 @@ end sub
 
 function engagementAccountCurrent() as boolean
     if get_setting("active_user", "$default$") <> m.account then return false
-    if not m.top.watchEnabled or m.token = "" then return true
-    if m.userId <> "" and m.clock.totalMilliseconds() >= m.authExpiresMs then return false
+    if not m.top.watchEnabled then return true
     return get_user_setting("access_token", "") = m.token
 end function
 
+function engagementWatchAuthorized() as boolean
+    return m.top.watchEnabled and not m.authTerminal and m.userId <> "" and m.clock.totalMilliseconds() < m.authExpiresMs and engagementAccountCurrent()
+end function
+
+' Also called from HTTP waits: network latency must not coalesce otherwise
+' fresh Video samples into a gap that looks like a playback stall.
+sub collectEngagementWatch()
+    if m.top.stopRequested or m.beacon = invalid or not m.snapshotValid or m.broadcastId = "" then return
+    if not engagementWatchAuthorized() then return
+    m.watch = engagementWatchStep(m.watch, m.top.sample)
+    if m.watch.due then m.pendingBroadcast = m.broadcastId
+end sub
+
 sub validateEngagementAccount()
-    m.userId = ""
-    m.watchState = "identity_unavailable"
     rsp = engagementHttp("https://id.twitch.tv/oauth2/validate", "GET", { Authorization: "OAuth " + m.token }, invalid, 32768)
+    ' A transport failure cannot revoke a previously validated identity. Its
+    ' original lease still bounds reporting; failures never extend that lease.
+    m.watchState = "identity_retry"
+    m.nextValidationMs = m.clock.totalMilliseconds() + m.validationRetryMs
+    m.validationRetryMs *= 2
+    if m.validationRetryMs > 300000 then m.validationRetryMs = 300000
+    if rsp <> invalid
+        if rsp.status = 401 or rsp.status = 403
+            refuseEngagementIdentity()
+            return
+        end if
+    end if
     if rsp = invalid or rsp.status <> 200 then return
     identity = parseJson(rsp.body)
     if GetInterface(identity, "ifAssociativeArray") = invalid then return
     if not engagementId(identity.user_id) then return
-    if identity.client_id <> "ue6666qo983tsx6so1t0vnawi233wa" or identity.login <> m.account then return
+    if identity.client_id <> "ue6666qo983tsx6so1t0vnawi233wa" or identity.login <> m.account or (m.userId <> "" and identity.user_id <> m.userId)
+        refuseEngagementIdentity()
+        return
+    end if
     if not engagementNumber(identity.expires_in) then return
-    if identity.expires_in > 0 and identity.expires_in < 60 then return
+    if identity.expires_in > 0 and identity.expires_in < 60
+        refuseEngagementIdentity()
+        return
+    end if
     ' The TV grant can validate with a zero expiry. Trust the successful
     ' validation for a bounded hour and revalidate before that lease ends.
     lifetime = identity.expires_in
@@ -148,7 +174,18 @@ sub validateEngagementAccount()
     m.userId = identity.user_id
     m.authExpiresMs = m.clock.totalMilliseconds() + (lifetime - 30) * 1000#
     m.nextValidationMs = m.clock.totalMilliseconds() + 3300000#
+    if m.nextValidationMs > m.authExpiresMs then m.nextValidationMs = m.authExpiresMs
+    m.validationRetryMs = 30000
     m.watchState = "initializing"
+end sub
+
+sub refuseEngagementIdentity()
+    m.userId = ""
+    m.authTerminal = true
+    m.authExpiresMs = 0#
+    m.pendingBroadcast = ""
+    m.watch = engagementWatchState()
+    m.watchState = "identity_unavailable"
 end sub
 
 sub pollEngagement()
@@ -165,8 +202,6 @@ sub pollEngagement()
     m.snapshotValid = snapshot <> invalid
     if snapshot = invalid
         m.hype = invalid
-        m.pin = invalid
-        if m.top.pinsEnabled then m.pinState = "unavailable"
         m.hypeState = "unavailable"
         watch = m.watch
         watch.last = invalid
@@ -177,7 +212,11 @@ sub pollEngagement()
         m.broadcastId = snapshot.broadcastId
         m.watch = engagementWatchState()
         m.pendingBroadcast = ""
+        m.nextMinute = 1
+        m.nextReportCheckMs = 0#
         m.pin = invalid
+        m.pinState = "disabled"
+        if m.top.pinsEnabled then m.pinState = "inactive"
         m.nextPinPoll = 0
     end if
     if m.userId <> "" and m.broadcastId = "" then m.watchState = "stream_offline"
@@ -189,10 +228,10 @@ end sub
 
 ' Pin failures never invalidate the separate playback/broadcast snapshot.
 sub pollPinnedChat()
-    m.pin = invalid
-    m.pinState = "unavailable"
     if m.top.stopRequested then return
     if not m.snapshotValid or m.broadcastId = "" then return
+    m.pin = invalid
+    m.pinState = "unavailable"
     try
         headers = { "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa", "Device-ID": m.deviceId, "Content-Type": "application/json" }
         rsp = engagementHttp("https://gql.twitch.tv/gql", "POST", headers, formatJson({
@@ -224,14 +263,17 @@ sub discoverEngagementBeacon()
 end sub
 
 sub reportEngagementMinute()
-    if not m.top.watchEnabled or m.top.sample?.playing <> true or not engagementAccountCurrent() or m.top.stopRequested then return
+    if not engagementWatchAuthorized() or m.top.sample?.playing <> true or m.top.stopRequested then return
     nowMs = m.clock.totalMilliseconds()
     ' No replay, catch-up burst or retry of an ambiguous POST.
     if nowMs - m.lastAttemptMs < 60000 then return
-    body = engagementMinuteBody(m.userId, m.top.channelId, m.broadcastId, m.top.channel, m.top.owner, m.watch.minutes)
+    if m.nextMinute > m.watch.minutes then return
+    body = engagementMinuteBody(m.userId, m.top.channelId, m.broadcastId, m.top.channel, m.top.owner, m.nextMinute)
     if body = invalid then return
     m.lastAttemptMs = nowMs
     m.attempts++
+    m.nextMinute++
+    if m.nextMinute > m.watch.minutes then m.pendingBroadcast = ""
     m.httpStatus = 0
     rsp = engagementHttp(m.beacon, "POST", { "Content-Type": "application/x-www-form-urlencoded" }, body, 4096)
     m.watchState = "network_error"
@@ -277,6 +319,7 @@ function engagementHttp(url as string, method as string, headers as object, body
     if not started then return invalid
     while not m.top.stopRequested and deadline.totalMilliseconds() < 6000
         event = wait(100, m.port)
+        if m.watch <> invalid then collectEngagementWatch()
         if deadline.totalMilliseconds() >= 6000 then exit while
         if type(event) = "roUrlEvent" and event.getSourceIdentity() = transfer.getIdentity()
             text = event.getString()

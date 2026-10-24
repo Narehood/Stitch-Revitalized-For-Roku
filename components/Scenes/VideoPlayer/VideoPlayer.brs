@@ -623,6 +623,11 @@ end sub
 ' However, some global actions might be needed here.
 
 sub onPositionChanged()
+    ' Unexpected worker exits recover on advancing playback, at most once per
+    ' 30 seconds. Explicit chat/quality changes can recover immediately.
+    if m.video <> invalid and m.engagementTask <> invalid and m.engagementClock <> invalid
+        if m.video.state = "playing" and m.engagementTask.control = "stop" and m.engagementClock.totalMilliseconds() >= 30000 then startTwitchEngagement()
+    end if
     publishTwitchPlayback()
     ' This is observed on m.video.
     ' StitchVideo/CustomVideo have their own onPositionChange for UI.
@@ -1519,7 +1524,9 @@ sub startTwitchEngagement()
         stopTwitchEngagement()
         return
     end if
-    if m.engagementTask <> invalid and m.engagementTask.watchEnabled <> watchEnabled then stopTwitchEngagement()
+    if m.engagementTask <> invalid
+        if m.engagementTask.watchEnabled <> watchEnabled or m.engagementTask.control = "stop" then stopTwitchEngagement()
+    end if
     if m.engagementTask = invalid
         m.engagementOwner = createObject("roDeviceInfo").getRandomUUID()
         m.engagementClock = createObject("roTimespan")
