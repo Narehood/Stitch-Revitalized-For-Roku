@@ -23,7 +23,7 @@ function read(url) {
 
 test('patched installed decoder preserves synchronous and asynchronous source-map reads', async () => {
     const decoderFile = caller.resolve('decode-uri-component');
-    assert.equal(JSON.parse(fs.readFileSync(path.join(path.dirname(decoderFile), 'package.json'))).version, '0.5.0');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(path.dirname(decoderFile), 'package.json'))).version, '0.5.1');
     const sync = resolver.resolveSync(code, base, read);
     assert.deepEqual(sync.sourcesContent, ['fixture source']);
     const asyncResult = await new Promise((resolve, reject) => resolver.resolve(code, base, (url, callback) => {

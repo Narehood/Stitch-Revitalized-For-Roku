@@ -25,7 +25,7 @@ function prepareDecoder() {
     const parent = JSON.parse(fs.readFileSync(path.resolve(path.dirname(wrapper), '../package.json'), 'utf8'));
     const decoderFile = caller.resolve('decode-uri-component');
     const decoder = JSON.parse(fs.readFileSync(path.join(path.dirname(decoderFile), 'package.json'), 'utf8'));
-    if (parent.version !== '0.5.3' || decoder.version !== '0.5.0') {
+    if (parent.version !== '0.5.3' || decoder.version !== '0.5.1') {
         throw new Error('Review source-map decoder compatibility before changing its pinned versions');
     }
     if (typeof caller('decode-uri-component').default !== 'function') throw new Error('Decoder default export is not callable');
@@ -40,7 +40,7 @@ function prepareDecoder() {
 module.exports = { prepareDecoder };
 if (require.main === module) {
     try {
-        console.log(prepareDecoder() ? 'Adapted source-map-resolve to patched decode-uri-component 0.5.0' : 'Patched source-map decoder compatibility already prepared');
+        console.log(prepareDecoder() ? 'Adapted source-map-resolve to patched decode-uri-component 0.5.1' : 'Patched source-map decoder compatibility already prepared');
     } catch (error) {
         console.error(error.message);
         process.exitCode = 1;
