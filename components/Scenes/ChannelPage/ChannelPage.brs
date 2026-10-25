@@ -75,9 +75,6 @@ sub updateChannelInfo()
         setPageStatus("error", tr("Couldn't load this channel"), tr("Check your internet connection and try again."), ["retry", "back"])
         return
     end if
-    if GetInterface(rsp.streamerId, "ifString") <> invalid
-        if rsp.streamerId <> "" then m.top.contentRequested.streamerId = rsp.streamerId
-    end if
     m.description.infoText = rsp.description
     m.followers.text = numberToText(rsp.followerCount) + " " + tr("followers")
     if rsp.profileImageUrl <> invalid
@@ -109,17 +106,23 @@ sub showLiveMarker(isLive as boolean)
 end sub
 
 function buildContentNodeFromShelves(rsp)
+    ' Navigation can share this request node with the source screen.
+    request = m.top.contentRequested
+    streamerId = request.streamerId
+    if GetInterface(rsp.streamerId, "ifString") <> invalid
+        if rsp.streamerId <> "" then streamerId = rsp.streamerId
+    end if
     contentCollection = createObject("RoSGNode", "ContentNode")
     if rsp.isLive
         row = createObject("RoSGNode", "ContentNode")
         row.title = tr("Live now")
-        rowItem = m.top.contentRequested
-        if rowItem.contentType <> "LIVE"
-            request = rowItem
+        rowItem = createObject("roSGNode", "TwitchContentNode")
+        if request.contentType = "LIVE"
+            setTwitchContentFields(rowItem, request.getFields())
+        else
             liveTitle = rsp.liveTitle
             if GetInterface(liveTitle, "ifString") = invalid then liveTitle = ""
             if liveTitle = "" then liveTitle = channelName()
-            rowItem = createObject("roSGNode", "TwitchContentNode")
             setTwitchContentFields(rowItem, {
                 contentType: "LIVE",
                 contentTitle: liveTitle,
@@ -127,11 +130,11 @@ function buildContentNodeFromShelves(rsp)
                 gameDisplayName: rsp.liveGameDisplayName,
                 streamerLogin: request.streamerLogin,
                 streamerDisplayName: request.streamerDisplayName,
-                streamerId: request.streamerId,
                 streamerProfileImageUrl: request.streamerProfileImageUrl,
                 previewImageURL: Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", request.streamerLogin)
             })
         end if
+        rowItem.streamerId = streamerId
         if rowItem.previewImageURL = invalid or rowItem.previewImageURL = ""
             rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", rowItem.streamerLogin)
         end if
@@ -172,7 +175,7 @@ function buildContentNodeFromShelves(rsp)
             end if
             rowItem.streamerDisplayName = m.top.contentRequested.streamerDisplayName
             rowItem.streamerLogin = m.top.contentRequested.streamerLogin
-            rowItem.streamerId = m.top.contentRequested.streamerId
+            rowItem.streamerId = streamerId
             rowItem.streamerProfileImageUrl = m.top.contentRequested.streamerProfileImageUrl
             if stream.game <> invalid
                 rowItem.gameDisplayName = stream.game.displayName
