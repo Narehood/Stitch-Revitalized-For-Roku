@@ -212,6 +212,7 @@ sub settingSelected()
     if selectedItem.type <> invalid
         if selectedItem.type = "bool" or LCase(selectedItem.type) = "radio"
             if m.optionSetting = invalid then showOptions(selectedItem)
+            if m.optionList.checkedItem >= 0 then m.optionList.jumpToItem = m.optionList.checkedItem
             m.optionList.setFocus(true)
         else if selectedItem.type = "text"
             showTextKeyboard(selectedItem)

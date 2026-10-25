@@ -76,6 +76,7 @@ async function buildPackage(dir, marker, negative) {
     for (const file of [
         'source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
         'source/utils/sceneFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/contentBuilder.brs',
+        'source/utils/playbackHls.brs',
         'settings/settings.json', 'components/SceneManager/Group/SceneManagerGroup.xml',
         'components/SceneManager/Group/SceneManagerGroup.brs', proxySource,
     ]) await copyFile(dir, file);
@@ -229,7 +230,7 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before.filter(setting => setting.settingName !== 'support');
     assert.equal(retained.length, 12);
-    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages'];
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin'];
     assert.equal(after.length, retained.length + additions.length);
     assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.has('support'), false, 'donation action is removed');
@@ -244,7 +245,9 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(map.get('analytics.enabled').default, 'false');
     assert.equal(map.get('playback.lowLatency').default, 'false');
     assert.equal(map.get('playback.lowLatency').experimental, true);
-    for (const key of additions) {
+    assert.equal(map.get('proxy.builtin').type, 'bool');
+    assert.equal(map.get('proxy.builtin').default, 'true');
+    for (const key of additions.filter(key => key !== 'proxy.builtin')) {
         assert.equal(map.get(key).type, 'bool', key);
         assert.equal(map.get(key).default, 'false', key);
         assert.equal(map.get(key).experimental, true, key);

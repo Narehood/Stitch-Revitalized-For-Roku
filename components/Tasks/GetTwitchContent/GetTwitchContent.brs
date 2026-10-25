@@ -130,6 +130,7 @@ sub loadHlsContent(request as object)
     m.playbackProbeOrigins = {}
     m.playbackProbeVodComplete = {}
     m.playbackProbeFailed = false
+    m.proxySelectionChecked = invalid
     m.playbackProbeClock = CreateObject("roTimeSpan")
     m.playbackProbeClock.Mark()
     for each variant in manifest.variants
@@ -162,6 +163,7 @@ sub loadHlsContent(request as object)
         proxied = false
         if proxyUrl <> "" and (transmux or separateAudio)
             if separateAudio
+                if not ensureProxySelectionSupport(proxyUrl) then return
                 url = buildProxySelectedM3u8Url(proxyUrl, usherUrl, [selection])
                 if url = invalid
                     respondPlaybackError("Playlist selection unavailable", "The stream's quality metadata could not be safely selected. Reopen the video to refresh it.")
@@ -239,6 +241,9 @@ sub loadHlsContent(request as object)
             automatic = rokuDemuxAutomaticEntry(metadata)
         end if
         if automatic = invalid
+            if proxyUrl <> "" and (hasMuxedVariants or hasSeparateAudio or not allVariantsSupported)
+                if not ensureProxySelectionSupport(proxyUrl) then return
+            end if
             automatic = playbackAutomaticEntry(automaticMetadata, usherUrl, proxyUrl, allowedUrls, allVariantsSupported, hasMuxedVariants, hasSeparateAudio, invalid, selections)
             if automatic <> invalid then automatic = rokuDemuxPlaybackEntry(automatic)
         end if
@@ -260,6 +265,29 @@ sub loadHlsContent(request as object)
     m.top.metadata = metadata
     m.top.response = content
 end sub
+
+function ensureProxySelectionSupport(proxyUrl as string) as boolean
+    if m.proxySelectionChecked <> invalid then return m.proxySelectionChecked
+    m.proxySelectionChecked = false
+    response = HttpRequest({ url: proxyUrl + "/health", method: "GET", timeout: 3000, retries: 1 }).Send()
+    health = invalid
+    if response <> invalid
+        if response.GetResponseCode() = 200 then health = ParseJSON(response.GetString())
+    end if
+    validHealth = false
+    if GetInterface(health, "ifAssociativeArray") <> invalid
+        if GetInterface(health.status, "ifString") <> invalid then validHealth = health.status = "ok"
+    end if
+    if not validHealth
+        respondPlaybackError("Audio service unavailable", "Could not check the configured audio service. Check its address and connection, or clear its URL in Settings to use supported playback on this Roku.", "proxy_health_failed")
+        return false
+    end if
+    m.proxySelectionChecked = proxySupportsSelectedMaster(health)
+    if not m.proxySelectionChecked
+        respondPlaybackError("Update the audio service", "Update the configured audio service to version 0.3.0 or later. You can also clear its URL in Settings to use supported playback on this Roku.", "proxy_upgrade_required")
+    end if
+    return m.proxySelectionChecked
+end function
 
 function isMuxedCmafVariant(variant as object, headers as object) as dynamic
     url = variant["URL"]

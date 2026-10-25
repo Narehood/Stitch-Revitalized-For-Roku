@@ -139,19 +139,23 @@ async def segment_handler(request: web.Request) -> web.Response:
             rewritten = result.body
             content_type = result.content_type
         else:
-            keep: fmp4.TrackKind = "video" if track == "video" else "audio"
-            tracks = await _track_map(
-                request.app, init_url, input_range if kind == "init" else init_range
-            )
-            if sum(value == keep for value in tracks.values()) != 1:
-                raise fmp4.Fmp4Error("Init segment must contain exactly one requested track")
             result = await _fetch_cached(request.app, upstream, input_range)
-            rewritten = (
-                fmp4.split_moov(result.body, tracks, keep)
-                if kind == "init"
-                else fmp4.split_moof_mdat(result.body, tracks, keep)
-            )
-            content_type = "video/mp4" if keep == "video" else "audio/mp4"
+            if kind in {"media", "part", "prefetch"} and _is_mpeg_ts(result.body):
+                rewritten = result.body
+                content_type = "video/mp2t"
+            else:
+                keep: fmp4.TrackKind = "video" if track == "video" else "audio"
+                tracks = await _track_map(
+                    request.app, init_url, input_range if kind == "init" else init_range
+                )
+                if sum(value == keep for value in tracks.values()) != 1:
+                    raise fmp4.Fmp4Error("Init segment must contain exactly one requested track")
+                rewritten = (
+                    fmp4.split_moov(result.body, tracks, keep)
+                    if kind == "init"
+                    else fmp4.split_moof_mdat(result.body, tracks, keep)
+                )
+                content_type = "video/mp4" if keep == "video" else "audio/mp4"
     except fmp4.Fmp4Error as exc:
         logger.warning("fmp4 demux failed (kind=%s): %s", kind, exc)
         raise web.HTTPBadGateway(text=f"fmp4 demux failed: {exc}") from exc
@@ -173,3 +177,12 @@ async def segment_handler(request: web.Request) -> web.Response:
         rewritten = rewritten[start:end]
         status = 206
     return web.Response(body=rewritten, content_type=content_type, headers=headers, status=status)
+
+
+def _is_mpeg_ts(data: bytes) -> bool:
+    """Recognize complete transport packets when an ad changes container format."""
+    return (
+        len(data) >= 188
+        and len(data) % 188 == 0
+        and all(data[offset] == 0x47 for offset in range(0, len(data), 188))
+    )

@@ -19,6 +19,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from yarl import URL
 
 from fmp4_demux_proxy.app import create_app
+from fmp4_demux_proxy.config import get_config
 from fmp4_demux_proxy.fmp4 import extract_track_map, iter_top_level_boxes
 from fmp4_demux_proxy.routes.segment_route import STORE_KEY, _fetch_cached
 from fmp4_demux_proxy.upstream import (
@@ -108,6 +109,48 @@ def proxy_factory(aiohttp_client: Any) -> Any:
 
 def media_request(cdn: FakeCDN, path: str, init: str, track: str = "video") -> str:
     return "/s?" + urlencode({"u": cdn.url(path), "i": cdn.url(init), "k": "media", "track": track})
+
+
+@pytest.mark.parametrize("track", ["video", "audio"])
+async def test_mixed_transport_stream_preserves_bytes_and_ranges(
+    cdn: FakeCDN, proxy_factory: Any, track: str
+) -> None:
+    cdn.bodies["/v1/segment/init"] = make_init_segment([(1, b"soun"), (2, b"vide")])
+    transport_stream = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/s1/v1/segment/media"] = transport_stream
+    client = await proxy_factory()
+    link = media_request(cdn, "/s1/v1/segment/media", "/v1/segment/init", track)
+    response = await client.get(link)
+    assert response.status == 200 and response.content_type == "video/mp2t"
+    assert await response.read() == transport_stream
+    partial = await client.get(link, headers={"Range": "bytes=0-187"})
+    assert partial.status == 206 and await partial.read() == transport_stream[:188]
+    assert partial.headers["Content-Range"] == "bytes 0-187/564"
+
+
+@pytest.mark.parametrize("corruption", ["sync", "truncated"])
+async def test_mixed_transport_refuses_malformed_packets(
+    cdn: FakeCDN, proxy_factory: Any, corruption: str
+) -> None:
+    cdn.bodies["/init"] = make_init_segment([(1, b"soun"), (2, b"vide")])
+    data = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/media"] = data[:376] + b"\x00" + data[377:] if corruption == "sync" else data[:-1]
+    client = await proxy_factory()
+    response = await client.get(media_request(cdn, "/media", "/init"))
+    assert response.status == 502
+
+
+def test_cloudfront_default_preserves_host_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UPSTREAM_HOST_ALLOWLIST", raising=False)
+    allowlist = get_config().upstream_host_allowlist
+    validate_upstream_url("https://example.cloudfront.net/media", allowlist)
+    with pytest.raises(web.HTTPBadRequest):
+        validate_upstream_url("https://example.cloudfront.net.evil.invalid/media", allowlist)
+    monkeypatch.setenv("UPSTREAM_HOST_ALLOWLIST", "ttvnw.net")
+    with pytest.raises(web.HTTPBadRequest):
+        validate_upstream_url(
+            "https://example.cloudfront.net/media", get_config().upstream_host_allowlist
+        )
 
 
 def mdat(data: bytes) -> bytes:

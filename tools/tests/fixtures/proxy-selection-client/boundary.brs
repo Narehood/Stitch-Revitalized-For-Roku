@@ -21,9 +21,17 @@ function HttpRequest(options as object) as object
     return {
         fixtureHost: m.top,
         requestOptions: options,
-        Send: function() as object
+        Send: function() as dynamic
             text = ""
-            if m.requestOptions.url.InStr("https://usher.ttvnw.net/") = 0
+            status = 200
+            if m.requestOptions.url.Right(7) = "/health"
+                if m.fixtureHost.fixtureHealthFailure = "timeout" then return invalid
+                health = { status: "ok", version: "0.3.0", selected_master_version: 1 }
+                if m.fixtureHost.fixtureLegacyProxy then health = { status: "ok", version: "0.1.0" }
+                text = FormatJSON(health)
+                if m.fixtureHost.fixtureHealthFailure = "http" then status = 503
+                if m.fixtureHost.fixtureHealthFailure = "json" then text = "not JSON"
+            else if m.requestOptions.url.InStr("https://usher.ttvnw.net/") = 0
                 m.fixtureHost.fixtureUsherUrl = m.requestOptions.url
                 text = m.fixtureHost.fixtureMaster
             else
@@ -38,8 +46,9 @@ function HttpRequest(options as object) as object
             end if
             return {
                 body: text,
+                status: status,
                 GetResponseCode: function() as integer
-                    return 200
+                    return m.status
                 end function,
                 GetString: function() as string
                     return m.body

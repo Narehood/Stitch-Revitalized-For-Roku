@@ -96,7 +96,11 @@ Live chat uses secure WebSocket IRC when that component is available on the devi
 
 **Lower live latency** is an opt-in experiment in Settings. Roku's player has no low-latency mode: it starts about 18 seconds before the end of Twitch's playlist and ignores requested start positions. With the setting on, Stitch serves the player a copy of the playlist trimmed to its newest segments from the Roku itself; video still downloads directly from Twitch. On a G204X this measured about 8–11 seconds behind Twitch instead of about 21, and about 16–17 seconds instead of about 25 for Roku-only streams. The smaller buffer can pause more often on slow connections. Twitch's low-latency prefetch segments are not used: on Roku they delayed startup and pushed Automatic quality to its lowest rendition.
 
+The **Built-in Enhanced Broadcasting Splitter** setting defaults to On for new installations. An existing Off preference is preserved. Changes take effect when opening a stream; a configured external service still takes precedence.
+
 ## Optional audio demux service
+
+Use service version 0.3.0 or a compatible selected-master protocol. Settings and playback distinguish older services that need an update from connection or invalid-health failures. Clearing the service URL restores eligible direct/on-device playback.
 
 **Docker is optional.** The Python service separates bundled audio and video without transcoding. It preserves stream quality but cannot add codec support to a Roku.
 

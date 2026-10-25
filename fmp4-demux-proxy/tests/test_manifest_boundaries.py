@@ -120,4 +120,9 @@ def test_environment_defaults_are_safe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ALLOW_UNSAFE_UPSTREAM", raising=False)
     config = get_config()
     assert not config.allow_unsafe_upstream
-    assert config.upstream_host_allowlist == ("ttvnw.net", "twitch.tv", "twitchcdn.net")
+    assert config.upstream_host_allowlist == (
+        "ttvnw.net",
+        "twitch.tv",
+        "twitchcdn.net",
+        "cloudfront.net",
+    )

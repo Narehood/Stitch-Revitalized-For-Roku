@@ -71,7 +71,10 @@ sub testProxyTask()
         { status: 200, body: "[]", reason: "", expected: "bad_body" },
         { status: 200, body: "{}", reason: "", expected: "bad_status" },
         { status: 200, body: "{""status"":""degraded""}", reason: "", expected: "bad_status" },
-        { status: 200, body: "{""status"":""ok"",""version"":""fixture-version""}", reason: "", expected: "ok" }
+        { status: 200, body: "{""status"":5}", reason: "", expected: "bad_status" },
+        { status: 200, body: "{""status"":""ok"",""version"":""0.1.0""}", reason: "", expected: "upgrade" },
+        { status: 200, body: "{""status"":""ok"",""version"":""0.3.0""}", reason: "", expected: "ok" },
+        { status: 200, body: "{""status"":""ok"",""version"":""fixture-version"",""selected_master_version"":1}", reason: "", expected: "ok" }
     ]
     for each scenario in scenarios
         m.global.fixtureHttpInput = scenario
@@ -354,9 +357,12 @@ end sub
 
 sub testSettings(scene as object)
     print "SECTION Settings"
+    registry = m.global.fixtureRegistry
+    registry["$default$:proxy.builtin"] = "false"
+    m.global.fixtureRegistry = registry
     page = addPage(scene, "Settings")
     s = inspect(page)
-    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 15, "actual Settings uses native MarkupList with all schema rows")
+    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 16, "actual Settings uses native MarkupList with all schema rows")
     check(m.global.fixtureWrites = 0 and m.global.fixtureDeletes = 0, "opening Settings displays defaults without any storage writes")
     check(settingValue(page, "ChatFontSize") = "Large (16)", "new-install chat display defaults to authorized 16")
     check(settingValue(page, "analytics.enabled") = "Off" and settingValue(page, "playback.lowLatency") = "Off", "diagnostics and experimental latency remain default off")
@@ -388,6 +394,7 @@ sub testSettings(scene as object)
     s = inspect(page)
     check(s.options.checkedItem = 2 and s.options.content.getChild(2).id = "14", "stored chat 14 remains checked with unchanged option id")
     page.callFunc("fixtureSelect")
+    check(s.options.itemFocused = 2, "opening choices focuses the stored option instead of the first option")
     s.options.checkedItem = 3
     check(get_user_setting("ChatFontSize") = "16" and settingValue(page, "ChatFontSize") = "Large (16)", "chat selection stores option id and refreshes current label")
     page.callFunc("fixtureKey", "back")
@@ -403,12 +410,15 @@ sub testSettings(scene as object)
         page.callFunc("fixtureKey", "back")
     end for
     check(settingIndex(page, "support") = -1, "donation action is absent from the actual Settings menu")
+    focusSetting(page, "proxy.builtin")
+    check(settingValue(page, "proxy.builtin") = "Off" and inspect(page).options.checkedItem = 0, "existing community splitter Off preference is retained")
+    set_user_setting("proxy.builtin", "true")
     check(page.findNode("supportQrPoster") = invalid, "donation QR poster is absent from the actual Settings page")
     section = { children: [{ title: "Nested", settingName: "fixture.nested", type: "bool", default: "false" }] }
     page.callFunc("fixtureHierarchy", section)
     check(inspect(page).levels = 2 and inspect(page).menu.content.getChildCount() = 1, "actual LoadMenu supports retained hierarchy")
     page.callFunc("fixtureKey", "back")
-    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 15 and not page.backPressed, "Back restores parent settings before page back")
+    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 16 and not page.backPressed, "Back restores parent settings before page back")
     page.callFunc("fixtureKey", "back")
     check(page.backPressed, "Back at root emits page back")
     page.backPressed = false

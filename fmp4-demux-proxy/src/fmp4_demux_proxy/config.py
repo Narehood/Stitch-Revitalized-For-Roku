@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-_DEFAULT_ALLOWLIST = ("ttvnw.net", "twitch.tv", "twitchcdn.net")
+_DEFAULT_ALLOWLIST = ("ttvnw.net", "twitch.tv", "twitchcdn.net", "cloudfront.net")
 
 
 @dataclass(frozen=True)

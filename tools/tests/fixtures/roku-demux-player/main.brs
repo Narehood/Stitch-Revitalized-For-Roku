@@ -268,6 +268,18 @@ sub testLiveRecoveryHealth()
     check(state.reconnect = 1 and state.recovery = 1 and state.transitionCharges = 0, "healthy source refund preserves the actual generic stall reconnect budget")
     closePlayer(player)
 
+    player = healthPlayer()
+    base = CreateObject("roDateTime").AsSeconds() + 46
+    healthSample(player, base, 100)
+    attempts = player.callFunc("fixtureRead").reconnect
+    for offset = 2 to 22 step 2
+        healthSample(player, base + offset, 50 + offset)
+    end for
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = attempts and state.reconnectTimer = invalid, "backward timeline correction followed by progress does not trigger a false stall")
+    check(state.transitionCharges = 1, "backward correction does not refund recovery health")
+    closePlayer(player)
+
     for each mode in ["stalled", "noise", "pause", "buffer", "backward", "jump", "gap", "clock", "seek", "cooldown", "duplicate", "quality", "retry", "dialog", "back", "disposed", "blocked", "pending", "foreign", "inconsistent"]
         player = healthPlayer()
         session = sessionOf(player)

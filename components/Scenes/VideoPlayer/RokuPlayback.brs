@@ -21,6 +21,7 @@ sub initRokuPlayback()
 end sub
 
 sub enableRokuDescriptor(task as object)
+    if get_user_setting("proxy.builtin", "true") <> "true" then return
     if m.rokuSession = invalid then return
     if m.rokuSession.cleanupBlocked then return
     if m.top.contentRequested = invalid then return

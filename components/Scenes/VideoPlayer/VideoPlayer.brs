@@ -652,7 +652,7 @@ sub onPositionChanged()
         if m.lastGoodPosition = invalid
             m.lastGoodPosition = m.video.position
             m.stallSeconds = 0
-        else if m.video.position > m.lastGoodPosition
+        else if m.video.position <> m.lastGoodPosition
             m.lastGoodPosition = m.video.position
             m.stallSeconds = 0
         end if
@@ -932,7 +932,7 @@ sub onWatchdogFire()
         return
     end if
 
-    if m.video.position > m.lastGoodPosition
+    if m.video.position <> m.lastGoodPosition
         m.lastGoodPosition = m.video.position
         m.stallSeconds = 0
         return

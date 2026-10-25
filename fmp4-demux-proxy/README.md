@@ -47,7 +47,7 @@ Published images use `ghcr.io/narehood/fmp4-demux-proxy:main`. That tag reflects
 | PORT | 8080 | Listening port |
 | LOG_LEVEL | INFO | Application log level |
 | PROXY_PUBLIC_URL | Request scheme and Host | Base URL reachable by Roku; set explicitly behind a reverse proxy or when port/path mapping changes it |
-| UPSTREAM_HOST_ALLOWLIST | ttvnw.net,twitch.tv,twitchcdn.net | Permitted upstream domain suffixes; enforced before every redirect |
+| UPSTREAM_HOST_ALLOWLIST | ttvnw.net,twitch.tv,twitchcdn.net,cloudfront.net | Permitted upstream domain suffixes; enforced before every redirect |
 | UPSTREAM_CONNECT_TIMEOUT | 5 | Connection deadline in seconds |
 | UPSTREAM_READ_TIMEOUT | 30 | Read inactivity deadline in seconds |
 | UPSTREAM_TOTAL_TIMEOUT | 45 | Deadline including queueing, redirect chain and response body |

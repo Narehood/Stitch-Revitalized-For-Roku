@@ -1010,5 +1010,13 @@
         <message><source>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</translation></message>
         <message><source>Pinned message</source><translation>Pinned message</translation></message>
         <message><source>Press Down to read the full message</source><translation>Press Down to read the full message</translation></message>
+        <message>
+            <source>Built-in Enhanced Broadcasting Splitter</source>
+            <translation>Built-in Enhanced Broadcasting Splitter</translation>
+        </message>
+        <message>
+            <source>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</source>
+            <translation>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</translation>
+        </message>
     </context>
 </TS>

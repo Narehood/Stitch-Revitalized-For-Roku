@@ -167,6 +167,13 @@
         ]
     },
     {
+        "title": "Built-in Enhanced Broadcasting Splitter",
+        "description": "Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.",
+        "settingName": "proxy.builtin",
+        "type": "bool",
+        "default": "true"
+    },
+    {
         "title": "Demux service URL (optional)",
         "description": "Some Twitch streams package audio and video together in a way Roku can't play directly. If you run Stitch's optional demux service on your network, enter its address, for example http://192.168.1.20:8080. Leave empty to turn it off.",
         "settingName": "proxy.url",

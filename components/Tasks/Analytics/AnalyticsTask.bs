@@ -30,6 +30,8 @@ sub analyticsLoop()
     m.top.observeField("identify", m.port)
     m.top.observeField("captureException", m.port)
 
+    flushStartupAnalytics()
+
     while true
         msg = wait(0, m.port)
         if type(msg) <> "roSGNodeEvent" then continue while
@@ -46,6 +48,18 @@ sub analyticsLoop()
             sendException(data)
         end if
     end while
+end sub
+
+sub flushStartupAnalytics()
+    ' Values assigned before this Task starts do not reach the message port.
+    ' Snapshot all fields before any request blocks, then use the normal dedupe.
+    identify = m.top.identify
+    capture = m.top.capture
+    exception = m.top.captureException
+    if identify <> invalid then sendIdentify(identify)
+    if capture <> invalid then sendCapture(capture)
+    if exception <> invalid then sendException(exception)
+
 end sub
 
 ' Sends a standard PostHog event with global props auto-injected.
@@ -78,6 +92,9 @@ sub sendIdentify(data as object)
     setProps = data.set
     if setProps = invalid then setProps = {}
 
+    serialized = FormatJson(setProps)
+    if m.lastIdentify = serialized then return
+
     payload = {
         api_key: m.config.apiKey,
         event: "$identify",
@@ -88,7 +105,8 @@ sub sendIdentify(data as object)
         }
     }
 
-    postToPostHog(payload)
+    ' Keep dedupe within this anonymous session and retry after failed delivery.
+    if postToPostHog(payload) then m.lastIdentify = serialized
 end sub
 
 ' Sends a PostHog $exception event for a caught BrightScript error.
@@ -153,7 +171,7 @@ sub sendException(err as object)
     mergedProps["distinct_id"] = distinctId
     mergedProps["$exception_list"] = [exceptionItem]
     mergedProps["$exception_level"] = "error"
-    mergedProps["$exception_fingerprint"] = ["BrightScriptException", err.message, err.location]
+    mergedProps["$exception_fingerprint"] = "BrightScriptException:" + err.message + ":" + err.location
     mergedProps["$os"] = "Roku OS"
     mergedProps["$device_model"] = m.deviceInfo.GetModel()
 
@@ -188,7 +206,7 @@ end function
 ' Synchronous HTTPS POST to PostHog capture endpoint.
 ' We are already in a background Task thread so blocking is safe.
 ' Synchronous avoids the GC risk of async transfers without a retained port.
-sub postToPostHog(payload as object)
+function postToPostHog(payload as object) as boolean
     request = HttpRequest({
         url: m.config.captureUrl,
         method: "POST",
@@ -196,8 +214,10 @@ sub postToPostHog(payload as object)
         data: payload,
         timeout: 5000
     })
-    request.send()
-end sub
+    response = request.send()
+    if response = invalid then return false
+    return response.GetResponseCode() = 200
+end function
 
 ' Returns true if this event name was already sent within the last 10 seconds.
 ' Prevents burst duplicates (e.g. concurrent GraphQL failures all firing api_error).

@@ -1020,5 +1020,13 @@
         <message><source>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Mostra a mensagem fixada acima do chat ao vivo. Pressione Baixo com os controles do player ocultos para ler o texto completo. Experimental; as atualizações podem demorar. Aplicado ao abrir uma transmissão.</translation></message>
         <message><source>Pinned message</source><translation>Mensagem fixada</translation></message>
         <message><source>Press Down to read the full message</source><translation>Pressione Baixo para ler a mensagem completa</translation></message>
+        <message>
+            <source>Built-in Enhanced Broadcasting Splitter</source>
+            <translation>Separador integrado de Enhanced Broadcasting</translation>
+        </message>
+        <message>
+            <source>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</source>
+            <translation>Reproduza transmissões compatíveis com áudio e vídeo combinados neste Roku sem outro computador. As alterações entram em vigor ao abrir uma transmissão.</translation>
+        </message>
     </context>
 </TS>

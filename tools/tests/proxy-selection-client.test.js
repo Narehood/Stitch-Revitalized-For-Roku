@@ -71,6 +71,8 @@ test('actual playback task admits only approved descriptors and preserves manual
             <field id="fixtureProxy" type="string" /><field id="fixturePreference" type="string" />
             <field id="fixtureUsherUrl" type="string" /><field id="fixtureProbes" type="integer" />
             <field id="fixtureFailures" type="integer" value="0" />
+            <field id="fixtureLegacyProxy" type="boolean" value="false" />
+            <field id="fixtureHealthFailure" type="string" />
           </interface>
           <script uri="pkg:/components/Tasks/GetTwitchContent/GetTwitchContent.brs" />
           <script uri="pkg:/source/utils/playbackHls.brs" />
@@ -108,7 +110,7 @@ test('actual playback task admits only approved descriptors and preserves manual
         assert.equal(lines.length, 1, `expected one fresh fixture summary\n${detail}`);
         const count = lines[0].match(/:\s*(\d+) assertions,\s*(\d+) cases$/);
         assert.ok(count && Number(count[1]) > 0, detail);
-        assert.equal(Number(count[2]), 9, detail);
+        assert.equal(Number(count[2]), 14, detail);
         t.diagnostic(`${count[1]} assertions across ${count[2]} actual task calls; no live HTTP, native decoder or playback is exercised`);
     } finally {
         const resolved = path.resolve(dir);

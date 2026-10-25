@@ -30,7 +30,9 @@ function HttpRequest(options as object) as object
         fixtureHost: m.top, requestOptions: options,
         Send: function() as object
             status = 200
-            if m.requestOptions.url.InStr("https://usher.ttvnw.net/") = 0
+            if m.requestOptions.url.Right(7) = "/health"
+                body = FormatJSON({ status: "ok", version: "0.3.0", selected_master_version: 1 })
+            else if m.requestOptions.url.InStr("https://usher.ttvnw.net/") = 0
                 m.fixtureHost.fixtureUsher = m.requestOptions
                 body = m.fixtureHost.fixtureMaster
             else

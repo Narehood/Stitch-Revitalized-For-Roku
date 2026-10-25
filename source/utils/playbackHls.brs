@@ -231,6 +231,18 @@ function playbackSelectionJson(selections as dynamic) as dynamic
     return json
 end function
 
+function proxySupportsSelectedMaster(health as dynamic) as boolean
+    if GetInterface(health, "ifAssociativeArray") = invalid then return false
+    if GetInterface(health.status, "ifString") = invalid then return false
+    if health.status <> "ok" then return false
+    ' Released 0.3.0 already implements this route, before capability advertising.
+    if GetInterface(health.version, "ifString") <> invalid
+        if health.version = "0.3.0" then return true
+    end if
+    if GetInterface(health.selected_master_version, "ifInt") = invalid then return false
+    return health.selected_master_version = 1
+end function
+
 function buildProxySelectedM3u8Url(proxyUrl as string, masterUrl as string, selections as dynamic) as dynamic
     json = playbackSelectionJson(selections)
     if json = invalid then return invalid
