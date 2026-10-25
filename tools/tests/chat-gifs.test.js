@@ -101,12 +101,13 @@ function rgbaPng() {
     return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);
 }
 
-async function buildAtlas(dir,marker,mutation = source=>source) {
+async function buildAtlas(dir,marker,mutation = source=>source,disposalProbe = '') {
         await helpers(dir,['chatAnimationGif','chatAnimationWebp','ircGifs','ircEmotes']);
         const asset=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatAnimationAsset.brs'),'utf8');
         await add(dir,'task.brs',asset.replace(/\bfs\.delete\(/g,'fixtureDelete(fs, '));
         let source=enginePngBoundary(await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatGifAtlas.brs'),'utf8'));
         source=source.replaceAll('createObject("roTimespan")','fixtureGifClock()')
+            .replace('    m.gifClock = fixtureGifClock()', '    fixtureBeginConversion()\n    m.gifClock = fixtureGifClock()')
             .replace('createObject("roBitmap", { width: width, height: height, AlphaEnable: false })','fixtureBitmap({ width: width, height: height, AlphaEnable: false })')
             .replace('sub chatGifCheck()','sub chatGifCheck()\n    fixtureCheckpoint()')
             .replace('createObject("roBitmap", framePath)','fixtureDecode(framePath)')
@@ -116,11 +117,15 @@ async function buildAtlas(dir,marker,mutation = source=>source) {
             .replace('stored.readFile(renderPath, 0, 525313)','fixturePngRead(stored, renderPath, 0, 525313)')
             .replace('fs.stat(path)','fixtureAtlasStat(fs, path)')
             .replace(/\bfs\.delete\(/g,'fixtureDelete(fs, ')
-            .replace('if not shown.drawObject(frame.x, frame.y, decoded)', 'if not fixtureDraw(shown, frame.x, frame.y, decoded)');
+            .replace('drawn = shown.drawObject(frame.x, frame.y, decoded)', 'drawn = fixtureDraw(shown, frame.x, frame.y, decoded)')
+            .replace('canvas = shown', 'canvas = fixtureReplaceCanvas(canvas, shown)')
+            .replace('canvas = disposed', 'canvas = fixtureReplaceCanvas(canvas, disposed)');
+        for (const name of ['decoded','shown','canvas','cleared','disposed','atlas'])
+            source=source.replace(new RegExp(`^([ \\t]*)${name} = invalid\\r?$`,'gm'),`$1${name} = fixtureReleaseBitmap(${name})`);
         await add(dir,'atlas.brs',mutation(source));
         await add(dir,'immutable-bitmap.brs',await fs.readFile(path.join(fixtures,'immutable-bitmap.brs')));
-        await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'atlas-main.brs'),'utf8')).replace('__PASS_MARKER__',marker)+
-            '\nfunction fixtureDraw(destination as object, x as integer, y as integer, source as object) as boolean\n if getGlobalAA().mode = "draw-failed" then return false\n return destination.drawObject(x,y,source)\nend function\n');
+        await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'atlas-main.brs'),'utf8')).replaceAll('__PASS_MARKER__',marker).replace('__DISPOSAL_PROBE__',disposalProbe)+
+            '\nfunction fixtureDraw(destination as object, x as integer, y as integer, source as object) as boolean\n if getGlobalAA().decodeIndex = 2\n if getGlobalAA().mode = "draw-failed" then return false\n if getGlobalAA().mode = "draw-throw" then throw "scripted native draw exception"\n end if\n return destination.drawObject(x,y,source)\nend function\n');
         await add(dir,'official.gif',corpus.official);
         await add(dir,'pillow-goldens.json',await fs.readFile(path.join(fixtures,'pillow-goldens.json')));
         await add(dir,'atlas-cases.json',JSON.stringify(atlasCorpus.cases.map(({bytes,...item})=>item)));
@@ -134,7 +139,38 @@ test('actual GIF wrappers and immutable atlas composition match all 15 Pillow pi
 });
 
 test('OS 16 regression guard rejects changing a canvas after it became a source', async()=>{
-    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        atlas.finish()', '        atlas.finish()\n        shown.clear(0)'))),/source bitmap mutated after draw/);
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        decoded = fixtureReleaseBitmap(decoded)', '        shown.clear(0)\n        decoded = fixtureReleaseBitmap(decoded)'))),/source bitmap mutated after draw/);
+});
+
+test('queued draw regression rejects releasing decoded input before the atlas fence', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        atlas.finish()\n        decoded = fixtureReleaseBitmap(decoded)', '        decoded = fixtureReleaseBitmap(decoded)\n        atlas.finish()'))),/bitmap released before Finish/);
+});
+
+test('queued draw regression rejects omitting the completion fence', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        atlas.finish()\n        decoded = fixtureReleaseBitmap(decoded)', '        decoded = invalid'))),/bitmap released before Finish|PNG read before Finish|unfinished draws survived conversion/);
+});
+
+test('fence count regression rejects restoring a redundant composition wait per frame', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        atlas.finish()\n        decoded = fixtureReleaseBitmap(decoded)', '        shown.finish()\n        atlas.finish()\n        decoded = fixtureReleaseBitmap(decoded)'))),/whole official movie uses fifteen fences for fifteen exact frames/);
+});
+
+test('failure regression rejects unwinding queued sources without the exception fence', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('            atlas.finish()\n            throw e','            throw e'))),/native draws finished before failure\/cancel unwinds source refs/);
+});
+
+for (const mode of ['disposal-cancel','disposal-deadline','disposal-request-deadline','disposal-allocation','disposal-base-false','disposal-rect-false']) {
+    test(`disposal-2 checkpoint fences queued work before unwind: ${mode}`,async t=>{
+        const count=await execute((dir,marker)=>buildAtlas(dir,marker,source=>source,mode));
+        t.diagnostic(`${count} actual disposal checkpoint assertions with queued draw/clock/allocation boundaries`);
+    });
+}
+
+test('disposal-2 regression rejects omitting its exceptional completion fence', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>{
+        const fence='            catch e\n                atlas.finish()\n                throw e';
+        assert.ok(source.includes(fence),'disposal catch/fence anchor required');
+        return source.replace(fence,'            catch e\n                throw e');
+    },'disposal-allocation')),/disposal-2 pending draws completed before source unwind/);
 });
 test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase and preserves one global owner/worker', async t => {
     const count=await execute(async (dir,marker) => {

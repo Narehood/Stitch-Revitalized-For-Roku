@@ -9,6 +9,12 @@ sub main()
     state.golden = parseJson(readAsciiFile("pkg:/pillow-goldens.json"))
     state.official = true
     m.top = { stopRequested: false }
+    disposalProbe = "__DISPOSAL_PROBE__"
+    if disposalProbe <> ""
+        runDisposalUnwindProbe(fs, disposalProbe)
+        if m.failures = 0 then print "__PASS_MARKER__: "; m.checks; " assertions"
+        return
+    end if
     bytes = createObject("roByteArray")
     bytes.readFile("pkg:/official.gif")
     info = chatAdmitGif(bytes)
@@ -26,7 +32,7 @@ sub main()
         if sample.engineExpected <> invalid then expected = sample.engineExpected
         runMovie(fs, bytes, sample.name, expected)
     end for
-    for each mode in ["32-frames", "33-frames", "conversion-deadline", "request-deadline", "cancel-before", "cancel-during", "cancel-after-png", "wrapper-write", "wrapper-append", "wrapper-stat", "decode-invalid", "decode-size", "draw-failed", "png-write", "png-stat", "png-read", "png-corrupt", "png-admission", "delete-source", "delete-wrapper"]
+    for each mode in ["32-frames", "33-frames", "conversion-deadline", "request-deadline", "finish-deadline", "finish-request-deadline", "cancel-before", "cancel-during", "cancel-at-finish", "cancel-after-png", "wrapper-write", "wrapper-append", "wrapper-stat", "decode-invalid", "decode-size", "base-copy-failed", "draw-failed", "draw-throw", "scale-failed", "scale-throw", "png-write", "png-stat", "png-read", "png-corrupt", "png-admission", "delete-source", "delete-wrapper"]
         state.mode = mode
         state.official = false
         state.checkpoints = 0
@@ -44,6 +50,8 @@ sub main()
         catch e
         end try
         check((result <> invalid) = (mode = "32-frames"), "bounded conversion failure/acceptance: " + mode)
+        check(state.drawQueue.count() = 0, "native draws finished before failure/cancel unwinds source refs: " + mode)
+        if mode = "finish-deadline" or mode = "finish-request-deadline" or mode = "cancel-at-finish" then check(state.pngExports = 0, "post-fence deadline/cancel cannot export a partial movie: " + mode)
         if result <> invalid then check(result.atlasWidth * result.atlasHeight = 131072 and result.frames = 32, "exact atlas/frame ceiling admitted without truncation")
         check(directoryBytes(fs, chatAnimationDirectory(path)) <= 3145728, "all partial files remain under reserved 3 MiB peak: " + mode)
         if mode = "delete-source" or mode = "delete-wrapper"
@@ -68,6 +76,38 @@ sub main()
     if m.failures = 0 then print "__PASS_MARKER__: "; m.checks; " assertions"
 end sub
 
+sub runDisposalUnwindProbe(fs as object, mode as string)
+    state = getGlobalAA()
+    state.mode = mode
+    state.official = false
+    bytes = createObject("roByteArray")
+    bytes.readFile("pkg:/disposals.gif")
+    path = "tmp:/stitch-emote-probe-" + mode + "/emote.gif"
+    fs.createDirectory(chatAnimationDirectory(path))
+    bytes.writeFile(path)
+    result = invalid
+    errorMessage = ""
+    try
+        result = chatConvertGif(fs, bytes, path, { totalMilliseconds: fixtureRequestTime })
+    catch e
+        errorMessage = e.message
+    end try
+    check(result = invalid, "disposal-2 fault rejects movie: " + mode)
+    check(state.disposalCheckpoint and state.decodeIndex = 3, "exact disposal base-copy checkpoint reached: " + mode)
+    check(state.disposalQueueAtCheckpoint = 1 and state.disposalFenceAtCheckpoint = 3, "one base copy queued before cleared bitmap allocation/finish: " + mode)
+    check(state.drawQueue.count() = 0, "disposal-2 pending draws completed before source unwind: " + mode + " queued=" + state.drawQueue.count().toStr())
+    fences = 4
+    if mode = "disposal-rect-false" then fences = 5
+    check(state.finishCalls = fences, "disposal-2 failure uses completion fence: " + mode)
+    if mode = "disposal-cancel" then check(errorMessage = "GIF conversion cancelled", "cancel thrown by actual helper check")
+    if mode = "disposal-deadline" or mode = "disposal-request-deadline" then check(errorMessage = "GIF conversion deadline", "exact 2000/8000ms helper deadline thrown")
+    if mode = "disposal-allocation" then check(errorMessage = "scripted cleared bitmap allocation exception", "cleared native allocation exception propagated")
+    if mode = "disposal-rect-false" then check(state.disposalRectCheckpoint, "false result injected after rectangle copy queued")
+    check(state.pngExports = 0, "disposal-2 rejected work never exported")
+    check(directoryBytes(fs, chatAnimationDirectory(path)) <= 3145728, "failed disposal stays inside file reservation")
+    check(deleteChatAnimationFile(fs, path) and not fs.exists(chatAnimationDirectory(path)), "owned-file cleanup follows disposal completion")
+end sub
+
 sub runMovie(fs as object, bytes as object, name as string, expected as dynamic)
     state = getGlobalAA()
     state.mode = "valid"
@@ -79,6 +119,13 @@ sub runMovie(fs as object, bytes as object, name as string, expected as dynamic)
     info = chatConvertGif(fs, bytes, path, { totalMilliseconds: fixtureRequestTime })
     check(info <> invalid, "complete movie admitted: " + name)
     if info = invalid then return
+    check(state.drawQueue.count() = 0 and state.maxQueued <= 3, "bounded draw queue fully realized before export: " + name)
+    if name = "official" then check(state.finishCalls = 15, "whole official movie uses fifteen fences for fifteen exact frames")
+    normalFences = info.frames
+    for each frame in chatAdmitGif(bytes).images
+        if frame.disposal = 2 then normalFences += 2
+    end for
+    check(state.finishCalls = normalFences, "normal disposal fence counts unchanged: " + name)
     check(info.renderer = "gif-atlas" and info.sourceBytes = bytes.count() and info.bytes > 0 and info.bytes <= 525312, "separate source and retained byte admission: " + name)
     check(not fs.exists(path) and not fs.exists(chatAnimationDirectory(path) + "/frame.gif"), "input and wrapper removed before cache publication: " + name)
     ' Fresh drawn GetByteArray is deliberately never used. Export, file reload,
@@ -152,11 +199,15 @@ function fixtureGifClock() as object
     return { totalMilliseconds: fixtureGifTime, mark: fixtureNothing }
 end function
 function fixtureGifTime() as integer
+    if getGlobalAA().mode = "disposal-deadline" and getGlobalAA().disposalCheckpoint then return 2000
     if getGlobalAA().mode = "conversion-deadline" and getGlobalAA().decodeIndex >= 2 then return 2000
+    if getGlobalAA().mode = "finish-deadline" and getGlobalAA().expiredAtFinish then return 2000
     return 25
 end function
 function fixtureRequestTime() as integer
+    if getGlobalAA().mode = "disposal-request-deadline" and getGlobalAA().disposalCheckpoint then return 8000
     if getGlobalAA().mode = "request-deadline" and getGlobalAA().decodeIndex >= 1 then return 8000
+    if getGlobalAA().mode = "finish-request-deadline" and getGlobalAA().expiredAtFinish then return 8000
     return 0
 end function
 sub fixtureNothing()
@@ -165,6 +216,8 @@ sub fixtureCheckpoint()
     state = getGlobalAA()
     state.checkpoints++
     if state.mode = "cancel-during" and state.decodeIndex = 2 then m.top.stopRequested = true
+    if state.mode = "cancel-at-finish" and state.expiredAtFinish then m.top.stopRequested = true
+    if state.mode = "disposal-cancel" and state.disposalCheckpoint then m.top.stopRequested = true
 end sub
 
 function fixtureWrite(bytes as object, path as string) as boolean

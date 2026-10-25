@@ -30,31 +30,47 @@ function chatConvertGif(fs as object, bytes as object, path as string, requestCl
         chatGifCheck()
         if not chatGifBitmapSize(decoded, frame.width, frame.height) then return invalid
         shown = chatGifBitmap(info.width, info.height)
-        if canvas = invalid
-            shown.clear(chatGifBackground(bytes, info, info.images[0].transparent))
-        else
-            if not shown.drawObject(0, 0, canvas) then return invalid
-        end if
-        shown.setAlphaEnable(true)
-        if not shown.drawObject(frame.x, frame.y, decoded) then return invalid
-        shown.finish()
+        index = ends.count()
+        drawn = true
+        try
+            if canvas = invalid
+                shown.clear(chatGifBackground(bytes, info, info.images[0].transparent))
+            else
+                drawn = shown.drawObject(0, 0, canvas)
+            end if
+            if drawn
+                shown.setAlphaEnable(true)
+                drawn = shown.drawObject(frame.x, frame.y, decoded)
+            end if
+            ' Queue the dependent scale before one fence; keep every source alive.
+            if drawn then drawn = atlas.drawScaledObject((index mod columns) * info.loadWidth, int(index / columns) * info.loadHeight, info.loadWidth / info.width, info.loadHeight / info.height, shown)
+        catch e
+            atlas.finish()
+            throw e
+        end try
+        ' Finish completes all queued draws, including the source composition.
+        atlas.finish()
         decoded = invalid
         chatGifCheck()
-        index = ends.count()
-        ' Copy RGBA, including alpha, into a tile; no per-pixel production work.
-        if not atlas.drawScaledObject((index mod columns) * info.loadWidth, int(index / columns) * info.loadHeight, info.loadWidth / info.width, info.loadHeight / info.height, shown) then return invalid
-        atlas.finish()
-        chatGifCheck()
+        if not drawn then return invalid
         if frame.disposal = 2
             ' Never clear a source: disposal is applied on a fresh destination.
             canvas = invalid
             disposed = chatGifBitmap(info.width, info.height)
-            if not disposed.drawObject(0, 0, shown) then return invalid
-            cleared = chatGifBitmap(frame.width, frame.height)
-            cleared.clear(chatGifBackground(bytes, info, frame.transparent))
-            cleared.finish()
-            if not disposed.drawObject(frame.x, frame.y, cleared) then return invalid
-            disposed.finish()
+            try
+                drawn = disposed.drawObject(0, 0, shown)
+                if drawn
+                    cleared = chatGifBitmap(frame.width, frame.height)
+                    cleared.clear(chatGifBackground(bytes, info, frame.transparent))
+                    cleared.finish()
+                    drawn = disposed.drawObject(frame.x, frame.y, cleared)
+                end if
+                disposed.finish()
+            catch e
+                atlas.finish()
+                throw e
+            end try
+            if not drawn then return invalid
             cleared = invalid
             canvas = disposed
             disposed = invalid
