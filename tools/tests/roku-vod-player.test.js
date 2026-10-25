@@ -75,7 +75,7 @@ async function build(dir, marker, capability, mutation) {
     for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs']) {
         await add(dir, `components/${file}`, await fs.readFile(path.join(root, 'tools/tests/fixtures/ad-countdown-player', file)));
     }
-    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs']) await add(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await add(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
     await add(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
     for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copy(dir, `components/Modules/Chat/${file}`);
     for (const file of ['EmojiLabel.xml', 'EmojiLabel.brs', 'EmojiLabelUtil.brs']) await copy(dir, `components/Modules/EmojiLabel/${file}`);

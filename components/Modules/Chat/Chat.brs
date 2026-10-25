@@ -790,7 +790,7 @@ sub appendChatTextUnits(units as object, text as string)
 end sub
 
 function buildChatGif(attachment as object) as object
-    if not m.animateChatEmotes or m.animationSupported = false then return chatTextNode(attachment.text)
+    if not m.animateChatEmotes then return chatTextNode(attachment.text)
     if not m.animatedEmotes.doesExist(attachment.uri)
         if m.gifAnimationKeys.count() >= 128
             old = m.gifAnimationKeys.shift()

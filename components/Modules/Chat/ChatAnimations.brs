@@ -4,6 +4,12 @@ sub initChatAnimations()
     m.animationSupported = invalid
     m.animationOwner = invalid
     m.animationNative = invalid
+    m.animationRenderer = ""
+    m.animationClip = invalid
+    m.animationCell = invalid
+    m.animationTimer = invalid
+    m.animationAsset = invalid
+    m.animationClock = invalid
     m.animationTask = invalid
     m.animationRequest = invalid
     m.animationGeneration = 0
@@ -81,6 +87,7 @@ sub collectChatAnimations(node as object, x as float, y as float, candidates as 
         end if
         descriptor = m.animatedEmotes[uri]
         if descriptor = invalid then return
+        if descriptor.format <> "gif" and m.animationSupported = false then return
         if m.animationFailed.doesExist(descriptor.uri) then return
         if not candidates.seen.doesExist(descriptor.uri) and candidates.items.count() < 8
             candidates.seen[descriptor.uri] = true
@@ -94,7 +101,7 @@ sub collectChatAnimations(node as object, x as float, y as float, candidates as 
 end sub
 
 sub syncChatAnimation()
-    if m.disposed or not m.top.visible or not m.animateChatEmotes or m.animationSupported = false
+    if m.disposed or not m.top.visible or not m.animateChatEmotes
         setChatAnimationStorageWaiting(false)
         releaseChatAnimation()
         pumpChatAnimationCleanup()
@@ -120,12 +127,28 @@ sub syncChatAnimation()
     pumpChatAnimationCleanup()
     if m.animationTask <> invalid or m.animationCleanupBlocked then return
     for each owner in candidates.items
-        native = createChatAnimatedImage()
-        if native = invalid then return
+        descriptor = m.animatedEmotes[owner.chatImageUri]
+        isGif = descriptor.format = "gif" or ircGifUri(descriptor.uri) <> invalid
+        native = invalid
+        if isGif
+            native = createObject("roSGNode", "Poster")
+        else
+            native = createChatAnimatedImage()
+        end if
+        if native = invalid then continue for
         m.animationOwner = owner
         m.animationNative = native
-        owner.appendChild(native)
-        native.observeField("state", "onChatAnimationState")
+        if isGif
+            m.animationRenderer = "gif-atlas"
+            m.animationClip = createObject("roSGNode", "Group")
+            owner.appendChild(m.animationClip)
+            m.animationClip.appendChild(native)
+            native.observeField("loadStatus", "onChatAnimationAtlasStatus")
+        else
+            m.animationRenderer = "webp"
+            owner.appendChild(native)
+            native.observeField("state", "onChatAnimationState")
+        end if
         ensureChatAnimationAsset()
         return
     end for
@@ -143,7 +166,9 @@ sub ensureChatAnimationAsset()
     end if
     ' Leave room for one admitted asset: at most 16 entries / 4 MiB cached.
     ' HEAD and polling mitigate transfer overshoot, but cannot cap native writes.
-    if not trimChatAnimationCache()
+    peakBytes = 1048576
+    if descriptor.format = "gif" or ircGifUri(descriptor.uri) <> invalid then peakBytes = 3145728
+    if not trimChatAnimationCache(peakBytes)
         pumpChatAnimationCleanup()
         return
     end if
@@ -200,11 +225,25 @@ sub playChatAnimation(asset as object)
     if native = invalid or m.animationOwner = invalid then return
     poster = m.animationOwner.getChild(0)
     try
+        if m.animationRenderer = "gif-atlas"
+            if not chatAnimationAtlasAsset(asset) then throw "Invalid GIF atlas"
+            m.animationAsset = asset
+            displayScale = poster.width / asset.info.loadWidth
+            if asset.info.loadHeight * displayScale > poster.height then displayScale = poster.height / asset.info.loadHeight
+            cell = { width: asset.info.loadWidth * displayScale, height: asset.info.loadHeight * displayScale }
+            m.animationCell = cell
+            m.animationClip.translation = [(poster.width - cell.width) / 2, (poster.height - cell.height) / 2]
+            m.animationClip.clippingRect = [0, 0, cell.width, cell.height]
+            native.width = cell.width * asset.info.columns
+            native.height = cell.height * int(asset.info.atlasHeight / asset.info.loadHeight)
+            native.loadDisplayMode = "noScale"
+            native.uri = asset.info.renderPath
+            return
+        end if
         native.width = poster.width
         native.height = poster.height
         native.loadWidth = asset.info.loadWidth
         native.loadHeight = asset.info.loadHeight
-        ' GIF has no documented MIME hint; the local .gif URI permits autodetection.
         native.mimeType = ""
         if asset.path.right(5) = ".webp" then native.mimeType = "video/webp"
         native.uri = asset.path
@@ -215,6 +254,88 @@ sub playChatAnimation(asset as object)
         failChatAnimation()
     end try
 end sub
+
+' No filesystem access here. The Task admitted exact local bytes and dimensions.
+function chatAnimationAtlasAsset(asset as object) as boolean
+    info = asset.info
+    if info.renderer <> "gif-atlas" then return false
+    if info.renderPath <> asset.path.left(asset.path.len() - 9) + "atlas.png" then return false
+    if info.frames < 2 or info.frames > 32 or info.frameEnds.count() <> info.frames then return false
+    if info.loadWidth < 1 or info.loadWidth > 64 or info.loadHeight < 1 or info.loadHeight > 64 then return false
+    if info.columns <> 4 and info.columns <> 8 then return false
+    if info.atlasWidth <> info.columns * info.loadWidth then return false
+    if info.atlasHeight <> int((info.frames + info.columns - 1) / info.columns) * info.loadHeight then return false
+    if info.atlasWidth * info.atlasHeight > 131072 or info.bytes < 57 or info.bytes > 525312 then return false
+    previous = 0
+    for each ending in info.frameEnds
+        if ending - previous < 20 then return false
+        previous = ending
+    end for
+    return previous = info.durationMs and previous >= 100 and previous <= 20000 and info.loopCount >= -1 and info.loopCount <= 65535
+end function
+
+sub onChatAnimationAtlasStatus(event as object)
+    if m.disposed or m.animationNative = invalid or m.animationOwner = invalid or m.animationAsset = invalid then return
+    if not event.getRoSGNode().isSameNode(m.animationNative) then return
+    if m.animationRenderer <> "gif-atlas" or m.animationNative.uri <> m.animationAsset.info.renderPath then return
+    status = event.getData()
+    if status = "ready"
+        if m.animationClock <> invalid then return
+        info = m.animationAsset.info
+        if m.animationNative.bitmapWidth <> info.atlasWidth or m.animationNative.bitmapHeight <> info.atlasHeight
+            failChatAnimation()
+            syncChatAnimation()
+            return
+        end if
+        m.animationClock = createObject("roTimespan")
+        m.animationTimer = createObject("roSGNode", "Timer")
+        m.animationTimer.repeat = false
+        m.animationClip.appendChild(m.animationTimer)
+        m.animationTimer.observeField("fire", "onChatAnimationAtlasTick")
+        m.animationOwner.getChild(0).visible = false
+        advanceChatAnimationAtlas()
+    else if status = "failed"
+        failChatAnimation()
+        syncChatAnimation()
+    end if
+end sub
+
+sub onChatAnimationAtlasTick(event as object)
+    if m.disposed or m.animationTimer = invalid or m.animationOwner = invalid or not m.top.visible then return
+    if not event.getRoSGNode().isSameNode(m.animationTimer) then return
+    advanceChatAnimationAtlas()
+end sub
+
+sub advanceChatAnimationAtlas()
+    if m.animationClock = invalid or m.animationAsset = invalid then return
+    info = m.animationAsset.info
+    phase = chatAnimationAtlasPhase(info, m.animationClock.totalMilliseconds())
+    cell = m.animationCell
+    m.animationNative.translation = [- (phase.index mod info.columns) * cell.width, -int(phase.index / info.columns) * cell.height]
+    m.animationTimer.control = "stop"
+    if not phase.done
+        m.animationTimer.duration = phase.waitMs / 1000.0
+        m.animationTimer.control = "start"
+    end if
+end sub
+
+' NETSCAPE 0 = infinite, positive = repeat count; absent (-1) plays once.
+' Late callbacks choose elapsed phase directly, never replay missed ticks.
+function chatAnimationAtlasPhase(info as object, elapsed as integer) as object
+    if elapsed < 0 then elapsed = 0
+    cycles = 1
+    if info.loopCount > 0 then cycles = info.loopCount + 1
+    if info.loopCount <> 0 and elapsed >= info.durationMs * cycles then return { index: info.frames - 1, done: true, waitMs: 20 }
+    position = elapsed mod info.durationMs
+    for index = 0 to info.frames - 1
+        if position < info.frameEnds[index]
+            waitMs = info.frameEnds[index] - position
+            if waitMs < 20 then waitMs = 20
+            return { index: index, done: false, waitMs: waitMs }
+        end if
+    end for
+    return { index: info.frames - 1, done: true, waitMs: 20 }
+end function
 
 sub onChatAnimationAsset(event as object)
     if m.animationTask = invalid or m.animationRequest = invalid then return
@@ -333,15 +454,34 @@ end sub
 
 sub releaseChatAnimation()
     m.animationGeneration++
+    timer = m.animationTimer
+    m.animationTimer = invalid
+    if timer <> invalid
+        timer.control = "stop"
+        timer.unobserveField("fire")
+    end if
+    m.animationClock = invalid
+    m.animationAsset = invalid
     native = m.animationNative
     m.animationNative = invalid
     if native <> invalid
-        native.unobserveField("state")
-        native.control = "pause"
+        if m.animationRenderer = "gif-atlas"
+            native.unobserveField("loadStatus")
+        else
+            native.unobserveField("state")
+            native.control = "pause"
+        end if
         native.uri = ""
         parent = native.getParent()
         if parent <> invalid then parent.removeChild(native)
     end if
+    if m.animationClip <> invalid
+        parent = m.animationClip.getParent()
+        if parent <> invalid then parent.removeChild(m.animationClip)
+    end if
+    m.animationClip = invalid
+    m.animationCell = invalid
+    m.animationRenderer = ""
     if m.animationOwner <> invalid then m.animationOwner.getChild(0).visible = true
     m.animationOwner = invalid
     ' Keep the single worker and its state observer until it actually returns.
@@ -357,6 +497,9 @@ function removeChatAnimationCache(uri as string) as boolean
     ' A playing file cannot be queued for eviction.
     if m.animationNative <> invalid
         if m.animationNative.uri = asset.path then return false
+        if asset.info.renderPath <> invalid
+            if m.animationNative.uri = asset.info.renderPath then return false
+        end if
     end if
     m.animationPartials[asset.path] = true
     return false
@@ -376,9 +519,15 @@ sub forgetChatAnimationFile(path as string)
     end for
 end sub
 
-function trimChatAnimationCache() as boolean
-    if m.animationCacheOrder.count() >= 16 or m.animationCacheBytes > 3145728
-        removeChatAnimationCache(m.animationCacheOrder[0])
+function trimChatAnimationCache(peakBytes = 1048576 as integer) as boolean
+    ' GIF reserves 3 MiB BEFORE download: input + wrapper + bounded PNG coexist.
+    if m.animationCacheOrder.count() >= 16 or m.animationCacheBytes + peakBytes > 4194304
+        for each uri in m.animationCacheOrder
+            removeChatAnimationCache(uri)
+            if m.animationPartials.count() > 0 then exit for
+        end for
+        ' Retained bytes are released only by the stopped Task's deletion ack.
+        return false
     end if
     return m.animationPartials.count() = 0
 end function

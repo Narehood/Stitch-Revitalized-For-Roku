@@ -24,8 +24,8 @@ sub main()
         check(response <> invalid and (response.info <> invalid) = admitted, "Task GIF admission: " + mode)
         if admitted
             check(response.path = path and response.uri = uri and response.generation = 123, "exact URI, path, generation ownership: " + mode)
-            check(response.info.format = "gif" and response.info.bytes = fixtureLength(), "structural format and complete actual size: " + mode)
-            check(response.info.loadWidth <= 64 and response.info.loadHeight <= 64 and fs.exists(path), "only admitted .gif is retained with bounded decode: " + mode)
+            check(response.info.format = "gif" and response.info.renderer = "gif-atlas" and response.info.sourceBytes = fixtureLength(), "GIF conversion keeps exact source size: " + mode)
+            check(response.info.loadWidth <= 64 and response.info.loadHeight <= 64 and not fs.exists(path) and fs.exists(response.info.renderPath), "only the admitted atlas is retained: " + mode)
             check(response.removed.count() = 0 and response.cleanupOk, "owned final file is not deleted early: " + mode)
         else
             check(response.cleanupOk and response.removed.count() = 1 and not fs.exists(chatAnimationDirectory(path)), "rejected/canceled file and directory are removed: " + mode)

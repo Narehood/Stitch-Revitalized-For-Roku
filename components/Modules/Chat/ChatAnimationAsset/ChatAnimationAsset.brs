@@ -57,7 +57,7 @@ function fetchChatAnimationFile(fs as object, request as object) as dynamic
                                     bytes = createObject("roByteArray")
                                     if bytes.readFile(request.path, 0, 1048577)
                                         if isGif
-                                            info = chatAdmitGif(bytes)
+                                            info = chatConvertGif(fs, bytes, request.path, clock)
                                         else
                                             info = chatAdmitWebp(bytes)
                                         end if
@@ -138,7 +138,7 @@ function chatAnimationPath(path as string) as boolean
     directory = chatAnimationDirectory(path)
     if directory = "" then return false
     suffix = directory.mid(18)
-    return suffix <> "" and suffix.instr("/") < 0 and suffix.instr("\") < 0 and suffix.instr("..") < 0
+    return createObject("roRegex", "^[A-Za-z0-9-]{1,96}$", "").isMatch(suffix)
 end function
 
 function chatAnimationDirectory(path as string) as string
@@ -153,6 +153,10 @@ function deleteChatAnimationFile(fs as object, path as string) as boolean
     ' Finite attempts even for unrecoverable filesystem failures.
     for attempt = 1 to 2
         fs.delete(path)
+        if path.right(4) = ".gif"
+            fs.delete(directory + "/frame.gif")
+            fs.delete(directory + "/atlas.png")
+        end if
         fs.delete(directory)
         if not fs.exists(directory) then return true
     end for

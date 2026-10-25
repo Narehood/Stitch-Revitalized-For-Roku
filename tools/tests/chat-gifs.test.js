@@ -10,6 +10,9 @@ const {spawn} = require('node:child_process');
 const {zipFolder} = require('roku-deploy');
 const corpus = require('./fixtures/chat-gifs/corpus');
 const webp = require('./fixtures/chat-animation/corpus');
+const atlasCorpus = require('./fixtures/chat-gifs/atlas-corpus');
+const {enginePngBoundary} = require('./fixtures/chat-gifs/atlas-boundary');
+const {deflateSync} = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
 const fixtures = path.join(__dirname, 'fixtures/chat-gifs');
@@ -81,27 +84,80 @@ test('actual GIF Task preserves URL, requires HEAD/GET/final stat, bounds time, 
         await add(dir,'task.brs',source.replace(/\bcreateObject\("(roFileSystem|roMessagePort|roTimespan|roUrlTransfer|roByteArray)"\)/gi,'fixtureCreateObject("$1")')
             .replace(/\bwait\(/gi,'fixtureWait(').replace('type(event) = "roUrlEvent"','fixtureIsUrlEvent(event)')
             .replace(/\bfs\.stat\(([^)]*)\)/g,'fixtureStat(fs, $1)'));
+        await add(dir,'atlas.brs',enginePngBoundary(await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatGifAtlas.brs'),'utf8')));
         await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'asset-main.brs'),'utf8')).replace('__PASS_MARKER__',marker));
         await add(dir,'tiny.gif',corpus.tiny);
         await add(dir,'twitch-official.gif',corpus.official);
         await add(dir,'petpet.webp',webp.petpet);
     });
-    t.diagnostic(`${count} actual Task/filesystem assertions with HTTP/clock and pending metadata boundaries; not a network hard cap`);
+    t.diagnostic(`${count} actual Task/filesystem assertions with HTTP/clock and PNG-format boundaries; not a native/network performance claim`);
 });
-test('actual animation manager accepts Group fallback, auto-detects GIF, and restores text on native error', async t => {
+
+function rgbaPng() {
+    function crc32(bytes) {let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
+    function chunk(type,data){const body=Buffer.concat([Buffer.from(type),data]);const size=Buffer.alloc(4);size.writeUInt32BE(data.length);const crc=Buffer.alloc(4);crc.writeUInt32BE(crc32(body));return Buffer.concat([size,body,crc]);}
+    const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(2);ihdr.writeUInt32BE(2,4);ihdr[8]=8;ihdr[9]=6;
+    const raw=Buffer.from([0,255,0,0,255,0,255,0,255,0,0,0,255,128,17,34,51,0]);
+    return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);
+}
+
+async function buildAtlas(dir,marker,mutation = source=>source) {
+        await helpers(dir,['chatAnimationGif','chatAnimationWebp','ircGifs','ircEmotes']);
+        const asset=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatAnimationAsset.brs'),'utf8');
+        await add(dir,'task.brs',asset.replace(/\bfs\.delete\(/g,'fixtureDelete(fs, '));
+        let source=enginePngBoundary(await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatGifAtlas.brs'),'utf8'));
+        source=source.replaceAll('createObject("roTimespan")','fixtureGifClock()')
+            .replace('createObject("roBitmap", { width: width, height: height, AlphaEnable: false })','fixtureBitmap({ width: width, height: height, AlphaEnable: false })')
+            .replace('sub chatGifCheck()','sub chatGifCheck()\n    fixtureCheckpoint()')
+            .replace('createObject("roBitmap", framePath)','fixtureDecode(framePath)')
+            .replace('prefix.writeFile(path)','fixtureWrite(prefix, path)')
+            .replace('bytes.appendFile(path, frame.dataStart, frame.dataLength)','fixtureAppend(bytes, path, frame.dataStart, frame.dataLength)')
+            .replace('png.writeFile(renderPath)','fixturePngWrite(png, renderPath)')
+            .replace('stored.readFile(renderPath, 0, 525313)','fixturePngRead(stored, renderPath, 0, 525313)')
+            .replace('fs.stat(path)','fixtureAtlasStat(fs, path)')
+            .replace(/\bfs\.delete\(/g,'fixtureDelete(fs, ')
+            .replace('if not shown.drawObject(frame.x, frame.y, decoded)', 'if not fixtureDraw(shown, frame.x, frame.y, decoded)');
+        await add(dir,'atlas.brs',mutation(source));
+        await add(dir,'immutable-bitmap.brs',await fs.readFile(path.join(fixtures,'immutable-bitmap.brs')));
+        await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'atlas-main.brs'),'utf8')).replace('__PASS_MARKER__',marker)+
+            '\nfunction fixtureDraw(destination as object, x as integer, y as integer, source as object) as boolean\n if getGlobalAA().mode = "draw-failed" then return false\n return destination.drawObject(x,y,source)\nend function\n');
+        await add(dir,'official.gif',corpus.official);
+        await add(dir,'pillow-goldens.json',await fs.readFile(path.join(fixtures,'pillow-goldens.json')));
+        await add(dir,'atlas-cases.json',JSON.stringify(atlasCorpus.cases.map(({bytes,...item})=>item)));
+        for(const sample of atlasCorpus.cases) await add(dir,`${sample.name}.gif`,sample.bytes);
+        for(const frames of [32,33]) await add(dir,`${frames}-frames.gif`,atlasCorpus.many(frames));
+        await add(dir,'rgba.png',rgbaPng());
+}
+test('actual GIF wrappers and immutable atlas composition match all 15 Pillow pins, hand pixels, bounds and failure cleanup', async t => {
+    const count=await execute(buildAtlas);
+    t.diagnostic(`${count} actual parser/wrapper/compositor/PNG-roundtrip assertions; native still decoder and GPU filter remain device boundaries`);
+});
+
+test('OS 16 regression guard rejects changing a canvas after it became a source', async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>source.replace('        atlas.finish()', '        atlas.finish()\n        shown.clear(0)'))),/source bitmap mutated after draw/);
+});
+test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase and preserves one global owner/worker', async t => {
     const count=await execute(async (dir,marker) => {
         const pkg=path.join(dir,'package');
         await add(pkg,'manifest','title=GIF Manager Contract Fixture\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         await add(pkg,'source/main.brs',await fs.readFile(path.join(fixtures,'manager-main.brs')));
         await add(pkg,'components/manager-scene.brs',(await fs.readFile(path.join(fixtures,'manager-scene.brs'),'utf8')).replace('__PASS_MARKER__',marker));
+        await add(pkg,'components/manager-atlas.brs',(await fs.readFile(path.join(fixtures,'manager-atlas.brs'),'utf8')).replace('__PASS_MARKER__',marker));
+        const chat=await fs.readFile(path.join(root,'components/Modules/Chat/Chat.brs'),'utf8');
+        await add(pkg,'components/ChatGifBuilder.brs',['buildChatGif','chatTextNode'].map(name=>chat.match(new RegExp(`^function ${name}\\([^]*?^end function`,'m'))[0]).join('\n'));
+        await add(pkg,'fonts/Archivo-Regular.otf',await fs.readFile(path.join(root,'fonts/Archivo-Regular.otf')));
         const source=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimations.brs'),'utf8');
         await add(pkg,'components/ChatAnimations.brs',source.replace('createObject("roSGNode", nodeType)','createObject("roSGNode", "AnimatedImageBoundary")')
+            .replace('createObject("roSGNode", "Poster")','createObject("roSGNode", "PosterBoundary")')
+            .replace('createObject("roTimespan")','fixtureElapsedClock()')
             .replace('createObject("roSGNode", "ChatAnimationAsset")','fixtureAssetTask()'));
         for (const helper of ['ircGifs','ircEmotes','taskFactory']) await add(pkg,`source/utils/${helper}.brs`,await fs.readFile(path.join(root,`source/utils/${helper}.brs`)));
         await add(pkg,'components/AnimatedImageBoundary.xml',await fs.readFile(path.join(__dirname,'fixtures/chat-animation/AnimatedImageBoundary.xml')));
-        await add(pkg,'components/GifManagerFixture.xml','<component name="GifManagerFixture" extends="Scene"><interface><function name="runFixture" /></interface>'+
-            '<script uri="manager-scene.brs" /><script uri="ChatAnimations.brs" />'+
-            '<script uri="pkg:/source/utils/ircGifs.brs" /><script uri="pkg:/source/utils/ircEmotes.brs" /><script uri="pkg:/source/utils/taskFactory.brs" /></component>');
+        await add(pkg,'components/PosterBoundary.xml',await fs.readFile(path.join(fixtures,'PosterBoundary.xml')));
+        for(const [name,base] of [['GifManagerFixture','Scene'],['GifChatBoundary','Group']])
+            await add(pkg,`components/${name}.xml`,`<component name="${name}" extends="${base}"><interface><function name="runFixture" /><function name="configureContender" /><function name="probe" /><function name="disposeContender" /></interface>`+
+                '<script uri="manager-scene.brs" /><script uri="manager-atlas.brs" /><script uri="ChatAnimations.brs" /><script uri="ChatGifBuilder.brs" />'+
+                '<script uri="pkg:/source/utils/ircGifs.brs" /><script uri="pkg:/source/utils/ircEmotes.brs" /><script uri="pkg:/source/utils/taskFactory.brs" /></component>');
     },true);
     t.diagnostic(`${count} actual manager assertions with scripted native states; no GIF decoding or visible motion proof`);
 });

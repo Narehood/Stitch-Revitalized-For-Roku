@@ -53,7 +53,7 @@ async function build(dir, marker) {
         'components/Modules/VideoItem', 'components/Scenes/Following', 'components/Scenes/ChannelPage', 'components/Scenes/VideoPlayer',
         'components/Modules/RokuDemuxSession']) await tree(folder);
     for (const file of ['source/constants.brs', 'source/changelog.brs', 'components/heroScene.xml', 'components/heroScene.brs']) await copy(file);
-    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs']) await copy(`components/Modules/Chat/ChatAnimationAsset/${asset}`);
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await copy(`components/Modules/Chat/ChatAnimationAsset/${asset}`);
     for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copy(`components/Modules/Chat/${file}`);
     await probe('components', 'heroScene', 'HeroProbe');
     await probe('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');

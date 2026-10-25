@@ -42,6 +42,8 @@ function chatAdmitGif(bytes as dynamic) as dynamic
         if offset >= limit then return invalid
     end if
     frames = 0
+    images = []
+    loopCount = -1
     duration = 0
     pendingControl = false
     transparent = false
@@ -63,7 +65,7 @@ function chatAdmitGif(bytes as dynamic) as dynamic
             loadHeight = int(height * scale)
             if loadWidth < 1 then loadWidth = 1
             if loadHeight < 1 then loadHeight = 1
-            return { format: "gif", width: width, height: height, loadWidth: loadWidth, loadHeight: loadHeight, frames: frames, durationMs: duration, bytes: limit }
+            return { format: "gif", width: width, height: height, loadWidth: loadWidth, loadHeight: loadHeight, frames: frames, durationMs: duration, bytes: limit, images: images, globalColors: globalColors, backgroundIndex: bytes[11], loopCount: loopCount }
         else if marker = &h21
             if header <> "GIF89a" or offset >= limit then return invalid
             label = bytes[offset]
@@ -80,6 +82,7 @@ function chatAdmitGif(bytes as dynamic) as dynamic
                 if duration > 20000 then return invalid
                 transparent = (flags and 1) <> 0
                 transparentIndex = bytes[offset + 4]
+                disposal = int(flags / 4)
                 pendingControl = true
                 offset += 6
             else if label = &hfe
@@ -95,6 +98,7 @@ function chatAdmitGif(bytes as dynamic) as dynamic
                 if identifier <> "NETSCAPE2.0" and identifier <> "ANIMEXTS1.0" then return invalid
                 if bytes[offset + 12] <> 3 or bytes[offset + 13] <> 1 or bytes[offset + 16] <> 0 then return invalid
                 loopSeen = true
+                loopCount = chatGifLE16(bytes, offset + 14)
                 offset += 17
             else
                 ' Plain-text rendering and unknown extension grammars are unsupported.
@@ -111,14 +115,17 @@ function chatAdmitGif(bytes as dynamic) as dynamic
             if (packed and &h18) <> 0 then return invalid
             offset += 9
             colors = globalColors
+            paletteOffset = 13
             if (packed and &h80) <> 0
                 colors = 2 ^ ((packed and 7) + 1)
+                paletteOffset = offset
                 offset += colors * 3
             end if
             if colors = 0 or offset >= limit then return invalid
             if transparent and transparentIndex >= colors then return invalid
             ' The code-size byte is bounded without decoding its LZW stream.
             if bytes[offset] < 2 or bytes[offset] > 8 then return invalid
+            dataStart = offset
             offset++
             if offset >= limit then return invalid
             if bytes[offset] = 0 then return invalid
@@ -127,6 +134,7 @@ function chatAdmitGif(bytes as dynamic) as dynamic
             frames++
             ' Count complete source canvases, even for small delta rectangles.
             if frames > 128 or width * height * frames > 4194304 then return invalid
+            images.push({ x: x, y: y, width: frameWidth, height: frameHeight, interlaced: (packed and &h40) <> 0, colors: colors, paletteOffset: paletteOffset, dataStart: dataStart, dataLength: offset - dataStart, transparent: transparent, transparentIndex: transparentIndex, disposal: disposal, delayMs: delay, endMs: duration })
             pendingControl = false
         else
             return invalid

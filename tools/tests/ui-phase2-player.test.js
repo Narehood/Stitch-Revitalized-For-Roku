@@ -63,7 +63,7 @@ async function addCommon(dir, title, marker, main) {
         'components/Modules/Chat/ChatAnimations.brs',
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
-    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs']) await addFile(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await addFile(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
     await addFile(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
     // Explicit I/O boundary: an in-memory registry on the global node.
     await addFile(dir, 'source/utils/config.brs', await fixture('config.brs'));

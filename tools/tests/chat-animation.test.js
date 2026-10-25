@@ -165,6 +165,7 @@ async function buildAsset(dir, marker, mutate = source => source) {
     await add(dir, 'task.brs', task);
     await add(dir, 'parser.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
     for (const helper of ['chatAnimationGif', 'ircGifs', 'ircEmotes']) await add(dir, `${helper}.brs`, await fs.readFile(path.join(root, `source/utils/${helper}.brs`)));
+    await add(dir, 'ChatGifAtlas.brs', await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset/ChatGifAtlas.brs')));
     await add(dir, 'main.brs', (await fixture('asset-main.brs')).replace('__PASS_MARKER__', marker));
     await add(dir, 'petpet.webp', corpus.petpet);
     await add(dir, 'oversize.webp', Buffer.alloc(2097152));
@@ -213,6 +214,7 @@ async function buildChat(dir, marker, nativeMutation = '', scenario = 'testChatA
     await add(dir, 'components/ChatProbe.brs', probe);
     await add(dir, 'components/AnimatedImageBoundary.xml', await fixture('AnimatedImageBoundary.xml'));
     const assetDir = 'components/Modules/Chat/ChatAnimationAsset/';
+    await copy(dir, assetDir + 'ChatGifAtlas.brs');
     const assetXml = (await fs.readFile(path.join(root, assetDir, 'ChatAnimationAsset.xml'), 'utf8'))
         .replace('</interface>', `<field id="fixtureSource" type="string" value="petpet.webp" />
             <field id="fixtureRelease" type="bool" /><field id="fixtureStarted" type="bool" /><field id="fixtureHeadPending" type="bool" />
