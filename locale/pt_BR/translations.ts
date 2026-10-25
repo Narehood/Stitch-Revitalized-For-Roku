@@ -1063,7 +1063,7 @@
         <message><source>100%</source><translation>100%</translation></message>
         <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
         <message><source>Press Down or Back to hide controls</source><translation>Pressione Baixo ou Voltar para ocultar os controles</translation></message>
-        <message><source>PINNED</source><translation>FIXADO</translation></message>
+        <message><source>PINNED</source><translation>FIXADOS</translation></message>
         <message><source>Press * to pin</source><translation>Pressione * para fixar</translation></message>
         <message><source>Press * to unpin</source><translation>Pressione * para desafixar</translation></message>
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Pressione * para fixar na barra lateral (máx. {0})</translation></message>
@@ -1079,5 +1079,10 @@
         <message><source>Not following this channel.</source><translation>Você não segue este canal.</translation></message>
         <message><source>Following this channel.</source><translation>Você segue este canal.</translation></message>
         <message><source>Select again to refresh this menu.</source><translation>Selecione novamente para atualizar este menu.</translation></message>
+        <message><source>Press * for sidebar actions</source><translation>Pressione * para opções da barra</translation></message>
+        <message><source>Pin to sidebar</source><translation>Fixar na barra lateral</translation></message>
+        <message><source>Unpin from sidebar</source><translation>Desafixar da barra lateral</translation></message>
+        <message><source>Remove from sidebar</source><translation>Remover da barra lateral</translation></message>
+        <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>As alterações da barra lateral ficam neste Roku e não mudam quem você segue na Twitch.</translation></message>
     </context>
 </TS>

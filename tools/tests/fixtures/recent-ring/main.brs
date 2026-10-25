@@ -113,7 +113,7 @@ sub testItems(rail as object)
     checkGeometry(first, rail, "live first row")
     faceBefore = boundsIn(first.findNode("avatar").findNode("examplePoster"), first)
     dotBefore = boundsIn(dot, first)
-    first.itemData = { login: "updated", displayName: "Updated", iconUrl: "pkg:/images/profile-mask-540.png" }
+    first.itemData = { login: "updated", displayName: "Updated", iconUrl: "pkg:/images/profile-mask-540.png", pinned: true }
     checkGeometry(first, rail, "avatar URI updated")
     check(sameCenter(faceBefore, boundsIn(first.findNode("avatar").findNode("examplePoster"), first)), "changing avatar URI does not move the face")
     check(sameCenter(dotBefore, boundsIn(dot, first)), "changing avatar URI does not move the live badge")
@@ -122,7 +122,7 @@ sub testItems(rail as object)
     check(not ring.visible and dot.visible, "leaving a live item hides its ring and retains its badge")
     second = rail.callFunc("fixtureRead").items[1]
     checkGeometry(second, rail, "second row")
-    check(boundsIn(second.findNode("selectionIndicator"), rail).y - firstRing.y = 62, "the rail retains its existing row spacing")
+    check(boundsIn(second.findNode("selectionIndicator"), rail).y - firstRing.y = 68, "the rail leaves space between complete rings")
     for i = 0 to 7
         rail.callFunc("fixtureKey", "down")
     end for

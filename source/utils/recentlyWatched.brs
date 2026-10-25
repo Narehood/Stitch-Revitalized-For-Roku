@@ -120,7 +120,8 @@ function RW_IsPinned(login as string) as boolean
 end function
 
 ' Explicit desired state makes repeated actions idempotent. Never evict a pin.
-function RW_SetPinned(value as dynamic, pinned as boolean) as string
+function RW_SetPinned(value as dynamic, pinned as boolean, expectedSection = "" as string) as string
+    if expectedSection <> "" and expectedSection <> RW_Section() then return "stale"
     entry = RW_NormalizeEntry(value)
     if entry = invalid then return "invalid"
     pins = RW_LoadPins()
@@ -138,9 +139,26 @@ function RW_SetPinned(value as dynamic, pinned as boolean) as string
         if pins.Count() >= RW_MaxItems() then return "limit"
         updated.Unshift(entry)
     end if
+    if expectedSection <> "" and expectedSection <> RW_Section() then return "stale"
     registry_write("pins", FormatJson(updated), RW_Section())
     if pinned then return "pinned"
     return "unpinned"
+end function
+
+' Local removal also unpins; a later explicit watch uses RW_Add normally.
+function RW_Remove(value as dynamic, expectedSection as string) as boolean
+    if expectedSection <> RW_Section() then return false
+    entry = RW_NormalizeEntry(value)
+    if entry = invalid then return false
+    for each key in [RW_RegistryKey(), "pins"]
+        updated = []
+        for each item in RW_LoadEntries(key)
+            if item.login <> entry.login then updated.push(item)
+        end for
+        if expectedSection <> RW_Section() then return false
+        registry_write(key, FormatJson(updated), expectedSection)
+    end for
+    return true
 end function
 
 ' Pin order is stable (new pins first); watching does not reorder pins.

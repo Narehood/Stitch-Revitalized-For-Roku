@@ -21,7 +21,7 @@ async function write(dir, file, data) {
 async function buildPackage(dir, marker, mutation) {
     await write(dir, 'manifest', 'title=Recent Ring Geometry Fixture\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of [
-        'source/constants.brs', 'source/utils/taskFactory.brs',
+        'source/constants.brs', 'source/utils/taskFactory.brs', 'source/utils/misc.brs',
         'components/Modules/RecentlyWatchedBar/RecentlyWatchedItem.xml',
         'components/Modules/RecentlyWatchedBar/RecentlyWatchedItem.brs',
         'components/Modules/RecentlyWatchedBar/RecentlyWatchedBar.brs',

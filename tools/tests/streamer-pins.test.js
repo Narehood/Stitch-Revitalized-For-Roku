@@ -95,15 +95,19 @@ async function build(dir, marker, fixtureCase) {
         await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/EmojiLabelRegex.brs')));
     for (const file of ['scene.brs', 'FixtureScene.xml']) await write(dir, `components/${file}`, await fs.readFile(path.join(fixtures, file)));
     await write(dir, 'source/main.brs', (await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8'))
-        .replaceAll('__PASS_MARKER__', marker).replaceAll('__FIXTURE_CASE__', fixtureCase));
+        .replaceAll('__PASS_MARKER__', marker).replaceAll('__FIXTURE_CASE__', fixtureCase)
+        + '\n' + await fs.readFile(path.join(fixtures, 'sidebar.brs'), 'utf8'));
     await write(dir, 'components/Settings.xml', (await fs.readFile(path.join(__dirname, 'fixtures/ui-startup-player/PageBoundary.xml'), 'utf8')).replaceAll('__NAME__', 'Settings'));
     await component(dir, 'components/Modules/MenuBar', 'MenuBar', '');
     await tree(dir, 'components/Modules/RecentlyWatchedBar');
     await component(dir, 'components/Modules/RecentlyWatchedBar', 'RecentlyWatchedBar', `function fixtureRead() as object
-    return { items: m.items, index: m.currentIndex, task: m.liveStatusTask, timer: m.refreshTimer, disposed: m.disposed, accountSection: m.accountSection }
+    return { items: m.items, index: m.currentIndex, task: m.liveStatusTask, timer: m.refreshTimer, disposed: m.disposed, accountSection: m.accountSection, dialog: m.actionDialog }
 end function
 function fixtureOptions() as boolean
     return onKeyEvent("options", true)
+end function
+function fixtureKey(key as string) as boolean
+    return onKeyEvent(key, true)
 end function
 sub fixtureRefresh()
     onRefreshTimer()
@@ -112,6 +116,11 @@ sub fixtureStale(task as object)
     onLiveStatusResponse({ getRoSGNode: function() as object
         return m.node
     end function, node: task })
+end sub
+sub fixtureStaleDialog(dialog as object)
+    onSidebarAction({ getRoSGNode: function() as object
+        return m.node
+    end function, node: dialog })
 end sub
 `);
     await component(dir, 'components/Scenes/ChannelPage', 'ChannelPage', `function fixtureRead() as object
@@ -154,12 +163,18 @@ function run(zip, cwd, cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.
     });
 }
 
-async function checkFixture(t, fixtureCase) {
+async function checkFixture(t, fixtureCase, mutation) {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'stitch-streamer-pins-'));
     const marker = `STITCH_PINS_PASS:${randomUUID()}`;
     try {
         const dir = path.join(temp, 'package');
         await build(dir, marker, fixtureCase);
+        if (mutation) {
+            const file = path.join(dir, mutation.file);
+            const source = await fs.readFile(file, 'utf8');
+            assert.ok(source.includes(mutation.from), 'negative-control boundary must match');
+            await fs.writeFile(file, source.replaceAll(mutation.from, mutation.to));
+        }
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
         const result = await run(zip, temp);
@@ -167,10 +182,16 @@ async function checkFixture(t, fixtureCase) {
         assert.equal(result.timedOut, false, detail);
         assert.equal(result.exceeded, false, detail);
         assert.equal(result.code, 0, detail);
-        assert.doesNotMatch(result.output, /STITCH_PINS_FAIL:|FIXTURE_DRIVER_ERROR:|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger/i, detail);
+        assert.doesNotMatch(result.output, /FIXTURE_DRIVER_ERROR:|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger/i, detail);
         assert.match(result.output, /EXIT_USER_NAV/, detail);
+        if (mutation) {
+            assert.ok(result.output.includes(`STITCH_PINS_FAIL:${mutation.failure}`), detail);
+            assert.ok(!result.output.includes(marker), 'mutant must not report success');
+            return;
+        }
+        assert.doesNotMatch(result.output, /STITCH_PINS_FAIL:/, detail);
         const summary = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
-        assert.ok(summary && Number(summary[1]) >= ({ storage: 27, navigation: 39, offline: 14, account: 39 })[fixtureCase], detail);
+        assert.ok(summary && Number(summary[1]) >= ({ storage: 27, navigation: 39, offline: 14, account: 39, sections: 500, removal: 30, menuaccount: 25 })[fixtureCase], detail);
         t.diagnostic(`${summary[1]} actual storage/SceneGraph assertions; native registry is process-local; Task/network/unsupported profile views are boundaries; hardware pixels and video are not tested`);
     } finally {
         const resolved = path.resolve(temp);
@@ -196,4 +217,52 @@ test('streamer pins execute offline Options, cap feedback and final pin removal'
 
 test('streamer pin account changes reject stale Options and refresh after OAuth invalidation', { timeout: 45000 }, async t => {
     await checkFixture(t, 'account');
+});
+
+for (const fixtureCase of ['sections', 'removal', 'menuaccount']) {
+    test(`sidebar executes actual ${fixtureCase} state, registry and focus`, { timeout: 45000 }, async t => {
+        await checkFixture(t, fixtureCase);
+    });
+}
+
+for (const [name, fixtureCase, file, from, to, failure] of [
+    ['history removal omitted', 'removal', 'source/utils/recentlyWatched.brs',
+        'for each key in [RW_RegistryKey(), "pins"]', 'for each key in ["pins"]',
+        'removal deletes the selected pin and history entry'],
+    ['pin removal omitted', 'removal', 'source/utils/recentlyWatched.brs',
+        'for each key in [RW_RegistryKey(), "pins"]', 'for each key in [RW_RegistryKey()]',
+        'removal deletes the selected pin and history entry'],
+    ['registry account guard removed', 'menuaccount', 'source/utils/recentlyWatched.brs',
+        'if expectedSection <> RW_Section() then return false', "' missing account guard",
+        'registry removal rejects a mismatched immutable account section'],
+    ['dialog identity guard removed', 'menuaccount', 'components/Modules/RecentlyWatchedBar/RecentlyWatchedBar.brs',
+        'if not event.getRoSGNode().isSameNode(m.actionDialog) then return', "' missing dialog identity guard",
+        'a late closed dialog cannot act on a newer menu'],
+    ['selection restoration omitted', 'removal', 'components/Modules/RecentlyWatchedBar/RecentlyWatchedBar.brs',
+        'm.currentIndex = previousIndex', 'm.currentIndex = 0',
+        'removal keeps the next neighbor focused'],
+    ['overlapping section geometry', 'sections', 'components/Modules/RecentlyWatchedBar/RecentlyWatchedBar.brs',
+        'm.itemSpacing = 68', 'm.itemSpacing = 52',
+        'visible full rings fit nonnegative HD safe bounds without overlap'],
+]) {
+    test(`sidebar negative control rejects ${name}`, { timeout: 45000 }, async t => {
+        await checkFixture(t, fixtureCase, { file, from, to, failure });
+    });
+}
+
+test('sidebar runtime labels have one UTF-8 translation in all three catalogs', async () => {
+    const bar = await fs.readFile(path.join(root, 'components/Modules/RecentlyWatchedBar/RecentlyWatchedBar.brs'), 'utf8');
+    const keys = [...new Set([...bar.matchAll(/\btr\("([^"]+)"\)/g)].map(match => match[1]))];
+    for (const locale of ['en_US', 'es_MX', 'pt_BR']) {
+        const source = new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(path.join(root, `locale/${locale}/translations.ts`)));
+        const messages = [...source.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*<translation>([\s\S]*?)<\/translation>\s*<\/message>/g)];
+        for (const key of keys) {
+            const matches = messages.filter(message => message[1] === key);
+            assert.equal(matches.length, 1, `${locale}: one translation for ${key}`);
+            assert.ok(matches[0][2].trim(), `${locale}: nonempty ${key}`);
+            assert.doesNotMatch(matches[0][2], /\uFFFD/);
+        }
+        if (locale === 'es_MX') assert.match(source, /a quién sigues en Twitch/);
+        if (locale === 'pt_BR') assert.match(source, /não mudam quem você segue na Twitch/);
+    }
 });

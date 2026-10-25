@@ -6,7 +6,7 @@ sub init()
     m.menu.menuOptionsText = ["Following", "Browse", "Search"]
 end sub
 
-sub fixtureReady()
+sub fixtureReady(liveHistory = false as boolean)
     teardownAllScenes()
     m.validateOauthToken = destroyTask(m.validateOauthToken, "response")
     m.validateOauthToken = createApiTask("validateOauthToken", "ValidateUserLogin")
@@ -18,6 +18,16 @@ sub fixtureReady()
     end if
     m.recentBar = createObject("roSGNode", "RecentlyWatchedBar")
     m.top.appendChild(m.recentBar)
+    if liveHistory
+        task = m.recentBar.callFunc("fixtureRead").task
+        if task <> invalid
+            live = {}
+            for each login in task.request.params.logins
+                live[login] = true
+            end for
+            task.response = live
+        end if
+    end if
     m.recentBar.observeField("contentSelected", "onRecentSelected")
     m.recentBar.observeField("hasItems", "onRecentItemsChanged")
     m.activeNode = createObject("roSGNode", "SceneManagerGroup")

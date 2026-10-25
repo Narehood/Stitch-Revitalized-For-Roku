@@ -1069,5 +1069,10 @@
         <message><source>Not following this channel.</source><translation>Not following this channel.</translation></message>
         <message><source>Following this channel.</source><translation>Following this channel.</translation></message>
         <message><source>Select again to refresh this menu.</source><translation>Select again to refresh this menu.</translation></message>
+        <message><source>Press * for sidebar actions</source><translation>Press * for sidebar actions</translation></message>
+        <message><source>Pin to sidebar</source><translation>Pin to sidebar</translation></message>
+        <message><source>Unpin from sidebar</source><translation>Unpin from sidebar</translation></message>
+        <message><source>Remove from sidebar</source><translation>Remove from sidebar</translation></message>
+        <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</translation></message>
     </context>
 </TS>

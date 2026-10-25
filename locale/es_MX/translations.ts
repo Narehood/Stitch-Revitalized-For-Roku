@@ -1065,7 +1065,7 @@
         <message><source>100%</source><translation>100%</translation></message>
         <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
         <message><source>Press Down or Back to hide controls</source><translation>Presiona Abajo o Atrás para ocultar los controles</translation></message>
-        <message><source>PINNED</source><translation>FIJADO</translation></message>
+        <message><source>PINNED</source><translation>FIJADOS</translation></message>
         <message><source>Press * to pin</source><translation>Presiona * para fijar</translation></message>
         <message><source>Press * to unpin</source><translation>Presiona * para desfijar</translation></message>
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Presiona * para fijar en la barra lateral (máx. {0})</translation></message>
@@ -1081,5 +1081,10 @@
         <message><source>Not following this channel.</source><translation>No sigues este canal.</translation></message>
         <message><source>Following this channel.</source><translation>Sigues este canal.</translation></message>
         <message><source>Select again to refresh this menu.</source><translation>Selecciona otra vez para actualizar este menú.</translation></message>
+        <message><source>Press * for sidebar actions</source><translation>Pulsa * para opciones de la barra</translation></message>
+        <message><source>Pin to sidebar</source><translation>Fijar en la barra lateral</translation></message>
+        <message><source>Unpin from sidebar</source><translation>Desfijar de la barra lateral</translation></message>
+        <message><source>Remove from sidebar</source><translation>Quitar de la barra lateral</translation></message>
+        <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Los cambios de la barra lateral se guardan en este Roku y no cambian a quién sigues en Twitch.</translation></message>
     </context>
 </TS>

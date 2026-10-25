@@ -9,7 +9,13 @@ sub main()
     scene = screen.createScene("FixtureScene")
     m.scene = scene
     screen.show()
-    if "__FIXTURE_CASE__" = "account"
+    if "__FIXTURE_CASE__" = "sections"
+        testSidebarSections(scene)
+    else if "__FIXTURE_CASE__" = "removal"
+        testSidebarRemoval(scene)
+    else if "__FIXTURE_CASE__" = "menuaccount"
+        testSidebarMenuAccount(scene)
+    else if "__FIXTURE_CASE__" = "account"
         testAccountChanges(scene)
     else if "__FIXTURE_CASE__" = "storage"
         testStorage()
@@ -42,7 +48,7 @@ end sub
 sub testAccountChanges(scene as object)
     ' Valid validation must leave a focused Alice rail and its normal action alone.
     seedAccountChange(true)
-    scene.callFunc("fixtureReady")
+    scene.callFunc("fixtureReady", true)
     rail = scene.callFunc("fixtureRead").rail
     press("left")
     original = rail.callFunc("fixtureRead").items[0]
@@ -56,7 +62,7 @@ sub testAccountChanges(scene as object)
     ' and remove. The timer deliberately skips the focused stale snapshot.
     for each alreadyPinned in [false, true]
         seedAccountChange(true, alreadyPinned)
-        scene.callFunc("fixtureReady")
+        scene.callFunc("fixtureReady", true)
         rail = scene.callFunc("fixtureRead").rail
         press("left")
         aliceItem = rail.callFunc("fixtureRead").items[0]
@@ -73,7 +79,7 @@ sub testAccountChanges(scene as object)
     end for
 
     seedAccountChange(false)
-    scene.callFunc("fixtureReady")
+    scene.callFunc("fixtureReady", true)
     rail = scene.callFunc("fixtureRead").rail
     press("left")
     signOutAccount()
@@ -84,7 +90,7 @@ sub testAccountChanges(scene as object)
     ' Complete the real pending validation Task after entering Alice's rail.
     for each anonymousHasPin in [true, false]
         seedAccountChange(anonymousHasPin)
-        scene.callFunc("fixtureReady")
+        scene.callFunc("fixtureReady", true)
         rail = scene.callFunc("fixtureRead").rail
         press("left")
         state = rail.callFunc("fixtureRead")
@@ -107,7 +113,7 @@ sub testAccountChanges(scene as object)
 
     ' Explicit logout keeps its existing account refresh and page focus behavior.
     seedAccountChange(true, true)
-    scene.callFunc("fixtureReady")
+    scene.callFunc("fixtureReady", true)
     rail = scene.callFunc("fixtureRead").rail
     press("left")
     signOutAccount()
@@ -194,11 +200,11 @@ sub testRailAndPage(scene as object)
     for i = 9 to 0 step -1
         RW_Add(entry("channel_" + i.ToStr(), i + 100))
     end for
-    scene.callFunc("fixtureReady")
+    scene.callFunc("fixtureReady", true)
     rail = scene.callFunc("fixtureRead").rail
     pause(300)
     press("left")
-    check(rail.itemHasFocus and rail.isInFocusChain() and rail.findNode("captionHint").text = "Press * to pin", "native Left enters the rail with a discoverable localized Options hint")
+    check(rail.itemHasFocus and rail.isInFocusChain() and rail.findNode("captionHint").text = "Press * for sidebar actions", "native Left enters the rail with a discoverable localized Options hint")
     for i = 1 to 9
         press("down")
     end for
@@ -209,25 +215,29 @@ sub testRailAndPage(scene as object)
     state = rail.callFunc("fixtureRead")
     pinned = state.items[0]
     check(RW_IsPinned("channel_9") and state.index = 0 and pinned.itemData.login = "channel_9" and pinned.focused, "native Options persists the pin and retains focus on that channel after sorting")
-    check(pinned.findNode("pinBadge").visible and pinned.findNode("pinLabel").text = "PINNED", "the pinned avatar has a persistent code-native PINNED indicator")
-    check(rail.findNode("captionHint").text = "Press * to unpin" and rail.findNode("caption").translation[1] = pinned.translation[1] + 12, "pinning changes the hint without moving the centered tooltip")
-    badge = pinned.findNode("pinBadge")
-    label = pinned.findNode("pinLabel")
-    check(badge.translation[0] >= 0 and badge.translation[1] >= 0 and badge.translation[0] + label.width <= 64 and badge.translation[1] + label.height <= 64, "the PIN indicator fits inside the unchanged 64 by 64 avatar footprint")
+    check(rail.findNode("pinnedHeader").visible and rail.findNode("pinnedHeader").text = "PINNED", "the pinned avatar has a persistent code-native PINNED indicator")
+    check(rail.findNode("captionHint").text = "Press * for sidebar actions" and rail.findNode("caption").translation[1] = pinned.translation[1] + 12, "pinning changes the hint without moving the centered tooltip")
+    header = rail.findNode("pinnedHeader")
+    check(header.translation[1] >= 0 and header.translation[1] + header.height <= pinned.translation[1], "the PINNED indicator owns space outside the 64 by 64 avatar footprint")
     check(pinned.findNode("selectionIndicator").width = 64 and pinned.findNode("avatar").translation[0] = 3, "pinning preserves the existing concentric ring and avatar geometry")
-    oldTask.response = { channel_9: true }
+    oldTask.response = { channel_9: false }
     rail.callFunc("fixtureStale", oldTask)
-    check(oldTask.control = "stop" and not pinned.isLive, "removed task callbacks and already queued stale responses cannot change rebuilt items")
+    check(oldTask.control = "stop" and pinned.isLive, "removed task callbacks and already queued stale responses cannot change rebuilt items")
     state.task.response = { channel_9: true }
-    check(pinned.isLive and pinned.findNode("liveDot").visible and pinned.findNode("pinBadge").visible, "live status and persistent PIN remain independent")
+    check(pinned.isLive and pinned.findNode("liveDot").visible and rail.findNode("pinnedHeader").visible, "live status and persistent PIN remain independent")
     state.task.response = {}
-    check(not pinned.isLive and pinned.findNode("pinBadge").visible, "failed or offline status preserves a local pin")
+    check(not pinned.isLive and rail.findNode("pinnedHeader").visible, "failed or offline status preserves a local pin")
     set_setting("active_user", "alice")
     state.task.response = { channel_9: true }
     check(not pinned.isLive, "a response from a previous account cannot update the visible pin state")
     set_setting("active_user", "$default$")
     rail.callFunc("fixtureRefresh")
     check(rail.callFunc("fixtureRead").items[0].isSameNode(pinned), "periodic refresh does not rebuild a focused rail")
+    live = {}
+    for i = 0 to 9
+        live["channel_" + i.ToStr()] = true
+    end for
+    state.task.response = live
     press("options")
     state = rail.callFunc("fixtureRead")
     check(not RW_IsPinned("channel_9") and state.index = 9 and state.items[9].focused and state.items[9].visible, "unpin returns a recent channel to history order while keeping it focused and visible")
@@ -249,12 +259,12 @@ sub testRailAndPage(scene as object)
     press("back")
     check(scene.callFunc("fixtureRead").active.id = "PriorPage" and scene.callFunc("fixtureRead").depth = 0 and page.callFunc("fixtureRead").disposed, "one native Back restores the prior page and disposes the ChannelPage")
     state = rail.callFunc("fixtureRead")
-    check(not state.items[state.index].findNode("pinBadge").visible, "hero back routing refreshes the visible rail immediately after a profile pin change")
+    check(state.items[state.index].itemData.pinned <> true, "hero back routing refreshes the visible rail immediately after a profile pin change")
 end sub
 
 sub testOfflinePage(scene as object)
     RW_Add(entry("channel_9", 109))
-    scene.callFunc("fixtureReady")
+    scene.callFunc("fixtureReady", true)
     rail = scene.callFunc("fixtureRead").rail
     oldTask = rail.callFunc("fixtureRead").task
     ' Reopen an offline channel: the profile action remains available with no rows.
@@ -281,7 +291,7 @@ sub testOfflinePage(scene as object)
     registry_delete("history", RW_Section())
     scene.callFunc("fixtureReady")
     rail = scene.callFunc("fixtureRead").rail
-    check(rail.hasItems and rail.callFunc("fixtureRead").items.Count() = 1 and rail.callFunc("fixtureRead").items[0].findNode("pinBadge").visible, "recreating the rail reloads an offline pin after history eviction")
+    check(rail.hasItems and rail.callFunc("fixtureRead").items.Count() = 1 and rail.findNode("pinnedHeader").visible and not rail.callFunc("fixtureRead").items[0].isLive, "recreating the rail reloads an offline pin after history eviction")
     press("left")
     press("options")
     check(not rail.hasItems and not rail.itemHasFocus and scene.callFunc("fixtureRead").active.isInFocusChain(), "unpinning the final history-free pin returns focus to the page without trapping the user")
@@ -323,6 +333,10 @@ sub press(key as string)
         else if key = "down"
             received = rail.callFunc("fixtureRead").index = index + 1
         else if key = "options"
+            if wasRail
+                dialog = rail.callFunc("fixtureRead").dialog
+                if dialog <> invalid then dialog.buttonSelected = 0
+            end if
             received = RW_IsPinned(login) <> wasPinned
         else if key = "back"
             if wasRail
