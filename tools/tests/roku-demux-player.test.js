@@ -124,6 +124,16 @@ async function buildPackage(dir, marker, mode = 'normal') {
     const controlledWatchdog = watchdogSource.replace(nativeClock, 'nowSec = fixtureWatchdogClock()');
     assert.equal(controlledWatchdog.replace('nowSec = fixtureWatchdogClock()', nativeClock), watchdogSource);
     await addFile(dir, playerPath, actualPlayer.replace(watchdog, controlledWatchdog));
+    // The absolute startup clock is the second explicit time boundary. Keep
+    // the actual assignment/Mark and all deadline/progress decisions intact.
+    const startupClock = 'm.playbackInitTime = CreateObject("roTimeSpan")';
+    const elapsedClock = 'm.playbackInitTime.TotalMilliseconds()';
+    let controlledPlayer = await fs.readFile(path.join(dir, playerPath), 'utf8');
+    assert.equal(controlledPlayer.split(startupClock).length, 2, 'one prepared-Video startup clock required');
+    assert.equal(controlledPlayer.split(elapsedClock).length, 3, 'two actual remaining-startup reads required');
+    controlledPlayer = controlledPlayer.replace(startupClock, 'm.playbackInitTime = fixtureStartupClock()')
+        .replaceAll(elapsedClock, 'fixtureStartupElapsed()');
+    await addFile(dir, playerPath, controlledPlayer);
     if (mode === 'old-buffer-downgrade' || mode === 'old-error-downgrade') {
         const buffer = mode === 'old-buffer-downgrade';
         const name = buffer ? 'findLowerQuality' : 'getNextLowerQuality';
@@ -211,6 +221,11 @@ async function buildPackage(dir, marker, mode = 'normal') {
         const summaryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
             || line.trim() === 'testChoiceReadyAndBack()').join('\n');
         main = main.replace(start, summaryOnly);
+    } else if (mode === 'crash-recovery') {
+        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+        assert.ok(start?.includes('    testNativeRecoveryStartupDeadline()'));
+        main = main.replace(start, start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
+            || ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()'].includes(line.trim())).join('\n'));
     } else if (mode === 'native-live-start' || mode === 'late-native-start') {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testNativeLiveStartupWindow()'));
@@ -276,7 +291,8 @@ function runChild(command, args, cwd, timeoutMs = 60000, outputLimit = 1024 * 10
 }
 
 function childDiagnostic(result, context = 'fixture') {
-    return `${context}: code=${result.code} signal=${result.signal} timedOut=${result.timedOut} exceeded=${result.exceeded} elapsedMs=${result.elapsedMs}\n${result.output.slice(-16000)}`;
+    const failures = result.output.split(/\r?\n/).filter(line => line.includes('STITCH_UI_FAIL:')).join('\n');
+    return `${context}: code=${result.code} signal=${result.signal} timedOut=${result.timedOut} exceeded=${result.exceeded} elapsedMs=${result.elapsedMs}\n${failures}\n${result.output.slice(-16000)}`;
 }
 
 function assertNormalExit(result, context = 'fixture') {
@@ -357,6 +373,11 @@ test('opted-in native startup retains the complete minimum window and rejects a 
     assertNormalExit(late.result, 'late-native-start');
     assert.match(late.result.output, /STITCH_UI_FAIL:actual selected window retains six seconds after the requested native start/);
     assert.throws(() => acceptResult(late.result, late.marker));
+});
+
+test('actual recovery callbacks preserve absolute native startup and discard only obsolete healthy-owner reconnects', { timeout: 90000 }, async t => {
+    const { result, marker } = await runFixture('crash-recovery');
+    t.diagnostic(`${acceptResult(result, marker)} actual callback assertions with controlled clocks and inert network/session boundaries; no native decoder proof`);
 });
 
 test('manual LIVE quality intent survives a missing recovery rung and rejects genuine intent loss', { timeout: 150000 }, async t => {

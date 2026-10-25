@@ -1,5 +1,6 @@
 ' @include components/Scenes/VideoPlayer/VideoPlayer.brs
 sub main()
+    m.disposed = false
     m.top = { contentRequested: { contentType: "VOD" } }
     m.chatWindow = invalid
     m.watchdogTimer = invalid

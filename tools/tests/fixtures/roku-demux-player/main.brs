@@ -1,4 +1,4 @@
-﻿sub main()
+sub main()
     fixtureBegin()
     m.global.addFields({ fixtureRegistry: { ChatOption: "false", ChatFontSize: "16", "playback.lowLatency": "true" }, fixtureContentTasks: 0, emoteCache: {} })
     m.scene = m.screen.createScene("RokuPlayerHost")
@@ -7,6 +7,9 @@
         testLateBindingAndOrdinaryPaths()
         testChoiceReadyAndBack()
         testNativeLiveStartupWindow()
+        testNativeRecoveryStartupDeadline()
+        testObsoleteLiveReconnect()
+        testFailedRefreshRecoveryOwnership()
         testCancelledStartAndDisposal()
         testDirectSwitch()
         testLowLatencyRelay()
@@ -198,6 +201,7 @@ sub testRokuStallRefundableCharge()
     video = player.callFunc("fixtureRead").video
     video.state = "buffering"
     settle(20)
+    player.callFunc("fixtureStartupAge", 25000)
     player.callFunc("fixtureBufferTimeout")
     state = player.callFunc("fixtureRead")
     check(state.reconnectTimer <> invalid and state.reconnect = 1 and state.recovery = 1 and state.transitionCharges = 1, "Roku-only stall reconnect is a refundable charge")
@@ -642,6 +646,10 @@ sub testQualityRecoveryLadder()
     deliver(player, fixed, metadata)
     chooseRoku(player)
     ready(session, player.callFunc("fixtureRead").sessionId)
+    recoveryProgress(player, 1)
+    player.callFunc("fixtureRead").video.state = "buffering"
+    settle(20)
+    check(player.callFunc("fixtureRead").advanced and player.callFunc("fixtureRead").recovery = 0, "fixed-Automatic rebuffer recovery starts only after actual forward progress")
     check(player.callFunc("fixtureLowerQuality") = 3, "fixed Automatic lowers below its actual 720 descriptor")
     recovery = player.callFunc("fixtureDecodeRecovery")
     check(recovery.shouldRetry and recovery.action = "change_quality" and recovery.newContent.index = 3 and recovery.newContent.qualityID = "480p30", "actual decode recovery planner lowers fixed Automatic below its retained rendition")
@@ -956,6 +964,306 @@ sub testLateBindingAndOrdinaryPaths()
     closePlayer(player)
 end sub
 
+function recoveryPlayer() as object
+    player = openPlayer("LIVE")
+    selected = content("roku-demux", "1080p60")
+    deliver(player, selected, [selected.getFields(), content("roku-demux", "720p60").getFields()])
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    return player
+end function
+
+sub recoveryProgress(player as object, position as float)
+    video = player.callFunc("fixtureRead").video
+    video.state = "playing"
+    settle(20)
+    video.position = position
+    settle(20)
+end sub
+
+sub testNativeRecoveryStartupDeadline()
+    ' The Video's preparation can take time without spending its startup grace.
+    for each startup in [12000, 15000]
+        player = recoveryPlayer()
+        video = player.callFunc("fixtureRead").video
+        timer = player.callFunc("fixtureRead").bufferTimer
+        check(timer <> invalid and timer.duration = 25, "prepared native owner arms its 25 second absolute deadline before buffering")
+        video.state = "buffering"
+        settle(20)
+        player.callFunc("fixtureStartupAge", 10000)
+        player.callFunc("fixtureBufferTimeout", timer)
+        state = player.callFunc("fixtureRead")
+        check(state.reconnect = 0 and state.recovery = 0 and state.reconnectTimer = invalid and state.reconnectTask = invalid and state.bufferTimer.duration = 15, "native startup cannot charge or replace at ten seconds")
+        player.callFunc("fixtureStartupAge", startup)
+        for bufferCheck = 1 to 6
+            player.callFunc("fixtureProlongedBufferCheck")
+        end for
+        check(player.callFunc("fixtureRead").recovery = 0 and player.content.QualityID = "1080p60", "repeated buffer observations cannot downshift a native owner during its startup allowance")
+        recoveryProgress(player, 1)
+        state = player.callFunc("fixtureRead")
+        check(state.advanced and state.bufferTimer = invalid and state.video.isSameNode(video) and state.reconnect = 0 and state.recovery = 0, "12 to 15 second startup advances on the original owner without recovery debt")
+        video.state = "buffering"
+        settle(20)
+        timer = player.callFunc("fixtureRead").bufferTimer
+        check(timer <> invalid and timer.duration = 10, "an actually advancing native owner retains its ten second rebuffer limit")
+        player.callFunc("fixtureBufferTimeout", timer)
+        state = player.callFunc("fixtureRead")
+        check(state.reconnect = 1 and state.recovery = 1 and state.reconnectTimer <> invalid, "ten second rebuffer timeout still charges one recovery")
+        closePlayer(player)
+    end for
+
+    player = recoveryPlayer()
+    video = player.callFunc("fixtureRead").video
+    player.callFunc("fixtureRecovery", 2)
+    for each age in [10000, 15000, 24000]
+        player.callFunc("fixtureStartupAge", age)
+        video.state = "buffering"
+        settle(20)
+        timer = player.callFunc("fixtureRead").bufferTimer
+        video.state = "playing"
+        settle(20)
+        state = player.callFunc("fixtureRead")
+        check(not state.advanced and state.bufferTimer <> invalid and state.bufferTimer.isSameNode(timer), "playing at zero and state flaps retain the absolute startup timer")
+        for tick = 1 to 8
+            player.callFunc("fixtureWatchdog", 2000000000 + tick * 2)
+        end for
+        player.callFunc("fixtureBufferTimeout", timer)
+        state = player.callFunc("fixtureRead")
+        check(state.reconnect = 2 and state.recovery = 2 and state.reconnectTimer = invalid and state.bufferTimer.duration = (25000 - age) / 1000, "startup flaps and watchdog cannot extend the deadline or refund existing debt")
+    end for
+    player.callFunc("fixtureStartupAge", 25000)
+    player.callFunc("fixtureBufferTimeout", player.callFunc("fixtureRead").bufferTimer)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnect = 3 and state.recovery = 3 and state.reconnectTimer <> invalid and not state.advanced, "nonadvancing playing at zero expires at 25 seconds from original assignment")
+    closePlayer(player)
+
+    ' Each successful refresh prepares a genuinely new owner. Never-ready
+    ' playback still exhausts exactly six automatic recoveries and then stops.
+    player = recoveryPlayer()
+    session = sessionOf(player)
+    for attempt = 1 to 7
+        video = player.callFunc("fixtureRead").video
+        video.state = "buffering"
+        settle(20)
+        player.callFunc("fixtureStartupAge", 25000)
+        player.callFunc("fixtureBufferTimeout", player.callFunc("fixtureRead").bufferTimer)
+        state = player.callFunc("fixtureRead")
+        if attempt <= 6
+            expectedDelay = 2 ^ (attempt - 1)
+            if expectedDelay > 16 then expectedDelay = 16
+            check(state.reconnectTimer <> invalid and state.reconnectTimer.duration = expectedDelay and state.recovery = attempt and state.reconnect = attempt, "never-advancing startup retains all six finite exponential backoffs")
+            if state.reconnectTimer = invalid then exit for
+            player.callFunc("fixtureReconnectTimer", state.reconnectTimer)
+            healthRefresh(player)
+            state = player.callFunc("fixtureRead")
+            check(not state.video.isSameNode(video) and state.bufferTimer.duration = 25 and not state.advanced, "automatic refresh gives only the new prepared Video a fresh startup allowance")
+        else
+            check(state.errorDialog <> invalid and state.reconnectTimer = invalid and state.reconnectTask = invalid and video.control = "stop" and calls(session, "start").count() = 7, "seventh startup timeout stops after exactly six replacement sessions")
+        end if
+    end for
+    closePlayer(player)
+
+    player = recoveryPlayer()
+    oldTimer = player.callFunc("fixtureRead").bufferTimer
+    video = player.callFunc("fixtureRead").video
+    video.qualityChangeRequest = 1
+    player.callFunc("fixtureQualityEvent")
+    player.callFunc("fixtureBufferTimeout", oldTimer)
+    state = player.callFunc("fixtureRead")
+    check(state.pendingContent <> invalid and state.bufferTimer = invalid and state.recovery = 0, "quality preparation invalidates the previous startup timer before its new worker is ready")
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    state = player.callFunc("fixtureRead")
+    timer = state.bufferTimer
+    player.callFunc("fixtureStartupAge", 25000)
+    state.video.state = "buffering"
+    settle(20)
+    player.callFunc("fixtureBufferTimeout", oldTimer)
+    state = player.callFunc("fixtureRead")
+    check(state.bufferTimer <> invalid and state.bufferTimer.isSameNode(timer) and state.recovery = 0 and state.video.selectedQuality = "720p60", "stale buffer timer cannot charge the new manual quality owner")
+    player.callFunc("onDestroy")
+    player.callFunc("fixtureBufferTimeout", timer)
+    state = player.callFunc("fixtureRead")
+    check(state.disposed and state.bufferTimer = invalid and state.reconnectTask = invalid and state.reconnect = 0, "buffer timer after disposal cannot restart or charge playback")
+    closePlayer(player)
+end sub
+
+sub testObsoleteLiveReconnect()
+    for each mode in ["backoff", "inflight", "stall", "playing_zero", "buffer_again", "dead_worker", "stopped_worker", "source_transition", "session_changed", "manual_quality", "new_content", "back", "disposed"]
+        player = recoveryPlayer()
+        session = sessionOf(player)
+        video = player.callFunc("fixtureRead").video
+        player.callFunc("fixtureRecovery", 5)
+        if mode = "source_transition"
+            session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "source_transition" }
+            settle(20)
+        else if mode = "stall"
+            recoveryProgress(player, 1)
+            player.callFunc("fixtureScheduleReconnect", "stall")
+        else
+            video.state = "buffering"
+            settle(20)
+            player.callFunc("fixtureStartupAge", 25000)
+            player.callFunc("fixtureBufferTimeout", player.callFunc("fixtureRead").bufferTimer)
+        end if
+        state = player.callFunc("fixtureRead")
+        timer = state.reconnectTimer
+        check(timer <> invalid and timer.duration = 16 and state.reconnect = 6 and state.recovery = 6, "attempt six retains its sixteen second backoff and shared recovery debt")
+        if timer = invalid
+            closePlayer(player)
+            return
+        end if
+        if mode = "inflight" or mode = "manual_quality" or mode = "new_content" or mode = "back" or mode = "disposed"
+            player.callFunc("fixtureReconnectTimer", timer)
+            task = player.callFunc("fixtureRead").reconnectTask
+            check(task <> invalid, "pending recovery fetch belongs to its scheduled owner")
+        end if
+        tasks = m.global.fixtureContentTasks
+        if mode = "playing_zero"
+            video.state = "playing"
+        else
+            recoveryProgress(player, 4)
+        end if
+        if mode = "buffer_again" then video.state = "buffering"
+        if mode = "dead_worker" then session.event = { id: player.callFunc("fixtureRead").sessionId, status: "failed", reason: "source_transition" }
+        if mode = "stopped_worker" then session.busy = false
+        if mode = "session_changed" then player.callFunc("fixtureSessionIdentity", "different-session")
+        settle(20)
+        if mode = "manual_quality"
+            video.qualityChangeRequest = 1
+            video.QualityChangeRequestFlag = true
+            settle(20)
+            ready(session, player.callFunc("fixtureRead").sessionId)
+        else if mode = "new_content"
+            player.contentRequested = request("LIVE")
+            settle(20)
+        else if mode = "back"
+            player.callFunc("fixtureBack")
+        else if mode = "disposed"
+            player.callFunc("onDestroy")
+        end if
+        if mode = "inflight" or mode = "manual_quality" or mode = "new_content" or mode = "back" or mode = "disposed"
+            task.metadata = [content("roku-demux").getFields()]
+            task.response = content("roku-demux")
+            settle(20)
+            player.callFunc("fixtureReconnectResponse", task)
+        else
+            player.callFunc("fixtureReconnectTimer", timer)
+        end if
+        state = player.callFunc("fixtureRead")
+        if mode = "backoff" or mode = "inflight" or mode = "stall"
+            check(state.video.isSameNode(video) and video.control = "play" and state.reconnectTimer = invalid and state.reconnectTask = invalid and calls(session, "start").count() = 1 and m.global.fixtureContentTasks = tasks, "same ready worker and forward progress suppress obsolete recovery before fetch or apply")
+            check(state.recovery = 6 and state.reconnect = 6, "resumed progress preserves spent recovery debt without an immediate health refund")
+            ' An already queued event cannot dispatch the just-cancelled timer.
+            player.callFunc("fixtureReconnectTimer", timer)
+            check(player.callFunc("fixtureRead").reconnectTask = invalid, "late cancelled reconnect timer cannot fetch again")
+        else if mode = "session_changed"
+            check(state.reconnectTask = invalid and state.reconnectTimer = invalid and state.recovery = 6, "obsolete session ownership invalidates recovery without forgiving debt")
+        else if mode = "manual_quality"
+            check(state.video.selectedQuality = "720p60" and state.manualLiveQuality = "720p60" and state.reconnectTask = invalid and state.recovery = 6, "late refresh cannot override the new explicit manual quality owner")
+            current = state.video
+            player.callFunc("fixtureReconnectTimer", timer)
+            check(player.callFunc("fixtureRead").video.isSameNode(current) and player.callFunc("fixtureRead").reconnectTask = invalid, "old reconnect timer cannot fetch for the new quality owner")
+        else if mode = "new_content"
+            check(state.task <> invalid and state.reconnectTask = invalid and state.recovery = 0 and state.reconnect = 0, "late refresh cannot apply to a new content request")
+        else if mode = "back" or mode = "disposed"
+            player.callFunc("fixtureReconnectTimer", timer)
+            check(video.control = "stop" and player.callFunc("fixtureRead").reconnectTask = invalid and state.recovery = 6, "late recovery callbacks after Back or disposal cannot revive the owner")
+        else
+            check(state.reconnectTask <> invalid and state.reconnect = 6 and state.recovery = 6, "playing zero, buffering again and failed workers still dispatch required recovery")
+            if state.reconnectTask <> invalid
+                healthRefresh(player)
+                state = player.callFunc("fixtureRead")
+                check(not state.video.isSameNode(video) and video.control = "stop" and calls(session, "start").count() = 2 and state.recovery = 6, "nonhealthy owners and source transitions still apply their fresh replacement")
+            end if
+        end if
+        closePlayer(player)
+    end for
+
+    ' A previous response/timer must not disturb a new owner's current work.
+    player = recoveryPlayer()
+    video = player.callFunc("fixtureRead").video
+    video.state = "buffering"
+    settle(20)
+    player.callFunc("fixtureStartupAge", 25000)
+    player.callFunc("fixtureBufferTimeout", player.callFunc("fixtureRead").bufferTimer)
+    oldTimer = player.callFunc("fixtureRead").reconnectTimer
+    player.callFunc("fixtureReconnectTimer", oldTimer)
+    oldTask = player.callFunc("fixtureRead").reconnectTask
+    player.contentRequested = request("LIVE")
+    settle(20)
+    deliver(player, content("roku-demux"))
+    ready(sessionOf(player), player.callFunc("fixtureRead").sessionId)
+    player.callFunc("fixtureRead").video.state = "buffering"
+    settle(20)
+    player.callFunc("fixtureStartupAge", 25000)
+    player.callFunc("fixtureBufferTimeout", player.callFunc("fixtureRead").bufferTimer)
+    timer = player.callFunc("fixtureRead").reconnectTimer
+    player.callFunc("fixtureReconnectTimer", oldTimer)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTimer <> invalid and state.reconnectTimer.isSameNode(timer) and state.reconnectTask = invalid and state.recovery = 1, "stale reconnect event cannot clear or dispatch the new owner's timer")
+    player.callFunc("fixtureReconnectTimer", timer)
+    task = player.callFunc("fixtureRead").reconnectTask
+    player.callFunc("fixtureReconnectResponse", oldTask)
+    state = player.callFunc("fixtureRead")
+    check(state.reconnectTask <> invalid and state.reconnectTask.isSameNode(task) and state.recovery = 1 and state.reconnect = 1, "stale refresh response cannot destroy or retry the new owner's current request")
+    closePlayer(player)
+end sub
+
+sub testFailedRefreshRecoveryOwnership()
+    for each reason in ["buffer_timeout", "stall", "source_transition", "error_retry"]
+        for each failure in ["invalid", "error"]
+            for each phase in ["backoff", "fetch"]
+                player = recoveryPlayer()
+                session = sessionOf(player)
+                recoveryProgress(player, 100)
+                video = player.callFunc("fixtureRead").video
+                video.state = "buffering"
+                settle(20)
+                player.callFunc("fixtureScheduleReconnect", reason)
+                player.callFunc("fixtureReconnectTimer", player.callFunc("fixtureRead").reconnectTimer)
+                task = player.callFunc("fixtureRead").reconnectTask
+                check(task <> invalid, "original recovery dispatches before its refresh failure")
+                if task = invalid
+                    closePlayer(player)
+                    return
+                end if
+                if failure = "invalid"
+                    task.response = invalid
+                else
+                    rejected = content()
+                    rejected.contentType = "ERROR"
+                    task.response = rejected
+                end if
+                settle(20)
+                state = player.callFunc("fixtureRead")
+                check(state.reconnectTimer <> invalid and state.reconnectTimer.duration = 2 and state.reconnect = 2 and state.recovery = 2, "invalid and ERROR refreshes retain the second exponential backoff and shared debt")
+                if state.reconnectTimer = invalid
+                    closePlayer(player)
+                    return
+                end if
+                timer = state.reconnectTimer
+                if phase = "fetch" then player.callFunc("fixtureReconnectTimer", timer)
+                beforeTasks = m.global.fixtureContentTasks
+                recoveryProgress(player, 104)
+                if phase = "backoff"
+                    player.callFunc("fixtureReconnectTimer", timer)
+                else
+                    healthRefresh(player)
+                end if
+                state = player.callFunc("fixtureRead")
+                if reason = "buffer_timeout" or reason = "stall"
+                    check(state.video.isSameNode(video) and video.control = "play" and state.reconnectTimer = invalid and state.reconnectTask = invalid and calls(session, "start").count() = 1 and m.global.fixtureContentTasks = beforeTasks, "failed refresh preserves the original buffer or stall trigger for resumed-owner cancellation during " + phase)
+                    check(state.recovery = 2 and state.reconnect = 2, "cancelling after a failed refresh preserves both spent attempts")
+                else
+                    if phase = "backoff" then healthRefresh(player)
+                    state = player.callFunc("fixtureRead")
+                    check(not state.video.isSameNode(video) and video.control = "stop" and calls(session, "start").count() = 2 and state.recovery = 2 and state.reconnect = 2, "failed refresh preserves protected source-transition and ordinary error-retry triggers")
+                end if
+                closePlayer(player)
+            end for
+        end for
+    end for
+end sub
+
 sub testNativeLiveStartupWindow()
     for each opted in [false, true]
         setting = "false"
@@ -1016,7 +1324,7 @@ sub testChoiceReadyAndBack()
     video.state = "buffering"
     settle(20)
     timer = player.callFunc("fixtureRead").bufferTimer
-    check(timer <> invalid and timer.duration = 10, "Roku-only live treats a ten-second stall as stuck")
+    check(timer <> invalid and timer.duration = 25, "new Roku-only live retains the ordinary 25 second startup allowance")
     video.state = "playing"
     settle(20)
     player.callFunc("fixtureEventAgain")
