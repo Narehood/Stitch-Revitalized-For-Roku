@@ -15,6 +15,18 @@ sub main()
     settle(60)
     m.prior = hero().active
     check(m.prior.id = "Following", "actual anonymous Hero opens the pre-player page")
+    runScenarios()
+    m.scene.CallFunc("onDestroy")
+    screen.Close()
+    if m.failures = 0
+        print "__PASS_MARKER__: "; m.assertions; " assertions"
+    else
+        print "CHANNEL_FAIL_SUMMARY: "; m.failures
+    end if
+end sub
+
+sub runScenarios()
+    ' Failed prerequisites return to Main's teardown and failure summary.
     for each kind in ["LIVE", "VOD", "CLIP"]
         request = channelRequest(kind)
         player = openPlayer(request)
@@ -28,7 +40,7 @@ sub main()
             check(not chat.visible and engagement = invalid, "recordings and clips retain hidden chat layout")
         end if
         original = player.contentRequested
-        selectChannel(video, kind)
+        if not selectChannel(video, kind) then return
         page = hero().active
         verifyPage(player, page, original)
         check(chat.CallFunc("fixtureChat").disposed and chat.CallFunc("fixtureChat").job = invalid and chat.CallFunc("fixtureChat").emote = invalid, "departure explicitly closes visible or hidden chat ownership")
@@ -45,7 +57,7 @@ sub main()
     request = channelRequest("VOD")
     request.streamerId = ""
     player = openPlayer(request)
-    selectChannel(player.CallFunc("fixturePlayer").video, "VOD")
+    if not selectChannel(player.CallFunc("fixturePlayer").video, "VOD") then return
     check(hero().active.contentRequested.streamerId = "" and hero().active.CallFunc("fixtureChannel").task.request.params.id = "canned", "missing numeric ID uses the existing ChannelPage login contract without account login")
     goBackToPrior()
 
@@ -68,7 +80,7 @@ sub main()
     set_user_setting("chat.layout", "overlay")
     player = openPlayer(channelRequest("LIVE"))
     oldVideo = player.CallFunc("fixturePlayer").video
-    openActions(oldVideo, "LIVE")
+    if not openActions(oldVideo, "LIVE") then return
     oldDialog = m.scene.dialog
     player.CallFunc("fixtureReplaceWrapper")
     video = player.CallFunc("fixturePlayer").video
@@ -79,7 +91,7 @@ sub main()
     check(hero().active.IsSameNode(player) and player.channelRequested = invalid and video.control = "play", "late old wrapper events cannot stop current playback")
     check(m.scene.dialog = invalid and not RW_IsPinned("canned"), "wrapper replacement closes its old dialog and rejects late pin actions")
     check(video.chatOverlayMode and video.width = 1280 and video.chatIsVisible, "overlay chat retains full video width with the channel action")
-    selectChannel(video, "LIVE")
+    if not selectChannel(video, "LIVE") then return
     check(hero().active.id = "ChannelPage", "replacement wrapper remote action still opens the channel")
     goBackToPrior()
     set_user_setting("chat.layout", "side")
@@ -92,7 +104,7 @@ sub main()
     relay.status = { url: "http://127.0.0.1:49372/live.m3u8" }
     video = player.CallFunc("fixturePlayer").video
     check(video <> invalid and video.lowLatency and not video.chatIsVisible and video.FindNode("scrim").width = 1280, "relay live wrapper retains full controls width when chat is closed")
-    selectChannel(video, "LIVE")
+    if not selectChannel(video, "LIVE") then return
     check(hero().active.id = "ChannelPage" and relay.stopRequested and relay.control = "stop", "channel departure explicitly stops the active relay")
     goBackToPrior()
     set_user_setting("playback.lowLatency", "false")
@@ -105,14 +117,18 @@ sub main()
     profile = hero().active
     check(profile.id = "ChannelPage" and hero().footprints = 1, "real content selection opens the starting profile")
     player = openPlayer(channelRequest("CLIP"))
-    selectChannel(player.CallFunc("fixturePlayer").video, "CLIP")
+    if not selectChannel(player.CallFunc("fixturePlayer").video, "CLIP") then return
     check(hero().active.IsSameNode(profile) and hero().pages = 1 and hero().footprints = 1 and hero().players = 0, "same-channel profile is reused without a duplicate or phantom player")
     goBackToPrior()
 
     testPlayerPins()
+    if m.failures > 0 then return
     testPinDuringSeek()
+    if m.failures > 0 then return
     testSupersededDialog()
+    if m.failures > 0 then return
     testPlayerFollows()
+    if m.failures > 0 then return
 
     ' Local LIVE and completed VOD use their actual production manager paths.
     for each kind in ["LIVE", "VOD"]
@@ -128,13 +144,14 @@ sub main()
         if video = invalid then throw "local wrapper did not attach"
         video.state = "playing"
         testLocalFollow(player, video, manager, worker, kind)
-        openActions(video, kind)
-        pinFromDialog()
+        if m.failures > 0 then return
+        if not openActions(video, kind) then return
+        if not pinFromDialog() then return
         check(RW_IsPinned("canned") and manager.busy and not worker.stopRequested and video.control = "play", "local pin preserves the active worker and attached playing Video")
-        openActions(video, kind)
-        pinFromDialog()
+        if not openActions(video, kind) then return
+        if not pinFromDialog() then return
         check(not RW_IsPinned("canned") and manager.CallFunc("fixtureManager").worker.IsSameNode(worker) and video.state = "playing", "local unpin preserves the same playback session")
-        selectChannel(video, kind)
+        if not selectChannel(video, kind) then return
         check(hero().active.IsSameNode(player) and player.CallFunc("fixturePlayer").exitPending and manager.busy and player.channelRequested = invalid, "local channel action waits for the owned worker and Video")
         if not hero().active.IsSameNode(player) then exit for
         check(worker.stopRequested and worker.control = "run" and video.control = "stop" and not video.visible, "local channel action cooperates with worker and hides stopped video")
@@ -168,7 +185,7 @@ sub main()
         worker.ready = readyFor(id, "LIVE")
         video = player.CallFunc("fixturePlayer").video
         video.state = "playing"
-        selectChannel(video, "LIVE")
+        if not selectChannel(video, "LIVE") then return
         manager.CallFunc("fixtureTimeout")
         check(manager.busy and manager.cleanupBlocked and hero().active.IsSameNode(player) and player.channelRequested = invalid, "cleanup timeout preserves the blocked active owner before actual Video STOP")
         player.CallFunc("requestBack")
@@ -181,14 +198,6 @@ sub main()
         worker.state = "stop"
         check(not manager.busy and manager.cleanupBlocked, "late genuine acknowledgment releases owner without clearing cleanup blockage")
         goBackToPrior()
-    end if
-
-    m.scene.CallFunc("onDestroy")
-    screen.Close()
-    if m.failures = 0
-        print "__PASS_MARKER__: "; m.assertions; " assertions"
-    else
-        print "CHANNEL_FAIL_SUMMARY: "; m.failures
     end if
 end sub
 
@@ -211,7 +220,7 @@ sub testPlayerFollows()
     chatJob = before.chat.CallFunc("fixtureChat").job
     player.CallFunc("fixtureFollowDebts")
     contentTasks = m.global.fixtureContentTasks
-    openActions(video, "LIVE")
+    if not openActions(video, "LIVE") then return
     dialog = m.scene.dialog
     status = player.CallFunc("fixturePlayer").followTask
     timer = player.CallFunc("fixturePlayer").followTimer
@@ -293,7 +302,7 @@ sub testPlayerFollows()
     for each scenario in ["cancel", "account", "signout", "token", "stream", "wrapper", "generation", "superseded", "destroy"]
         player = openPlayer(channelRequest("CLIP"))
         video = player.CallFunc("fixturePlayer").video
-        openActions(video, "CLIP")
+        if not openActions(video, "CLIP") then return
         dialog = m.scene.dialog
         status = player.CallFunc("fixturePlayer").followTask
         if scenario = "cancel"
@@ -338,7 +347,7 @@ sub testPlayerFollows()
     request.streamerLogin = " canned "
     player = openPlayer(request)
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "VOD")
+    if not openActions(video, "VOD") then return
     status = player.CallFunc("fixturePlayer").followTask
     check(status.request.params.id = "" and status.request.params.login = "canned", "missing broadcaster id asks one bounded login lookup without VOD id or clip slug")
     status.response = followState(false)
@@ -357,7 +366,7 @@ sub testPlayerFollows()
     request.streamerLogin = "alice"
     player = openPlayer(request)
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "CLIP")
+    if not openActions(video, "CLIP") then return
     check(m.scene.dialog.buttons[2] = "Your channel" and player.CallFunc("fixturePlayer").followTask = invalid, "own channel offers a clear inert self state without a request")
     m.scene.dialog.buttonSelected = 2
     check(player.CallFunc("fixturePlayer").followTask = invalid and video.control = "play", "self selection cannot write or interrupt playback")
@@ -371,7 +380,7 @@ sub testPlayerFollows()
     m.prior = hero().active
     player = openPlayer(channelRequest("LIVE"))
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "LIVE")
+    if not openActions(video, "LIVE") then return
     check(m.scene.dialog.buttons[2] = "Sign in to follow" and player.CallFunc("fixturePlayer").followTask = invalid and video.control = "play", "anonymous viewers can keep watching with Open Pin and clear optional sign-in")
     m.scene.dialog.buttonSelected = 2
     settle(40)
@@ -389,7 +398,7 @@ sub testLocalFollow(player as object, video as object, manager as object, worker
     set_user_setting("access_token", "canned-token")
     player.CallFunc("fixtureFollowDebts")
     id = manager.CallFunc("fixtureManager").currentId
-    openActions(video, kind)
+    if not openActions(video, kind) then return
     player.CallFunc("fixturePlayer").followTask.response = followState(false)
     m.scene.dialog.buttonSelected = 2
     m.scene.dialog.buttonSelected = 2
@@ -409,7 +418,7 @@ end function
 sub testSupersededDialog()
     player = openPlayer(channelRequest("VOD"))
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "VOD")
+    if not openActions(video, "VOD") then return
     oldDialog = m.scene.dialog
     player.CallFunc("fixturePlaybackError")
     recovery = m.scene.dialog
@@ -432,8 +441,8 @@ sub testPinDuringSeek()
     settle(250)
     before = video.CallFunc("fixtureOverlay")
     check(before.preview and before.position = 70 and video.control = "pause", "recorded channel controls retain the first-press seek preview")
-    openActions(video, "VOD")
-    pinFromDialog()
+    if not openActions(video, "VOD") then return
+    if not pinFromDialog() then return
     after = video.CallFunc("fixtureOverlay")
     check(RW_IsPinned("canned") and after.preview and after.position = 70 and video.control = "pause", "pinning preserves an unapplied seek preview and its paused state")
     press("back")
@@ -452,12 +461,12 @@ sub testPlayerPins()
         chat = state.chat
         job = chat.CallFunc("fixtureChat").job
         contentTasks = m.global.fixtureContentTasks
-        openActions(video, kind)
+        if not openActions(video, kind) then return
         dialog = m.scene.dialog
         check(dialog.buttons[1] = "Pin streamer" and video.control = "play", "current unpinned channel offers Pin without pausing video")
         video.CallFunc("fixtureRepeatAction")
         check(m.scene.dialog.IsSameNode(dialog), "repeated channel action keeps a single dialog")
-        pinFromDialog()
+        if not pinFromDialog() then return
         check(RW_IsPinned("canned") and RW_LoadPins().Count() = 1, "actual player pin action persists one channel via shared helper")
         check(hero().active.IsSameNode(player) and player.CallFunc("fixturePlayer").video.IsSameNode(video) and video.control = "play" and video.IsInFocusChain(), "pin action retains active Video playback and focus")
         check(m.global.fixtureContentTasks = contentTasks and not video.QualityChangeRequestFlag, "pinning neither reloads content nor requests a quality change")
@@ -467,12 +476,12 @@ sub testPlayerPins()
         writes = m.global.fixtureWrites
         dialog.buttonSelected = 1
         check(m.global.fixtureWrites = writes and RW_IsPinned("canned"), "late duplicate pin selection cannot toggle or repeat a write")
-        openActions(video, kind)
+        if not openActions(video, kind) then return
         check(m.scene.dialog.buttons[1] = "Unpin streamer" and m.scene.dialog.message[0] = "Canned · PINNED", "reopened menu refreshes current pin label and visible PINNED state")
-        pinFromDialog()
+        if not pinFromDialog() then return
         check(not RW_IsPinned("canned") and RW_LoadPins().Count() = 0 and railEntry("canned") = invalid, "actual unpin action removes the pin and refreshes the empty rail")
         check(hero().active.IsSameNode(player) and video.control = "play" and not player.backPressed and video.CallFunc("fixtureOverlay").fade = "start", "unpin preserves playback and restarts control fade")
-        openActions(video, kind)
+        if not openActions(video, kind) then return
         press("back")
         settle(250)
         check(m.scene.dialog = invalid and hero().active.IsSameNode(player) and video.control = "play" and video.IsInFocusChain(), "native dialog Back closes channel actions without leaving or pausing playback")
@@ -483,16 +492,16 @@ sub testPlayerPins()
     ' A menu opened for anonymous storage cannot change Alice's pins.
     player = openPlayer(channelRequest("VOD"))
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "VOD")
+    if not openActions(video, "VOD") then return
     stale = m.scene.dialog
     writes = m.global.fixtureWrites
     set_setting("active_user", "alice")
     stale.buttonSelected = 1
     check(not RW_IsPinned("canned") and m.global.fixtureWrites = writes and video.control = "play", "old account dialog cannot pin into the new active account")
     result = RW_SetPinned({ login: "canned", displayName: "Canned", id: "987654" }, true)
-    openActions(video, "VOD")
+    if not openActions(video, "VOD") then return
     check(m.scene.dialog.buttons[1] = "Unpin streamer", "menu reads pin state from the current account when opened")
-    pinFromDialog()
+    if not pinFromDialog() then return
     check(not RW_IsPinned("canned"), "current account unpin uses the shared account helper")
     set_setting("active_user", "$default$")
     check(not RW_IsPinned("canned"), "player account actions preserve anonymous pins independently")
@@ -500,8 +509,8 @@ sub testPlayerPins()
     for i = 1 to RW_MaxItems()
         result = RW_SetPinned({ login: "other_" + i.ToStr(), displayName: "Other", id: i.ToStr() }, true)
     end for
-    openActions(video, "VOD")
-    pinFromDialog()
+    if not openActions(video, "VOD") then return
+    if not pinFromDialog() then return
     check(RW_LoadPins().Count() = 12 and not RW_IsPinned("canned"), "player respects the existing pin limit without evicting channels")
     check(video.FindNode("messageText").text = "Pin limit reached (12). Unpin a channel first." and video.control = "play", "pin limit is readable while video keeps playing")
     registry_delete("pins", RW_Section())
@@ -512,26 +521,17 @@ sub testPlayerPins()
     request.streamerId = ""
     player = openPlayer(request)
     video = player.CallFunc("fixturePlayer").video
-    openActions(video, "CLIP")
-    pinFromDialog()
+    if not openActions(video, "CLIP") then return
+    if not pinFromDialog() then return
     check(RW_IsPinned("canned") and RW_LoadPins()[0].id = "" and RW_LoadPins()[0].login = "canned", "login-only clip pin never persists clip slug or recording ID")
     registry_delete("pins", RW_Section())
     player.CallFunc("requestBack")
     settle(40)
 end sub
 
-sub pinFromDialog()
-    dialog = m.scene.dialog
-    press("down")
-    settle(250)
-    press("ok")
-    settle(250)
-    ' brs-node's StandardMessageDialog does not reliably route its native
-    ' button keys. Supply only that widget event; production selection runs.
-    if m.scene.dialog <> invalid
-        if m.scene.dialog.IsSameNode(dialog) then dialog.buttonSelected = 1
-    end if
-end sub
+function pinFromDialog() as boolean
+    return selectDialogButton(1, m.scene.dialog)
+end function
 
 function railEntry(login as string) as object
     for each child in hero().rail.GetChildren(-1, 0)
@@ -572,36 +572,72 @@ function openPlayer(request as object, local = false as boolean) as object
     return player
 end function
 
-sub openActions(video as object, kind as string)
+function openActions(video as object, kind as string) as boolean
     video.SetFocus(true)
     if not video.FindNode("controlOverlay").visible
         press("ok")
-        settle(250)
-        check(video.FindNode("controlOverlay").visible and hero().active.id = "VideoPlayer" and m.scene.dialog = invalid, "first remote Select only reveals controls")
+        ready = waitForPlayerUi(video, "controls")
+        ready = ready and video.FindNode("controlOverlay").visible and hero().active.id = "VideoPlayer" and m.scene.dialog = invalid
+        check(ready, "first remote Select only reveals controls")
+        if not ready then return false
     end if
     target = 6
     if kind = "LIVE" then target = 4
     for i = 1 to 7
-        if video.CallFunc("fixtureOverlay").focused = target then exit for
+        focused = video.CallFunc("fixtureOverlay").focused
+        if focused = target then exit for
         press("right")
-        settle(250)
+        if not waitForPlayerUi(video, "focus", focused) then exit for
     end for
-    check(video.FindNode("channelFocus").visible and video.FindNode("captionLabel").text = "Channel actions", "remote navigation clearly captions the channel actions control")
+    ready = video.FindNode("channelFocus").visible and video.FindNode("captionLabel").text = "Channel actions"
+    check(ready, "remote navigation clearly captions the channel actions control")
+    if not ready then return false
     press("ok")
-    settle(250)
-    check(m.scene.dialog <> invalid and m.scene.dialog.title = "Channel actions" and video.CallFunc("fixtureOverlay").fade = "stop", "actual channel dialog opens without letting controls fade")
-end sub
+    ready = waitForPlayerUi(video, "dialog")
+    ready = ready and m.scene.dialog <> invalid and m.scene.dialog.title = "Channel actions" and video.CallFunc("fixtureOverlay").fade = "stop"
+    check(ready, "actual channel dialog opens without letting controls fade")
+    return ready
+end function
 
-sub selectChannel(video as object, kind as string)
-    openActions(video, kind)
+function waitForPlayerUi(video as object, outcome as string, previousFocus = -1 as integer) as boolean
+    elapsed = CreateObject("roTimespan")
+    while elapsed.TotalMilliseconds() < 3000
+        overlay = video.CallFunc("fixtureOverlay")
+        if outcome = "controls" and video.FindNode("controlOverlay").visible then return true
+        if outcome = "focus" and overlay.visible and overlay.focused <> previousFocus then return true
+        if outcome = "dialog" and m.scene.dialog <> invalid
+            if m.scene.dialog.title = "Channel actions" and overlay.fade = "stop" then return true
+        end if
+        ignored = Wait(10, m.port)
+    end while
+    return false
+end function
+
+function selectChannel(video as object, kind as string) as boolean
+    if not openActions(video, kind) then return false
     dialog = m.scene.dialog
-    check(m.scene.dialog.buttons[0] = "Open channel", "channel dialog clearly labels profile navigation")
-    press("ok")
-    settle(250)
-    if m.scene.dialog <> invalid
-        if m.scene.dialog.IsSameNode(dialog) then dialog.buttonSelected = 0
+    if dialog = invalid then return false
+    check(dialog.buttons[0] = "Open channel", "channel dialog clearly labels profile navigation")
+    return selectDialogButton(0, dialog)
+end function
+
+function selectDialogButton(index as integer, dialog as object) as boolean
+    ' brs-node's native dialog keys are unreliable. Supply its button event
+    ' once, without a queued remote key later reaching the restored wrapper.
+    if dialog = invalid
+        check(false, "channel dialog is available for selection")
+        return false
     end if
-end sub
+    dialog.buttonSelected = index
+    elapsed = CreateObject("roTimespan")
+    while elapsed.TotalMilliseconds() < 3000
+        if m.scene.dialog = invalid then return true
+        if not m.scene.dialog.IsSameNode(dialog) then return true
+        ignored = Wait(10, m.port)
+    end while
+    check(false, "selected channel dialog closes")
+    return false
+end function
 
 sub verifyPage(player as object, page as object, original as object)
     check(page.id = "ChannelPage" and hero().pages = 1 and hero().players = 0 and hero().footprints = 1, "channel replaces player without a playable back-stack entry")

@@ -107,9 +107,9 @@ async function build(dir, marker) {
     return add;
 }
 
-function run(zip, cwd) {
+function run(zip, cwd, driver = path.join(startup, 'key-driver.js')) {
     return new Promise(resolve => {
-        const child = spawn(process.execPath, [path.join(startup, 'key-driver.js'), path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), zip],
+        const child = spawn(process.execPath, [driver, path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), zip],
             { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
         let output = '', bytes = 0, timedOut = false, exceeded = false, startupError;
         const timer = setTimeout(() => { timedOut = true; child.kill(); }, 90000);
@@ -126,7 +126,7 @@ function run(zip, cwd) {
     });
 }
 
-function positive(result, marker) {
+function positive(result, marker, minimum = 370) {
     const detail = result.output.slice(-24000);
     assert.equal(result.startupError, undefined, detail);
     assert.equal(result.timedOut, false, detail);
@@ -141,7 +141,7 @@ function positive(result, marker) {
     assert.match(result.output, /EXIT_USER_NAV/, detail);
     const summaries = [...result.output.matchAll(new RegExp(`${marker}:\\s*(\\d+) assertions`, 'g'))];
     assert.equal(summaries.length, 1, detail);
-    assert.ok(Number(summaries[0][1]) >= 100, detail);
+    assert.ok(Number(summaries[0][1]) >= minimum, detail);
     return Number(summaries[0][1]);
 }
 
@@ -169,9 +169,126 @@ test('remote channel actions pin without interrupting playback and replace Hero 
         assert.equal(negative.timedOut, false, negative.output.slice(-16000));
         assert.equal(negative.code, 0, negative.output.slice(-16000));
         assert.doesNotMatch(negative.output, /EXIT_BRIGHTSCRIPT_CRASH|runtime error|BrightScript Debugger>|Syntax Error/, negative.output.slice(-16000));
-        assert.match(negative.output, /CHANNEL_ASSERT_FAIL: local channel action waits for the owned worker and Video/, negative.output.slice(-16000));
+        assert.deepEqual([...negative.output.matchAll(/CHANNEL_ASSERT_FAIL: ([^\r\n]+)/g)].map(match => match[1]),
+            ['local channel action waits for the owned worker and Video'], negative.output.slice(-16000));
         assert.throws(() => positive(negative, marker));
+        t.diagnostic('removed cleanup barrier rejected by its owned-worker/Video assertion with normal engine exit');
         assert.deepEqual(await snapshots(), before, 'production sources stay frozen across engine fixtures');
+    } finally {
+        const resolved = path.resolve(dir);
+        assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(resolved).startsWith(prefix));
+        await fs.rm(resolved, { recursive: true, force: true });
+    }
+});
+
+test('channel controls await delayed real keys and dialog delivery, and reject a missing dialog', { timeout: 90000 }, async t => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    const before = await snapshots();
+    try {
+        const marker = `STITCH_PLAYER_CHANNEL_DELAY_PASS:${randomUUID()}`;
+        const packageDir = path.join(dir, 'package');
+        const add = await build(packageDir, marker);
+        const fixture = await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8');
+        const start = fixture.indexOf('sub runScenarios()');
+        const finish = fixture.indexOf("' The StandardMessageDialog selection");
+        assert.ok(start > 0 && finish > start);
+        const scenario = body => `${fixture.slice(0, start)}sub runScenarios()\n${body}\nend sub\n\n${fixture.slice(finish)}`.replaceAll('__PASS_MARKER__', marker);
+        const main = scenario(`
+    for each kind in ["LIVE", "VOD"]
+        player = openPlayer(channelRequest(kind))
+        video = player.CallFunc("fixturePlayer").video
+        if not openActions(video, kind) then return
+        writes = m.global.fixtureWrites
+        if not pinFromDialog() then return
+        check(RW_IsPinned("canned") and m.global.fixtureWrites = writes + 1 and hero().active.IsSameNode(player), "delayed input pins exactly once without leaving playback")
+        if not openActions(video, kind) then return
+        if not pinFromDialog() then return
+        check(not RW_IsPinned("canned") and m.global.fixtureWrites = writes + 2 and video.control = "play", "delayed input unpins exactly once without a queued dialog key")
+        if not selectChannel(video, kind) then return
+        verifyPage(player, hero().active, player.contentRequested)
+        goBackToPrior()
+    end for`);
+        await add('source/main.brs', main);
+
+        // Delay actual emissions inside a disposable copy of the reviewed
+        // serialized driver. No synthetic overlay/focus/dialog-ready fields.
+        const driverSource = await fs.readFile(path.join(startup, 'key-driver.js'), 'utf8');
+        assert.equal(driverSource.split('            emit(name);').length, 2);
+        const driver = path.join(dir, 'delayed-key-driver.js');
+        await fs.writeFile(driver, driverSource.replace('            emit(name);',
+            '            await pause(600);\n            process.stdout.write(`FIXTURE_DELIVERED:${key}\\n`);\n            emit(name);'));
+
+        // Delay only the action-request event boundary, then run the real
+        // production dialog creation and selection observers unchanged.
+        const playerFile = 'components/Scenes/VideoPlayer/VideoPlayer.brs';
+        const source = await fs.readFile(path.join(root, playerFile), 'utf8');
+        const normalized = source.replaceAll('\r\n', '\n');
+        const call = '    showPlayerChannelActions()\nend sub';
+        assert.equal(normalized.split(call).length, 2);
+        await add(playerFile, normalized.replace(call, `    m.fixtureActionTimer = CreateObject("roSGNode", "Timer")
+    m.fixtureActionTimer.duration = 0.6
+    m.fixtureActionTimer.observeField("fire", "fixtureDeliverDelayedAction")
+    m.fixtureActionTimer.control = "start"
+end sub
+
+sub fixtureDeliverDelayedAction()
+    m.fixtureActionTimer.control = "stop"
+    m.fixtureActionTimer.unobserveField("fire")
+    m.fixtureActionTimer = invalid
+    showPlayerChannelActions()
+end sub`));
+        const zip = path.join(dir, 'delayed.zip');
+        await zipFolder(packageDir, zip);
+        const delayed = await run(zip, dir, driver);
+        const count = positive(delayed, marker, 30);
+        const requests = [...delayed.output.matchAll(/FIXTURE_KEY:(\w+)/g)].map(match => match[1]);
+        const deliveries = [...delayed.output.matchAll(/FIXTURE_DELIVERED:(\w+)/g)].map(match => match[1]);
+        assert.deepEqual(deliveries, requests, delayed.output);
+        assert.deepEqual(requests, [
+            'ok', 'right', 'right', 'ok', 'ok', 'ok', 'back',
+            'ok', 'right', 'right', 'right', 'ok', 'ok', 'ok', 'back',
+        ], 'one key per real wrapper transition; native button events leave no queued key');
+        t.diagnostic(`${count} assertions with each real key and channel-dialog event delayed 600 ms`);
+
+        // Reintroducing only the old 250 ms dialog settle must reproduce the
+        // concrete failure, even with working controls and right-key waits.
+        const wait = '    ready = waitForPlayerUi(video, "dialog")';
+        assert.equal(main.split(wait).length, 2);
+        await add('source/main.brs', main.replace(wait, '    settle(250)\n    ready = true'));
+        const oldZip = path.join(dir, 'fixed-dialog-settle.zip');
+        await zipFolder(packageDir, oldZip);
+        const old = await run(oldZip, dir, driver);
+
+        // The same swallowed request must fail normally through the actual
+        // profile and pin scenarios, including their dialog consumers.
+        await add(playerFile, normalized.replace(call, '    return\nend sub'));
+        const controls = [['fixed 250 ms', old]];
+        for (const [consumer, missingMain] of [
+            ['selectChannel', fixture.replaceAll('__PASS_MARKER__', marker)],
+            ['pin consumer', scenario('    testPlayerPins()')],
+        ]) {
+            await add('source/main.brs', missingMain);
+            const missingZip = path.join(dir, `missing-${consumer.replaceAll(' ', '-')}.zip`);
+            await zipFolder(packageDir, missingZip);
+            const missing = await run(missingZip, dir, driver);
+            t.diagnostic(`${consumer} swallowed request: exit=${missing.code}, crash=${/EXIT_BRIGHTSCRIPT_CRASH/.test(missing.output)}`);
+            controls.push([consumer, missing]);
+        }
+        for (const [label, result] of controls) {
+            assert.equal(result.startupError, undefined, result.output);
+            assert.equal(result.timedOut, false, result.output);
+            assert.equal(result.exceeded, false, result.output);
+            assert.equal(result.code, 0, result.output);
+            assert.match(result.output, /EXIT_USER_NAV/, result.output);
+            assert.doesNotMatch(result.output, /EXIT_BRIGHTSCRIPT_CRASH|runtime error|BrightScript Debugger>|Syntax Error/, result.output);
+            assert.deepEqual([...result.output.matchAll(/CHANNEL_ASSERT_FAIL: ([^\r\n]+)/g)].map(match => match[1]),
+                ['actual channel dialog opens without letting controls fade'], result.output);
+            assert.match(result.output, /CHANNEL_FAIL_SUMMARY:\s*1\b/, result.output);
+            assert.throws(() => positive(result, marker, 30));
+            t.diagnostic(`${label}: dialog assertion rejected with normal engine exit`);
+        }
+        assert.deepEqual(await snapshots(), before, 'delivery boundaries touch disposable packages only');
     } finally {
         const resolved = path.resolve(dir);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
