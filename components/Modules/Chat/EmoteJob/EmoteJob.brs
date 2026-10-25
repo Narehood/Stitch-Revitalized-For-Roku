@@ -166,7 +166,7 @@ sub getTwitchBadges()
     publishEmoteCache({})
 end sub
 
-function invokerest(link as string) as object
+function invokerest(link as string, optionalChannel = false as boolean) as object
     req = HttpRequest({
         url: link.EncodeUri(),
         headers: {
@@ -176,7 +176,12 @@ function invokerest(link as string) as object
         retries: 1,
         method: "GET"
     })
-    response_string = decodeJsonResponse(req.send())
+    response = req.send()
+    ' These optional channel endpoints use 404 when the channel is not registered.
+    if optionalChannel and response <> invalid
+        if response.getResponseCode() = 404 then return invalid
+    end if
+    response_string = decodeJsonResponse(response)
     if response_string = invalid then m.fetchFailed = true
     ' ? "responseString: "; response_string
     return response_string
@@ -186,7 +191,8 @@ sub getChannel7tvEmotes(channel_id)
     ' ? "[EmoteJob] - getChannel7tvEmotes"
     emoteCache = {}
     try
-        temp = invokerest("https://7tv.io/v3/users/twitch/" + channel_id)
+        temp = invokerest("https://7tv.io/v3/users/twitch/" + channel_id, true)
+        if temp = invalid then return
         if not temp.doesExist("emote_set")
             m.fetchFailed = true
             return
@@ -255,7 +261,8 @@ sub getChannelTTVFrankerEmotes(channel_id)
     ' ? "[EmoteJob] - getChannelTTVFrankerEmotes"
     emoteCache = {}
     try
-        temp = invokerest("https://api.betterttv.net/3/cached/frankerfacez/users/twitch/" + channel_id)
+        temp = invokerest("https://api.betterttv.net/3/cached/frankerfacez/users/twitch/" + channel_id, true)
+        if temp = invalid then return
         if type(temp) <> "roArray"
             m.fetchFailed = true
             return
@@ -274,7 +281,8 @@ sub getChannelTTVEmotes(channel_id)
     emoteCache = {}
     try
         ' ? "[EmoteJob] - getChannelTTVEmotes"
-        temp = invokerest("https://api.betterttv.net/3/cached/users/twitch/" + channel_id)
+        temp = invokerest("https://api.betterttv.net/3/cached/users/twitch/" + channel_id, true)
+        if temp = invalid then return
         if type(temp.sharedEmotes) <> "roArray" or type(temp.channelEmotes) <> "roArray"
             m.fetchFailed = true
             return

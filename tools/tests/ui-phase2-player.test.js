@@ -310,6 +310,30 @@ end function
 `);
 }
 
+async function buildEmoteAbsencePackage(dir, marker, mutate = source => source) {
+    await addCommon(dir, 'Chat Emote Absence Fixture', marker, 'chat-main.brs');
+    const folder = path.join(__dirname, 'fixtures/chat-transport');
+    await addFile(dir, 'source/main.brs', await fs.readFile(path.join(folder, 'reopen.brs')));
+    await addEmojiLabel(dir);
+    await addFile(dir, 'components/ChatJob.xml', await fixture('ChatJob.xml'));
+    await addComponent(dir, 'components/Modules/Chat', 'Chat', `function fixtureRead() as object
+    return { job: m.chat, emote: m.EmoteJob, cached: m.emoteChannel }
+end function
+`);
+    const provider = 'components/Modules/Chat/EmoteJob/';
+    const xml = await fs.readFile(path.join(root, provider, 'EmoteJob.xml'), 'utf8');
+    await addFile(dir, provider + 'EmoteJob.xml', xml.replace('pkg:/source/utils/http.brs', 'ProviderHttp.brs'));
+    await addFile(dir, provider + 'EmoteJob.brs', mutate(await fs.readFile(path.join(root, provider, 'EmoteJob.brs'), 'utf8')));
+    const http = await fs.readFile(path.join(root, 'source/utils/http.brs'), 'utf8');
+    const decoders = [...http.matchAll(/^function decodeJson(?:Response|Body)\([^\r\n]*\) as dynamic\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
+    assert.equal(decoders.length, 2, 'complete production response and JSON body decoders');
+    const decoder = decoders.map(match => match[0]).join('\n');
+    assert.equal(decoder.split('type(event) <> "roUrlEvent"').length, 2);
+    // Only the native event identity is adapted; status and body decoding execute unchanged.
+    await addFile(dir, provider + 'ProviderHttp.brs', (await fs.readFile(path.join(folder, 'ProviderHttp.brs'), 'utf8')) + '\n' +
+        decoder.replace('type(event) <> "roUrlEvent"', 'event = invalid'));
+}
+
 function runPackage(zip, cwd) {
     return new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [keyDriver, cli, zip],
@@ -393,4 +417,17 @@ test('actual player owns opt-in watch samples independently of chat, rejects sta
 test('actual chat and EmojiLabel render Unicode/provider images, wrap text and clean up failed images', { timeout: 90000 }, async t => {
     const count = await runFixture('stitch-ui-chat-emotes-', buildEmojiRenderPackage);
     t.diagnostic(`${count} actual renderer assertions; full pattern adapted from PCRE to simulator UTF-16 regex; native PCRE and CDN decoding require native QA`);
+});
+
+test('actual Chat reuses completed optional emote absence after hide/show and retries malformed or transient failures', { timeout: 90000 }, async t => {
+    const count = await runFixture('stitch-ui-emote-absence-', buildEmoteAbsencePackage);
+    t.diagnostic(`${count} actual Chat/EmoteJob Task/decoder assertions; only HTTP events, registry and IRC transport are offline boundaries`);
+});
+
+test('discarding optional channel 404 status fails the actual Chat hide/show fixture', { timeout: 90000 }, async () => {
+    await assert.rejects(runFixture('stitch-ui-emote-absence-red-', (dir, marker) => buildEmoteAbsencePackage(dir, marker, source => {
+        const gate = 'if response.getResponseCode() = 404 then return invalid';
+        assert.equal(source.split(gate).length, 2, 'one optional-absence status gate');
+        return source.replace(gate, 'if false then return invalid');
+    })), /optional404 completes and remembers its cache/);
 });

@@ -181,15 +181,20 @@ test('actual emote lifecycle stops between providers, suppresses canceled public
     t.diagnostic(`${count} transport/emote lifecycle assertions; provider fetch functions are explicit offline boundaries`);
 });
 
-test('actual emote providers reject malformed HTTP 200 payloads, retry incomplete caches and accept empty arrays or explicit no-set', async t => {
+test('actual emote providers complete optional channel 404s while malformed 200s and transient failures stay retryable', async t => {
     const source = await fs.readFile(path.join(root, 'components/Modules/Chat/EmoteJob/EmoteJob.brs'), 'utf8');
     assert.equal([...source.matchAll(/^sub main\(\)/gm)].length, 1);
     const http = await fs.readFile(path.join(root, 'source/utils/http.brs'), 'utf8');
     const decoders = [...http.matchAll(/^function decodeJsonBody\([^\r\n]*\) as dynamic\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
     assert.equal(decoders.length, 1, 'expected the complete production HTTP body decoder');
     const emote = source.replace(/^sub main\(\)/m, 'sub runEmoteJob()') + '\n' + decoders[0][0];
-    const count = acceptResult(await runFixture('', '', '', '', false, emote,
-        path.join(__dirname, 'fixtures/chat-transport/providers.brs')));
+    const result = await runFixture('', '', '', '', false, emote,
+        path.join(__dirname, 'fixtures/chat-transport/providers.brs'));
+    // Caught provider failures and the deliberately invalid JSON are expected inputs.
+    // Retain every other error guard, including parser errors for any other input.
+    result.output = result.output.replace(/^Error grabbing global7tv badges\r?$/gm, '')
+        .replace(/^BRIGHTSCRIPT: ERROR: ParseJSON: [^\r\n]*"not JSON"[^\r\n]*pkg:\/source\/transport\.brs\(\d+\)\r?$/gm, '');
+    const count = acceptResult(result);
     t.diagnostic(`${count} actual provider/lifecycle/JSON decoder assertions; only HTTP and registry boundaries are canned`);
 });
 
