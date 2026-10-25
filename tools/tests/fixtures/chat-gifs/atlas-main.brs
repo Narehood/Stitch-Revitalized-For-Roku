@@ -15,6 +15,12 @@ sub main()
         if m.failures = 0 then print "__PASS_MARKER__: "; m.checks; " assertions"
         return
     end if
+    budgetProbe = "__BUDGET_PROBE__"
+    if budgetProbe <> ""
+        runBudgetProbe(fs, budgetProbe)
+        if m.failures = 0 then print "__PASS_MARKER__: "; m.checks; " assertions"
+        return
+    end if
     bytes = createObject("roByteArray")
     bytes.readFile("pkg:/official.gif")
     info = chatAdmitGif(bytes)
@@ -100,7 +106,7 @@ sub runDisposalUnwindProbe(fs as object, mode as string)
     if mode = "disposal-rect-false" then fences = 5
     check(state.finishCalls = fences, "disposal-2 failure uses completion fence: " + mode)
     if mode = "disposal-cancel" then check(errorMessage = "GIF conversion cancelled", "cancel thrown by actual helper check")
-    if mode = "disposal-deadline" or mode = "disposal-request-deadline" then check(errorMessage = "GIF conversion deadline", "exact 2000/8000ms helper deadline thrown")
+    if mode = "disposal-deadline" or mode = "disposal-request-deadline" then check(errorMessage = "GIF conversion deadline", "exact 3000/8000ms helper deadline thrown")
     if mode = "disposal-allocation" then check(errorMessage = "scripted cleared bitmap allocation exception", "cleared native allocation exception propagated")
     if mode = "disposal-rect-false" then check(state.disposalRectCheckpoint, "false result injected after rectangle copy queued")
     check(state.pngExports = 0, "disposal-2 rejected work never exported")
@@ -108,9 +114,45 @@ sub runDisposalUnwindProbe(fs as object, mode as string)
     check(deleteChatAnimationFile(fs, path) and not fs.exists(chatAnimationDirectory(path)), "owned-file cleanup follows disposal completion")
 end sub
 
-sub runMovie(fs as object, bytes as object, name as string, expected as dynamic)
+sub runBudgetProbe(fs as object, mode as string)
     state = getGlobalAA()
-    state.mode = "valid"
+    state.mode = mode
+    state.decodeIndex = 0
+    state.checkpoints = 0
+    bytes = createObject("roByteArray")
+    bytes.readFile("pkg:/official.gif")
+    if mode = "budget-valid-2001" or mode = "budget-valid-2999"
+        state.official = true
+        expectedMs = 2001
+        if mode = "budget-valid-2999" then expectedMs = 2999
+        runMovie(fs, bytes, mode, invalid, mode, expectedMs)
+        check(state.decodeIndex = 15, "extended budget completes all fifteen frames")
+        check(fixtureRequestTime() = 7999, "extended budget stays inside original eight-second request")
+        return
+    end if
+    state.official = false
+    path = "tmp:/stitch-emote-" + mode + "/emote.gif"
+    fs.createDirectory(chatAnimationDirectory(path))
+    bytes.writeFile(path)
+    result = invalid
+    errorMessage = ""
+    try
+        result = chatConvertGif(fs, bytes, path, { totalMilliseconds: fixtureRequestTime })
+    catch e
+        errorMessage = e.message
+    end try
+    if mode = "budget-exact-3000" then check(result = invalid and errorMessage = "GIF conversion deadline", "3000 ms conversion boundary rejects")
+    if mode = "budget-request-8000" then check(result = invalid and errorMessage = "GIF conversion deadline", "8000 ms request boundary rejects even below conversion cap")
+    if mode = "budget-cancel" then check(result = invalid and errorMessage = "GIF conversion cancelled", "cancellation remains active below 3000 ms")
+    check(state.decodeIndex = 2, "policy guard stops at injected second-decode checkpoint")
+    check(state.drawQueue.count() = 0 and state.pngExports = 0, "policy rejection leaves no pending draws or PNG export")
+    check(directoryBytes(fs, chatAnimationDirectory(path)) <= 3145728, "policy probe preserves pending file reservation")
+    check(deleteChatAnimationFile(fs, path) and not fs.exists(chatAnimationDirectory(path)), "policy rejection cleans only owned files")
+end sub
+
+sub runMovie(fs as object, bytes as object, name as string, expected as dynamic, mode = "valid" as string, expectedConversionMs = -1 as integer)
+    state = getGlobalAA()
+    state.mode = mode
     state.checkpoints = 0
     state.decodeIndex = 0
     path = "tmp:/stitch-emote-pixels-" + name + "/emote.gif"
@@ -119,6 +161,7 @@ sub runMovie(fs as object, bytes as object, name as string, expected as dynamic)
     info = chatConvertGif(fs, bytes, path, { totalMilliseconds: fixtureRequestTime })
     check(info <> invalid, "complete movie admitted: " + name)
     if info = invalid then return
+    if expectedConversionMs >= 0 then check(info.conversionMs = expectedConversionMs and info.conversionMs > 2000 and info.conversionMs < 3000, "valid whole movie completes between two and three seconds")
     check(state.drawQueue.count() = 0 and state.maxQueued <= 3, "bounded draw queue fully realized before export: " + name)
     if name = "official" then check(state.finishCalls = 15, "whole official movie uses fifteen fences for fifteen exact frames")
     normalFences = info.frames
@@ -199,12 +242,23 @@ function fixtureGifClock() as object
     return { totalMilliseconds: fixtureGifTime, mark: fixtureNothing }
 end function
 function fixtureGifTime() as integer
-    if getGlobalAA().mode = "disposal-deadline" and getGlobalAA().disposalCheckpoint then return 2000
-    if getGlobalAA().mode = "conversion-deadline" and getGlobalAA().decodeIndex >= 2 then return 2000
-    if getGlobalAA().mode = "finish-deadline" and getGlobalAA().expiredAtFinish then return 2000
+    state = getGlobalAA()
+    if state.decodeIndex >= 2
+        if state.mode = "budget-valid-2001" then return 2001
+        if state.mode = "budget-valid-2999" or state.mode = "budget-request-8000" or state.mode = "budget-cancel" then return 2999
+        if state.mode = "budget-exact-3000" then return 3000
+    end if
+    if state.mode = "disposal-deadline" and state.disposalCheckpoint then return 3000
+    if state.mode = "conversion-deadline" and state.decodeIndex >= 2 then return 3000
+    if state.mode = "finish-deadline" and state.expiredAtFinish then return 3000
     return 25
 end function
 function fixtureRequestTime() as integer
+    state = getGlobalAA()
+    if state.decodeIndex >= 2
+        if state.mode = "budget-request-8000" then return 8000
+        if state.mode.left(7) = "budget-" then return 7999
+    end if
     if getGlobalAA().mode = "disposal-request-deadline" and getGlobalAA().disposalCheckpoint then return 8000
     if getGlobalAA().mode = "request-deadline" and getGlobalAA().decodeIndex >= 1 then return 8000
     if getGlobalAA().mode = "finish-request-deadline" and getGlobalAA().expiredAtFinish then return 8000
@@ -218,6 +272,7 @@ sub fixtureCheckpoint()
     if state.mode = "cancel-during" and state.decodeIndex = 2 then m.top.stopRequested = true
     if state.mode = "cancel-at-finish" and state.expiredAtFinish then m.top.stopRequested = true
     if state.mode = "disposal-cancel" and state.disposalCheckpoint then m.top.stopRequested = true
+    if state.mode = "budget-cancel" and state.decodeIndex >= 2 then m.top.stopRequested = true
 end sub
 
 function fixtureWrite(bytes as object, path as string) as boolean

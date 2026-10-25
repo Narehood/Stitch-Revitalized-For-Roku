@@ -101,7 +101,7 @@ function rgbaPng() {
     return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);
 }
 
-async function buildAtlas(dir,marker,mutation = source=>source,disposalProbe = '') {
+async function buildAtlas(dir,marker,mutation = source=>source,disposalProbe = '',budgetProbe = '') {
         await helpers(dir,['chatAnimationGif','chatAnimationWebp','ircGifs','ircEmotes']);
         const asset=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimationAsset/ChatAnimationAsset.brs'),'utf8');
         await add(dir,'task.brs',asset.replace(/\bfs\.delete\(/g,'fixtureDelete(fs, '));
@@ -124,7 +124,7 @@ async function buildAtlas(dir,marker,mutation = source=>source,disposalProbe = '
             source=source.replace(new RegExp(`^([ \\t]*)${name} = invalid\\r?$`,'gm'),`$1${name} = fixtureReleaseBitmap(${name})`);
         await add(dir,'atlas.brs',mutation(source));
         await add(dir,'immutable-bitmap.brs',await fs.readFile(path.join(fixtures,'immutable-bitmap.brs')));
-        await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'atlas-main.brs'),'utf8')).replaceAll('__PASS_MARKER__',marker).replace('__DISPOSAL_PROBE__',disposalProbe)+
+        await add(dir,'main.brs',(await fs.readFile(path.join(fixtures,'atlas-main.brs'),'utf8')).replaceAll('__PASS_MARKER__',marker).replace('__DISPOSAL_PROBE__',disposalProbe).replace('__BUDGET_PROBE__',budgetProbe)+
             '\nfunction fixtureDraw(destination as object, x as integer, y as integer, source as object) as boolean\n if getGlobalAA().decodeIndex = 2\n if getGlobalAA().mode = "draw-failed" then return false\n if getGlobalAA().mode = "draw-throw" then throw "scripted native draw exception"\n end if\n return destination.drawObject(x,y,source)\nend function\n');
         await add(dir,'official.gif',corpus.official);
         await add(dir,'pillow-goldens.json',await fs.readFile(path.join(fixtures,'pillow-goldens.json')));
@@ -171,6 +171,38 @@ test('disposal-2 regression rejects omitting its exceptional completion fence', 
         assert.ok(source.includes(fence),'disposal catch/fence anchor required');
         return source.replace(fence,'            catch e\n                throw e');
     },'disposal-allocation')),/disposal-2 pending draws completed before source unwind/);
+});
+
+for (const mode of ['budget-valid-2001','budget-valid-2999','budget-exact-3000','budget-request-8000','budget-cancel']) {
+    test(`GIF conversion budget policy: ${mode}`,async t=>{
+        const count=await execute((dir,marker)=>buildAtlas(dir,marker,source=>source,'',mode));
+        t.diagnostic(`${count} actual conversion/golden/cleanup assertions with mocked 3-second/8-second clocks; no native timing claim`);
+    });
+}
+
+function mutateGuard(source,before,after) {
+    assert.equal(source.split(before).length,2,'one exact production guard required');
+    return source.replace(before,after);
+}
+
+test('budget regression rejects restoring the previous two-second conversion cap',async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>mutateGuard(source,
+        'm.gifClock.totalMilliseconds() >= 3000','m.gifClock.totalMilliseconds() >= 2000'),'', 'budget-valid-2001')),/GIF conversion deadline/);
+});
+
+test('budget regression rejects allowing exactly 3000 ms conversion work',async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>mutateGuard(source,
+        'm.gifClock.totalMilliseconds() >= 3000','m.gifClock.totalMilliseconds() > 3000'),'', 'budget-exact-3000')),/3000 ms conversion boundary rejects/);
+});
+
+test('budget regression rejects extending the shared eight-second request cap',async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>mutateGuard(source,
+        'm.gifRequestClock.totalMilliseconds() >= 8000','m.gifRequestClock.totalMilliseconds() >= 8001'),'', 'budget-request-8000')),/8000 ms request boundary rejects/);
+});
+
+test('budget regression rejects ignoring cancellation in the extended conversion window',async()=>{
+    await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>mutateGuard(source,
+        'if m.gifCancelled then throw "GIF conversion cancelled"','if false then throw "GIF conversion cancelled"'),'', 'budget-cancel')),/cancellation remains active below 3000 ms/);
 });
 test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase and preserves one global owner/worker', async t => {
     const count=await execute(async (dir,marker) => {

@@ -112,7 +112,7 @@ sub chatGifCheck()
         m.gifPollClock.mark()
     end if
     if m.gifCancelled then throw "GIF conversion cancelled"
-    if m.gifClock.totalMilliseconds() >= 2000 or m.gifRequestClock.totalMilliseconds() >= 8000 then throw "GIF conversion deadline"
+    if m.gifClock.totalMilliseconds() >= 3000 or m.gifRequestClock.totalMilliseconds() >= 8000 then throw "GIF conversion deadline"
 end sub
 
 function chatGifBitmap(width as integer, height as integer) as object
