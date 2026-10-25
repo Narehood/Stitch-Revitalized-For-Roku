@@ -110,7 +110,9 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             'components/Modules/RecentlyWatchedBar', 'components/Modules/TwitchContentNode', 'components/Modules/VideoErrorHandler',
             'components/Modules/StitchVideo', 'components/Modules/CustomVideo', 'components/Modules/AdCountdown', 'components/Modules/EmojiLabel',
             'components/Scenes/Following']) await tree(folder);
-        for (const file of ['Chat.xml', 'Chat.brs']) await copy(`components/Modules/Chat/${file}`);
+        for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs']) await add(`components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+        await add('source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+        for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copy(`components/Modules/Chat/${file}`);
         await component('components', 'heroScene', 'HeroProbe');
         await component('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');
         await component('components/Modules/StitchVideo', 'StitchVideo', 'StitchVideoProbe');

@@ -39,13 +39,15 @@ async function buildPackage(dir, marker) {
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs',
         'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
-        'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
+        'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
+        'source/utils/chatAnimationWebp.brs']) await copyFile(dir, file);
     for (const folder of ['fonts', 'images', 'locale', 'components/SceneManager/Group',
         'components/Modules/CirclePoster', 'components/Modules/AdCountdown',
         'components/Modules/EmojiLabel', 'components/Modules/StitchVideo',
         'components/Modules/CustomVideo', 'components/Modules/TwitchContentNode',
-        'components/Modules/VideoErrorHandler', 'components/Scenes/VideoPlayer']) await copyTree(dir, folder);
-    for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
+        'components/Modules/VideoErrorHandler', 'components/Modules/Chat/ChatAnimationAsset',
+        'components/Scenes/VideoPlayer']) await copyTree(dir, folder);
+    for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Existing offline boundaries supply registry and transport contracts;
     // production playback, wrapper and label handlers are copied unchanged.
     await addFile(dir, 'source/utils/config.brs', await fs.readFile(path.join(shared, 'config.brs')));

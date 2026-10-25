@@ -1,5 +1,6 @@
 sub init()
     m.disposed = false
+    initChatAnimations()
     m.chatPanel = m.top.findNode("chatPanel")
     m.chatBackground = m.top.findNode("chatBackground")
     m.chatStatus = m.top.findNode("chatStatus")
@@ -99,6 +100,7 @@ end sub
 sub onInvisible()
     if m.disposed then return
     if m.top.visible
+        openChatAnimations()
         startChatJob()
         startEmoteJob()
     else
@@ -164,6 +166,7 @@ sub layoutChatHeaders()
         if m.pinPanel.visible then offset += 176
     end if
     if m.chatStatus <> invalid then m.chatStatus.translation = [12, offset + 12]
+    syncChatAnimation()
 end sub
 
 sub onPinnedMessageChange()
@@ -289,6 +292,7 @@ end sub
 ' Uses destroyTask() per AGENTS.md: unobserve first so any in-flight
 ' nextCommentObj callback is suppressed before the task thread halts.
 sub stopJobs()
+    stopChatAnimations()
     stopChatJob()
     stopEmoteJob()
 end sub
@@ -297,12 +301,14 @@ sub stopEmoteJob()
     if m.EmoteJob <> invalid
         emoteJob = m.EmoteJob
         m.EmoteJob = invalid
+        if GetInterface(emoteJob.animatedEmotes, "ifAssociativeArray") <> invalid then m.animatedEmotes = emoteJob.animatedEmotes
         if emoteJob.completed and emoteJob.cacheComplete
             m.emoteChannel = emoteJob.channel
             m.emoteChannelId = emoteJob.channel_id
         end if
         emoteJob.stopRequested = true
         destroyTask(emoteJob, "completed")
+        destroyTask(emoteJob, "animatedEmotes")
         m.top.removeChild(emoteJob)
     end if
 end sub
@@ -320,6 +326,7 @@ sub onEnterChannel()
     m.pinModeration = []
     m.pinSuppressedMessageId = ""
     stopJobs()
+    stopChatAnimations(true)
     for each message in m.chatPanel.getChildren(-1, 0)
         removeChatMessage(message)
     end for
@@ -327,9 +334,13 @@ sub onEnterChannel()
     m.translation = m.lower_bound - m.line_height
     m.emoteChannel = ""
     m.emoteChannelId = ""
+    m.animatedEmotes = {}
     if m.top.channel = "" then return
     m.global.setField("emoteCache", {})
-    if m.top.visible then startChatJob()
+    if m.top.visible
+        openChatAnimations()
+        startChatJob()
+    end if
     startEmoteJob()
 end sub
 
@@ -422,6 +433,8 @@ sub startEmoteJob()
     m.top.appendChild(m.EmoteJob)
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
+    m.EmoteJob.animatedEmotes = m.animatedEmotes
+    m.EmoteJob.observeField("animatedEmotes", "onAnimatedEmotes")
     m.EmoteJob.observeField("completed", "onEmotesCompleted")
     m.EmoteJob.control = "run"
 end sub
@@ -440,12 +453,15 @@ sub onEmotesCompleted(event = invalid as dynamic)
     if not m.EmoteJob.completed then return
     emoteJob = m.EmoteJob
     m.EmoteJob = invalid
+    if GetInterface(emoteJob.animatedEmotes, "ifAssociativeArray") <> invalid then m.animatedEmotes = emoteJob.animatedEmotes
     if emoteJob.cacheComplete
         m.emoteChannel = emoteJob.channel
         m.emoteChannelId = emoteJob.channel_id
     end if
     destroyTask(emoteJob, "completed")
+    destroyTask(emoteJob, "animatedEmotes")
     m.top.removeChild(emoteJob)
+    syncChatAnimation()
 end sub
 
 function extractMessage(section) as object
@@ -505,7 +521,10 @@ function buildEmote(posterUri, fallbackText = "[emoji]" as string)
     else
         poster.width = m.badge_size
     end if
-    return poster
+    wrapper = createObject("roSGNode", "Group")
+    wrapper.addFields({ chatImageUri: posterUri })
+    wrapper.appendChild(poster)
+    return wrapper
 end function
 
 function buildUsername(display_name, color)
@@ -667,7 +686,10 @@ sub onChatImageStatus(event as object)
         if row.hasField("chatIdentity") then exit while
         row = row.getParent()
     end while
-    if row = invalid then return
+    if row = invalid
+        syncChatAnimation()
+        return
+    end if
     if row.getChildCount() = 2
         body = row.getChild(1)
         body.translation = [0, row.getChild(0).localBoundingRect().height + m.line_gap]
@@ -693,9 +715,13 @@ sub onChatImageStatus(event as object)
             m.translation -= overflow
         end if
     end if
+    syncChatAnimation()
 end sub
 
 sub releaseChatImages(node as object)
+    if m.animationOwner <> invalid
+        if node.isSameNode(m.animationOwner) then releaseChatAnimation()
+    end if
     if node.subtype() = "Poster" and node.hasField("chatFallbackText") then node.unobserveField("loadStatus")
     for each child in node.getChildren(-1, 0)
         releaseChatImages(child)
@@ -748,6 +774,7 @@ sub removeModerated(event as object)
             removeChatMessage(message)
         end for
         m.translation = m.lower_bound - m.line_height
+        syncChatAnimation()
         return
     end if
     children = m.chatPanel.getChildren(-1, 0)
@@ -761,6 +788,7 @@ sub removeModerated(event as object)
             message.translation = [message.translation[0], message.translation[1] + shift]
         end if
     end for
+    syncChatAnimation()
 end sub
 
 ' Mirrors ircModerationMatches in the transport, whose parser this component does not load.
@@ -898,6 +926,7 @@ sub renderComment()
         end if
         m.hasRenderedComment = true
         updateChatStatus(m.chat.connectionState)
+        syncChatAnimation()
     end if
 end sub
 
@@ -926,4 +955,5 @@ sub onDestroy()
     m.emojiRegex = invalid
     m.failedChatImages = {}
     m.nameColorCache = {}
+    m.animatedEmotes = {}
 end sub

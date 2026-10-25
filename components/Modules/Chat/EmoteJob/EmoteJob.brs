@@ -8,6 +8,17 @@ sub publishEmoteCache(fetched as object)
     cache = m.global.emoteCache
     if cache = invalid then cache = {}
     m.global.setField("emoteCache", ircMergeEmoteCache(cache, fetched))
+    if m.animationDescriptors <> invalid then m.top.animatedEmotes = m.animationDescriptors
+end sub
+
+sub publishAnimatedEmote(staticUri as dynamic, descriptor as dynamic)
+    if m.top.stopRequested or staticUri = invalid or descriptor = invalid then return
+    if m.animationDescriptors = invalid
+        m.animationDescriptors = m.top.animatedEmotes
+        if GetInterface(m.animationDescriptors, "ifAssociativeArray") = invalid then m.animationDescriptors = {}
+    end if
+    if m.animationDescriptors.count() >= 10000 and not m.animationDescriptors.doesExist(staticUri) then return
+    m.animationDescriptors[staticUri] = descriptor
 end sub
 
 sub getGlobalTwitchEmotes()
@@ -181,6 +192,7 @@ sub getChannel7tvEmotes(channel_id)
             end if
             for each emote in temp.emote_set.emotes
                 uri = irc7tvImage(emote)
+                publishAnimatedEmote(uri, irc7tvAnimation(emote))
                 if uri <> invalid then emoteCache[emote.name] = uri
             end for
         end if
@@ -202,6 +214,7 @@ sub getGlobal7tvEmotes()
         end if
         for each emote in temp.emotes
             uri = irc7tvImage(emote)
+            publishAnimatedEmote(uri, irc7tvAnimation(emote))
             if uri <> invalid then emoteCache[emote.name] = uri
         end for
     catch e
@@ -222,6 +235,7 @@ sub getGlobalTTVEmotes()
         end if
         for each emote in temp
             uri = ircBttvImage(emote)
+            publishAnimatedEmote(uri, ircBttvAnimation(emote))
             emoteCache[emote.code] = uri
         end for
     catch e
@@ -262,12 +276,15 @@ sub getChannelTTVEmotes(channel_id)
         if temp.sharedEmotes <> invalid
             for each emote in temp.sharedEmotes
                 uri = ircBttvImage(emote)
+                publishAnimatedEmote(uri, ircBttvAnimation(emote))
                 emoteCache[emote.code] = uri
             end for
         end if
         if temp.channelEmotes <> invalid
             for each emote in temp.channelEmotes
-                emoteCache[emote.code] = ircBttvImage(emote)
+                uri = ircBttvImage(emote)
+                publishAnimatedEmote(uri, ircBttvAnimation(emote))
+                emoteCache[emote.code] = uri
             end for
         end if
     catch e

@@ -66,8 +66,43 @@ function ircBttvImage(emote as object) as dynamic
     if emote?.id = invalid then return invalid
     imageType = emote?.imageType
     ' Use BTTV's own static rendition for a predictable, single Poster image.
-    if imageType = "gif" then return "https://cdn.betterttv.net/emote/" + emote.id + "/static/1x.webp"
+    if imageType = "gif" or emote?.animated = true then return "https://cdn.betterttv.net/emote/" + emote.id + "/static/1x.webp"
     return "https://cdn.betterttv.net/emote/" + emote.id + "/1x.png"
+end function
+
+' Descriptors are keyed by the static URI, never by a provider's reusable word.
+function ircBttvAnimation(emote as dynamic) as dynamic
+    if GetInterface(emote?.id, "ifString") = invalid or emote.id = "" then return invalid
+    if emote?.imageType <> "gif" and emote?.animated <> true then return invalid
+    return { uri: "https://cdn.betterttv.net/emote/" + emote.id + "/1x.webp" }
+end function
+
+function irc7tvAnimation(emote as dynamic) as dynamic
+    host = emote?.data?.host
+    if GetInterface(host?.files, "ifArray") = invalid then return invalid
+    base = ircImageUrl(host.url)
+    if base = invalid then return invalid
+    best = invalid
+    bestWidth = 2147483647
+    for each file in host.files
+        name = file?.name
+        if GetInterface(name, "ifString") <> invalid
+            if name.right(5) = ".webp" and name.instr("/") < 0 and name.instr("static") < 0
+                animated = emote?.data?.animated = true
+                if GetInterface(file?.frame_count, "ifInt") <> invalid then animated = file.frame_count > 1
+                if animated
+                    width = bestWidth
+                    if GetInterface(file?.width, "ifInt") <> invalid then width = file.width
+                    if name = "1x.webp" then width = 0
+                    if best = invalid or width < bestWidth
+                        bestWidth = width
+                        best = { uri: base + "/" + name }
+                    end if
+                end if
+            end if
+        end if
+    end for
+    return best
 end function
 
 function ircMergeEmoteCache(current as object, fetched as object, maxEntries = 10000 as integer) as object

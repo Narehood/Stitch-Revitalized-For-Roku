@@ -94,7 +94,9 @@ async function buildPackage(dir, marker, mode = 'normal') {
         return match[0];
     }).join('\n\n');
     await addFile(dir, 'source/ActualLiveWindow.brs', liveWindowBodies);
-    for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs']) await addFile(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    await addFile(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+    for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Actual EmojiLabel rendering code; pattern construction is an explicit
     // existing engine boundary. Transport/bookmarks/registry never start.
     for (const file of ['EmojiLabel.xml', 'EmojiLabel.brs', 'EmojiLabelUtil.brs']) await copyFile(dir, `components/Modules/EmojiLabel/${file}`);

@@ -9,6 +9,7 @@ function getChangelog() as object
             "New: Choose chat timing: Match video or Live",
             "Fix: Chat shows when it is waiting or syncing, and stays stopped while hidden",
             "Fix: Unicode emoji and BTTV/7TV images, including recent-channel emotes",
+            "New: Animate one visible BTTV or 7TV emote at a time on compatible Roku devices",
             "Fix: Channel live thumbnails, player viewer counts and recent-avatar focus alignment",
             "Fix: Playback recovery allows startup time and cancels retries after playback resumes",
             "Fix: Lower live latency refreshes advancing short segments more frequently",

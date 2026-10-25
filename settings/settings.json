@@ -145,6 +145,13 @@
         ]
     },
     {
+        "title": "Animate chat emotes",
+        "description": "Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.",
+        "settingName": "chat.animatedEmotes",
+        "type": "bool",
+        "default": "true"
+    },
+    {
         "title": "BetterTTV emotes",
         "description": "Show BetterTTV emotes in live chat.",
         "settingName": "BetterTTVEmote",

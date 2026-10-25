@@ -1025,5 +1025,7 @@
         <message><source>Live (no added delay)</source><translation>Live (no added delay)</translation></message>
         <message><source>Waiting for new messages…</source><translation>Waiting for new messages…</translation></message>
         <message><source>Syncing chat with video…</source><translation>Syncing chat with video…</translation></message>
+        <message><source>Animate chat emotes</source><translation>Animate chat emotes</translation></message>
+        <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</translation></message>
     </context>
 </TS>

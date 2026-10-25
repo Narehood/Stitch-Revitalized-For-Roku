@@ -27,6 +27,7 @@
     </interface>
 
     <script type="text/brightscript" uri="Chat.brs" />
+    <script type="text/brightscript" uri="ChatAnimations.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/uiContrast.brs" />

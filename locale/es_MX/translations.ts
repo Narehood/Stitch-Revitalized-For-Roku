@@ -1037,5 +1037,7 @@
         <message><source>Live (no added delay)</source><translation>En vivo (sin retraso adicional)</translation></message>
         <message><source>Waiting for new messages…</source><translation>Esperando mensajes nuevos…</translation></message>
         <message><source>Syncing chat with video…</source><translation>Sincronizando el chat con el video…</translation></message>
+        <message><source>Animate chat emotes</source><translation>Animar emotes del chat</translation></message>
+        <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Anima un emote visible a la vez en dispositivos Roku compatibles. Los demás emotes permanecen estáticos. Se aplica al abrir el chat.</translation></message>
     </context>
 </TS>
