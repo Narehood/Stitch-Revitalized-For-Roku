@@ -102,7 +102,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         for (const file of ['source/constants.brs', 'source/changelog.brs', 'source/utils/misc.brs',
             'source/utils/taskFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/analytics.brs',
             'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs',
-            'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs', 'source/utils/uiContrast.brs',
+            'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
             'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs',
             'source/utils/rokuVodRuntime.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copy(file);
         for (const folder of ['fonts', 'images', 'components/SceneManager/Scene', 'components/SceneManager/Group',
@@ -110,12 +110,16 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
             'components/Modules/RecentlyWatchedBar', 'components/Modules/TwitchContentNode', 'components/Modules/VideoErrorHandler',
             'components/Modules/StitchVideo', 'components/Modules/CustomVideo', 'components/Modules/AdCountdown', 'components/Modules/EmojiLabel',
             'components/Scenes/Following']) await tree(folder);
-        for (const file of ['Chat.xml', 'Chat.brs']) await copy(`components/Modules/Chat/${file}`);
+        for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await add(`components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+        await add('source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+        for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copy(`components/Modules/Chat/${file}`);
         await component('components', 'heroScene', 'HeroProbe');
         await component('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');
         await component('components/Modules/StitchVideo', 'StitchVideo', 'StitchVideoProbe');
         await copy('components/Scenes/VideoPlayer/RokuPlayback.brs');
+        await copy('components/Scenes/VideoPlayer/ChatLayout.brs');
         await copy('components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
+        await copy('components/Scenes/VideoPlayer/ChannelFollow.brs');
         await component('components/Modules/RokuDemuxSession', 'RokuDemuxSession', 'ManagerProbe');
         const worker = 'CreateObject("roSGNode", "RokuDemuxServer")';
         const managerPath = 'components/Modules/RokuDemuxSession/RokuDemuxSession.brs';

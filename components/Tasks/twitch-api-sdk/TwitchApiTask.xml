@@ -6,6 +6,8 @@
         <!-- Field to issue a request to the handler -->
         <field id="request" type="assocarray" />
         <field id="response" type="assocarray" alwaysNotify="true" />
+        <!-- Cooperative cancellation between the player follow HTTP steps. -->
+        <field id="followStopRequested" type="boolean" value="false" />
     </interface>
     <script type="text/brightscript" uri="pkg:/source/enums/TaskControl.bs" />
     <script type="text/brightscript" uri="pkg:/source/enums/ContentType.bs" />
@@ -18,6 +20,7 @@
     <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/search.bs" />
     <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/user.bs" />
     <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/follow.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Tasks/twitch-api-sdk/playerFollow.bs" />
     <script type="text/brightscript" uri="pkg:/source/utils/http.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/authState.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />

@@ -617,6 +617,41 @@ sub clockQuotaCore()
     caseCore("monotonic-long-clock-quotas-and-exhaustion")
 end sub
 
+sub staleTailCore()
+    for each retained in [true, false]
+        state = preparedCore()
+        initial = nativeLivePublication(state)
+        nativeLiveFeed(state, "playlist", playlistCore(10&, 6), 2000&)
+        for sequence = 13 to 15
+            pairCore(state, sequence, 2000&)
+        end for
+        current = nativeLivePublication(state)
+        if not retained then nativeLiveRetire(state, initial.generation)
+        checkCore((nlSegmentIndex(state, 12&) >= 0) = retained, "stale-tail case has requested cache retention")
+        beforeWindow = FormatJson(state.window)
+        beforeSegments = FormatJson(state.segments)
+        beforeBytes = state.cacheBytes
+        beforeSerial = state.serial
+        beforeGenerations = FormatJson(state.generations)
+        nativeLiveFeed(state, "playlist", playlistCore(10&, 5), 4000&)
+        nativeLiveAdvance(state, 4000&)
+        checkCore(state.phase = "ready" and FormatJson(state.window) = beforeWindow and state.publishedFirst = 13& and state.publishedLast = 15&, "stale tail preserves published window and bounds")
+        checkCore(FormatJson(nativeLivePublication(state)) = FormatJson(current) and FormatJson(state.generations) = beforeGenerations and state.nextGeneration = current.generation + 1&, "stale tail preserves publication and generation")
+        checkCore(state.lastUpstreamProgress = 2000& and state.lastPublicationProgress = 2000& and state.lastPlaylistSequence = 10&, "stale tail cannot refresh progress")
+        checkCore(FormatJson(state.segments) = beforeSegments and state.cacheBytes = beforeBytes and state.serial = beforeSerial and state.segmentPairCount = 6, "stale tail never converts or prunes cached history")
+        checkCore(state.nextPoll = 5000& and nlIntent(state, 4999&) = invalid, "stale tail preserves fallback polling floor")
+        nativeLiveFeed(state, "playlist", playlistCore(10&, 6), 5000&)
+        nativeLiveAdvance(state, 5000&)
+        checkCore(state.lastUpstreamProgress = 5000& and state.lastPublicationProgress = 2000& and FormatJson(nativeLivePublication(state)) = FormatJson(current), "unchanged tail still refreshes upstream health without publication")
+        nativeLiveFeed(state, "playlist", playlistCore(10&, 7), 6000&)
+        pairCore(state, 16, 6000&)
+        nextPub = nativeLivePublication(state)
+        checkCore(nextPub.generation = current.generation + 1& and nextPub.mediaSequence = 14& and state.publishedLast = 16& and state.segmentPairCount = 7, "forward tail resumes once without replaying stale media")
+        closeCore(state)
+    end for
+    caseCore("shorter-tail-discard-before-cached-history")
+end sub
+
 sub finiteLivenessCore()
     state = preparedCore(false)
     pub = nativeLivePublication(state)
@@ -674,6 +709,7 @@ sub main()
         admissionCore()
         generationPinsCore()
         clockQuotaCore()
+        staleTailCore()
         finiteLivenessCore()
         print "STITCH_ROKU_CORE_PASS: __MARKER__ cases="; m.cases; " assertions="; m.assertions; " pairs="; m.pairs; " goldens="; m.goldens; " ids="; m.uniqueIds; " generations="; m.generations; " elapsedMs="; m.elapsedMs
     catch e

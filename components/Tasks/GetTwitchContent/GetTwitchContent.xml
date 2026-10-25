@@ -7,7 +7,7 @@
         <field id="contentRequested" type="assocarray" />
         <field id="response" type="node" alwaysNotify="true" />
         <field id="metadata" type="array" />
-        <!-- Temporary integration guard; no user setting or default promotion. -->
+        <!-- Enabled by the player when the built-in splitter setting permits it. -->
         <field id="enableRokuDemux" type="boolean" value="false" />
     </interface>
     <script type="text/brightscript" uri="GetTwitchContent.brs" />

@@ -93,6 +93,7 @@ sub main()
     if not engagementAssert(engagementSnapshot({ errors: [{ message: "failed" }], data: { user: { id: "472066926" } } }, "472066926", nowSeconds) = invalid, "GraphQL errors cannot become valid empty metadata") then return
     if not engagementAssert(engagementSnapshot({ data: { user: { id: "123" } } }, "472066926", nowSeconds) = invalid, "a mismatched channel cannot own a snapshot") then return
     if not checkPinnedSnapshots(nowSeconds) then return
+    if not checkPinnedBadges() then return
     print "STITCH_TEST_PASS: Twitch engagement"
 end sub
 
@@ -138,6 +139,65 @@ function checkPinnedSnapshots(nowSeconds as double) as boolean
         if not engagementAssert(engagementPinSnapshot(malformed, "101", nowSeconds) = invalid, "malformed pin metadata is a failure rather than a valid empty connection") then return false
     end for
     return true
+end function
+
+function checkPinnedBadges() as boolean
+    ' Real anonymous Taylien/JOURDA1N response observed Oct 25; time is frozen.
+    fixture = parseJson(readAsciiFile("pkg:/tools/tests/fixtures/twitch-engagement/pinned-author-badges.json"))
+    if not engagementAssert(fixture <> invalid, "observed pin badge fixture loads") then return false
+    nowSeconds = fixture.fixtureNowSeconds
+    snapshot = engagementPinSnapshot(fixture.response, "155586958", nowSeconds)
+    if not engagementAssert(snapshot <> invalid and snapshot.pinnedMessage <> invalid, "observed pin badge response remains valid") then return false
+    pin = snapshot.pinnedMessage
+    expected = ["moderator/1", "subscriber/2042", "gamerduo/1"]
+    if not engagementAssert(formatJson(pin.badges) = formatJson(expected), "observed message badge pairs preserve provider order") then return false
+    if not engagementAssert(pin.id = "a457fc04-69d8-4b78-9e27-5d05e8e12a79" and pin.messageId = "261fe860-6db9-4227-9713-22365f80a501" and pin.userId = "178054219" and pin.login = "jourda1n" and pin.senderName = "JOURDA1N", "observed badge pin preserves original identity") then return false
+    if not engagementAssert(pin.text = "tynDspin Bubbingle tynDspin" and pin.sentAt = engagementUtcSeconds("2026-10-25T06:29:37Z") and pin.updatedAt = engagementUtcSeconds("2026-10-25T06:29:54Z") and pin.expiresAt = invalid and pin.observedAt = nowSeconds, "observed badge pin preserves text, timestamps and indefinite expiry") then return false
+    node = fixture.response.data.channel.pinnedChatMessages.edges[0].node
+    if not checkPinBadgeVariant(node, nowSeconds, invalid, [], "absent metadata yields an empty badge array without guessing from MOD type", true) then return false
+    for each raw in [invalid, [], "moderator/1", 1, true, {}, { setID: "moderator", version: "1" }]
+        if not checkPinBadgeVariant(node, nowSeconds, raw, [], "null, empty or wrongly typed optional badge metadata is ignored") then return false
+    end for
+    mixed = [invalid, "moderator/1", 1, true, [], {}, { setID: "moderator" }, { version: "1" }, { setID: 1, version: "1" }, { setID: "subscriber", version: 2042 }, { setID: {}, version: "1" }, { setID: "moderator", version: [] }, { setID: "moderator", version: "1" }, { setID: "moderator", version: "1" }, { setID: "subscriber", version: "2042" }, { setID: "gamerduo", version: "1" }]
+    if not checkPinBadgeVariant(node, nowSeconds, mixed, expected, "malformed entries are skipped and duplicate pairs preserve first-seen order") then return false
+    distinct = [{ setID: "badge-with_underscore", version: "v_1-2" }, { setID: "same", version: "1" }, { setID: "same", version: "2" }, { setID: "other", version: "1" }, { setID: "Badge", version: "V1" }, { setID: "badge", version: "V1" }]
+    if not checkPinBadgeVariant(node, nowSeconds, distinct, ["badge-with_underscore/v_1-2", "same/1", "same/2", "other/1", "Badge/V1", "badge/V1"], "hyphens, underscores, case and distinct pair components are preserved") then return false
+    token80 = string(80, "x")
+    if not checkPinBadgeVariant(node, nowSeconds, [{ setID: token80, version: token80 }], [token80 + "/" + token80], "80-character badge tokens are accepted") then return false
+    for each token in ["", " ", "with space", "slash/key", "dot.key", chr(92), chr(10), chr(13), "moderator" + chr(10), "moderator" + chr(13), chr(233), token80 + "x"]
+        raw = [{ setID: token, version: "1" }, { setID: "moderator", version: token }, { setID: "gamerduo", version: "1" }]
+        if not checkPinBadgeVariant(node, nowSeconds, raw, ["gamerduo/1"], "empty, non-ASCII, unsafe or oversized tokens are skipped in either component") then return false
+    end for
+    raw = []
+    expected = []
+    for i = 1 to 10
+        raw.push({ setID: "badge-" + i.toStr(), version: "1" })
+        if i <= 8 then expected.push("badge-" + i.toStr() + "/1")
+    end for
+    if not checkPinBadgeVariant(node, nowSeconds, raw, expected, "retained badge metadata caps at eight unique pairs") then return false
+    raw = []
+    for i = 0 to 9999
+        raw.push(invalid)
+    end for
+    raw[31] = { setID: "within-limit", version: "1" }
+    raw[32] = { setID: "past-limit", version: "1" }
+    if not checkPinBadgeVariant(node, nowSeconds, raw, ["within-limit/1"], "ten thousand entries only admit badges from the first 32 positions") then return false
+    return true
+end function
+
+function checkPinBadgeVariant(original as object, nowSeconds as double, raw as dynamic, expected as object, description as string, omit = false as boolean) as boolean
+    node = parseJson(formatJson(original))
+    message = node.pinnedMessage
+    message.delete("senderBadges")
+    if not omit then message.senderBadges = raw
+    node.pinnedMessage = message
+    pin = engagementPinnedMessage(node, nowSeconds)
+    if not engagementAssert(pin <> invalid, description + ": valid pin survives") then return false
+    if not engagementAssert(GetInterface(pin.badges, "ifArray") <> invalid and formatJson(pin.badges) = formatJson(expected), description) then return false
+    baseline = engagementPinnedMessage(original, nowSeconds)
+    pin.delete("badges")
+    baseline.delete("badges")
+    return engagementAssert(formatJson(pin) = formatJson(baseline), description + ": all existing pin fields stay unchanged")
 end function
 
 function pinNode(endsAt as dynamic) as object

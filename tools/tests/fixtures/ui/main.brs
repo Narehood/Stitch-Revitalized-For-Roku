@@ -9,6 +9,10 @@ sub main()
     fixtureGlobal = screen.getGlobalNode()
     testFollowing(scene, fixtureGlobal)
     testRetainedSelection(scene, fixtureGlobal)
+    testChannelBroadcasterId(scene)
+    testChannelLiveThumbnail(scene)
+    testChannelLiveViewers(scene)
+    testChannelLiveOwnership(scene)
     testLateAccountResponse(scene, fixtureGlobal)
     testBrowse(scene)
     testDetailPages(scene)
@@ -22,6 +26,162 @@ sub main()
     else
         print "STITCH_UI_FAIL:"; m.failures; " failures; "; m.assertions; " assertions"
     end if
+end sub
+
+sub testChannelLiveThumbnail(scene as object)
+    generated = "https://static-cdn.jtvnw.net/previews-ttv/live_user_recent_channel-1280x720.jpg"
+    for each sample in [
+            { kind: "LIVE", preview: "", expected: generated },
+            { kind: "LIVE", preview: "pkg:/images/default_banner.png", expected: "pkg:/images/default_banner.png" },
+            { kind: "USER", preview: "", expected: generated }
+        ]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        fields = cardFields(sample.kind, "recent_channel")
+        fields.previewImageURL = sample.preview
+        setTwitchContentFields(content, fields)
+        page.contentRequested = content
+        state = inspect(page)
+        state.task.response = channelIdResponse()
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(live.previewImageURL = sample.expected, sample.kind + " live card has a preview when opened from Recents and preserves an existing preview")
+        check(content.previewImageURL = sample.preview, sample.kind + " thumbnail fallback leaves the request unchanged")
+        page.callFunc("fixtureSelect", 0)
+        check(page.playContent and page.contentSelected.previewImageURL = sample.expected, sample.kind + " live selection retains the thumbnail and playback contract")
+        disposePage(scene, page)
+    end for
+end sub
+
+sub testChannelLiveViewers(scene as object)
+    for each sample in [
+            { count: 2468, expected: 2468 },
+            { count: 0, expected: 0 },
+            { count: invalid, expected: 99 },
+            { count: "invalid", expected: 99 },
+            { count: -1, expected: 99 }
+        ]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        fields = cardFields("LIVE", "recent_channel")
+        fields.viewersCount = 99
+        setTwitchContentFields(content, fields)
+        page.contentRequested = content
+        response = channelIdResponse()
+        response.liveViewersCount = sample.count
+        state = inspect(page)
+        state.task.response = response
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(not live.isSameNode(content) and live.viewersCount = sample.expected, "current channel viewers refresh the owned LIVE card, including zero, without erasing valid counts on bad data")
+        check(content.viewersCount = 99 and content.getParent() = invalid, "viewer refresh preserves the original unparented LIVE request")
+        page.callFunc("fixtureSelect", 0)
+        check(page.contentSelected.viewersCount = sample.expected, "live playback selection carries the refreshed viewer count")
+        disposePage(scene, page)
+    end for
+end sub
+
+sub testChannelLiveOwnership(scene as object)
+    fields = cardFields("LIVE", "owned-live")
+    fields.append({ contentId: "live-id", contentTitle: "Original title", createdAt: "2026-10-01T00:00:00Z", gameDisplayName: "Original game", gameId: "game-id", gameName: "original-game", gameBoxArtUrl: "pkg:/images/default_banner.png", streamerId: "original-id", streamerProfileImageUrl: "pkg:/images/default_banner.png", datePublished: "2026-10-01T00:00:00Z", url: "https://example.invalid/stream.m3u8" })
+    content = createObject("roSGNode", "TwitchContentNode")
+    setTwitchContentFields(content, fields)
+    owner = createObject("roSGNode", "ContentNode")
+    owner.appendChild(content)
+    page = addPage(scene, "ChannelPage")
+    page.contentRequested = content
+    response = channelIdResponse()
+    response.streamerId = "resolved-id"
+    response.liveViewersCount = 482
+    inspect(page).task.response = response
+    live = inspect(page).rowlist.content.getChild(0).getChild(0)
+    check(owner.getChildCount() = 1 and content.getParent().isSameNode(owner), "LIVE construction keeps the request attached to its original owner")
+    for each key in fields
+        check(content[key] = fields[key], "LIVE construction preserves request field " + key)
+        if key <> "streamerId" and key <> "viewersCount"
+            check(live[key] = fields[key], "separate LIVE card retains metadata field " + key)
+        end if
+    end for
+    check(live.streamerId = "resolved-id" and live.viewersCount = 482, "only the owned LIVE item receives current ID and viewers")
+    disposePage(scene, page)
+end sub
+
+sub testChannelBroadcasterId(scene as object)
+    for each kind in ["LIVE", "USER", "VOD", "CLIP"]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        setTwitchContentFields(content, cardFields(kind, "recent-channel"))
+        if kind = "VOD" or kind = "CLIP"
+            content.contentId = "recording-id"
+            content.clipSlug = "recording-slug"
+        end if
+        page.contentRequested = content
+        check(content.streamerId = "", kind + " navigation starts without a broadcaster ID")
+        s = inspect(page)
+        response = channelIdResponse()
+        response.streamerId = "71092938"
+        s.task.response = response
+        check(content.streamerId = "" and content.contentType = kind and content.getParent() = invalid, kind + " channel metadata leaves navigation identity and ownership unchanged")
+        check(inspect(page).rowlist.content.getChildCount() = 3, kind + " channel metadata builds live, VOD and clip rows")
+        checkChannelRowIds(page, "71092938", kind + " navigation")
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(not live.isSameNode(content), kind + " launch builds a separate LIVE card")
+        if kind = "VOD" or kind = "CLIP"
+            check(live.contentId = "" and live.clipSlug = "", kind + " request cannot copy recording or clip identity into the LIVE item")
+            check(content.contentId = "recording-id" and content.clipSlug = "recording-slug", kind + " request keeps its original recording and clip identity")
+        end if
+        disposePage(scene, page)
+    end for
+
+    for each kind in ["LIVE", "USER", "VOD", "CLIP"]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        setTwitchContentFields(content, cardFields(kind, "known-channel"))
+        content.streamerId = "existing-id"
+        page.contentRequested = content
+        s = inspect(page)
+        for each sample in [
+                { fields: {}, expectedId: "existing-id" },
+                { fields: { streamerId: "" }, expectedId: "existing-id" },
+                { fields: { streamerId: invalid }, expectedId: "existing-id" },
+                { fields: { streamerId: 71092938 }, expectedId: "existing-id" },
+                { fields: { streamerId: true }, expectedId: "existing-id" },
+                { fields: { streamerId: {} }, expectedId: "existing-id" },
+                { fields: { streamerId: [] }, expectedId: "existing-id" },
+                { fields: { streamerId: "existing-id" }, expectedId: "existing-id" },
+                { fields: { streamerId: "updated-id" }, expectedId: "updated-id" }
+            ]
+            response = channelIdResponse()
+            response.append(sample.fields)
+            s.task.response = response
+            check(content.streamerId = "existing-id" and content.getParent() = invalid, kind + " response ID guard matrix preserves the original request")
+            checkChannelRowIds(page, sample.expectedId, kind + " response ID guard matrix")
+        end for
+        s.task.response = invalid
+        check(content.streamerId = "existing-id" and inspect(page).status.state = "error", kind + " failed channel response preserves the existing ID and failure status contract")
+        disposePage(scene, page)
+    end for
+end sub
+
+function channelIdResponse() as object
+    return {
+        isLive: true,
+        description: "",
+        followerCount: 2,
+        liveTitle: "Current live stream",
+        videoShelves: [
+            { node: { title: "Recent videos", items: [{ id: "vod-1", vodTitle: "Recording", vodViewCount: 4, vodCreatedAt: "2026-10-01T00:00:00Z" }] } },
+            { node: { title: "Clips", items: [{ id: "clip-1", slug: "fixture-clip", title: "Clip", viewCount: 3, createdAt: "2026-10-01T00:00:00Z" }] } }
+        ]
+    }
+end function
+
+sub checkChannelRowIds(page as object, expectedId as string, context as string)
+    rowIndex = 0
+    for each kind in ["LIVE", "VOD", "CLIP"]
+        page.callFunc("fixtureSelect", rowIndex)
+        selected = page.contentSelected
+        check(page.playContent and selected.contentType = kind and selected.streamerId = expectedId, context + " emits " + kind + " with the broadcaster ID")
+        rowIndex += 1
+    end for
 end sub
 
 sub testRetainedSelection(scene as object, fixtureGlobal as object)
@@ -313,7 +473,7 @@ sub testDetailPages(scene as object)
         else
             s.task.response = { isLive: true, videoShelves: [], description: "fixture", followerCount: 2 }
             s = inspect(page)
-            check(s.status.state = "hidden" and s.rowlist.content.getChild(0).getChild(0).isSameNode(content), "Channel success exposes the requested live card identity")
+            check(s.status.state = "hidden" and not s.rowlist.content.getChild(0).getChild(0).isSameNode(content), "Channel success exposes a separate live card and preserves the navigation request")
         end if
         old = s.task
         shell = s.shell

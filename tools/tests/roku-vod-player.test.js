@@ -19,7 +19,7 @@ const playerPath = 'components/Scenes/VideoPlayer/VideoPlayer.brs';
 const playerXml = 'components/Scenes/VideoPlayer/VideoPlayer.xml';
 const taskPath = 'components/Tasks/GetTwitchContent/GetTwitchContent.brs';
 const runtimePath = 'source/utils/rokuVodRuntime.brs';
-const dependencies = ['source/utils/taskFactory.brs', 'source/utils/rokuDemuxDescriptor.brs',
+const dependencies = ['source/utils/taskFactory.brs', 'source/utils/recentlyWatched.brs', 'source/utils/rokuDemuxDescriptor.brs',
     'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', runtimePath,
     'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
     'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs'];
@@ -65,7 +65,7 @@ async function probeXml(dir, file, probeFile, probe) {
 async function build(dir, marker, capability, mutation) {
     await add(dir, 'manifest', 'title=Offline VOD Player Contract\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/analytics.brs',
-        'source/utils/uiContrast.brs', ...dependencies]) await copy(dir, file);
+        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs', ...dependencies]) await copy(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster',
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
@@ -75,7 +75,9 @@ async function build(dir, marker, capability, mutation) {
     for (const file of ['TwitchAdMetadata.xml', 'TwitchAdMetadata.brs']) {
         await add(dir, `components/${file}`, await fs.readFile(path.join(root, 'tools/tests/fixtures/ad-countdown-player', file)));
     }
-    for (const file of ['Chat.xml', 'Chat.brs']) await copy(dir, `components/Modules/Chat/${file}`);
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await add(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    await add(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+    for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copy(dir, `components/Modules/Chat/${file}`);
     for (const file of ['EmojiLabel.xml', 'EmojiLabel.brs', 'EmojiLabelUtil.brs']) await copy(dir, `components/Modules/EmojiLabel/${file}`);
     for (const file of ['RokuPlayerHost.xml', 'GetTwitchContent.xml', 'GetTwitchContentBoundary.brs',
         'TwitchApiTask.xml', 'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml']) {
@@ -83,9 +85,9 @@ async function build(dir, marker, capability, mutation) {
     }
     await add(dir, 'components/TwitchEngagementTask.xml',
         await fs.readFile(path.join(root, 'tools/tests/fixtures/ui-phase2-player/TwitchEngagementTask.xml')));
-    await add(dir, 'source/utils/config.brs', await fs.readFile(path.join(sharedFixtures, 'config.brs')));
+    await add(dir, 'source/utils/config.brs', `${await fs.readFile(path.join(sharedFixtures, 'config.brs'), 'utf8')}\n${await fs.readFile(path.join(__dirname, 'fixtures/ui-account-settings/registry.brs'), 'utf8')}`);
     await add(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fs.readFile(path.join(sharedFixtures, 'EmojiLabelRegex.brs')));
-    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs']) {
+    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs', 'components/Scenes/VideoPlayer/ChatLayout.brs', 'components/Scenes/VideoPlayer/ChannelFollow.brs']) {
         await copy(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), 'actual owner/player handlers must execute unchanged');
     }

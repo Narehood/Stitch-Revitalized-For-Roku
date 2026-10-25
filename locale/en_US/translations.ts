@@ -422,6 +422,13 @@
             <translation>Loading stream…</translation>
         </message>
         <message>
+            <source>Open channel</source>
+            <translation>Open channel</translation>
+        </message>
+        <message><source>Channel actions</source><translation>Channel actions</translation></message>
+        <message><source>Pin streamer</source><translation>Pin streamer</translation></message>
+        <message><source>Unpin streamer</source><translation>Unpin streamer</translation></message>
+        <message>
             <source>Exit player</source>
             <translation>Exit player</translation>
         </message>
@@ -1010,5 +1017,62 @@
         <message><source>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</translation></message>
         <message><source>Pinned message</source><translation>Pinned message</translation></message>
         <message><source>Press Down to read the full message</source><translation>Press Down to read the full message</translation></message>
+        <message>
+            <source>Built-in Enhanced Broadcasting Splitter</source>
+            <translation>Built-in Enhanced Broadcasting Splitter</translation>
+        </message>
+        <message>
+            <source>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</source>
+            <translation>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</translation>
+        </message>
+        <message><source>Choose the startup quality. A preferred resolution falls back to the nearest lower option, or the lowest available if none is lower. You can still change quality while watching.</source><translation>Choose the startup quality. A preferred resolution falls back to the nearest lower option, or the lowest available if none is lower. You can still change quality while watching.</translation></message>
+        <message><source>Chat timing</source><translation>Chat timing</translation></message>
+        <message><source>Match video delays messages to follow the stream. Live shows new messages as they arrive and may reveal reactions before the video. Takes effect when chat opens.</source><translation>Match video delays messages to follow the stream. Live shows new messages as they arrive and may reveal reactions before the video. Takes effect when chat opens.</translation></message>
+        <message><source>Match video</source><translation>Match video</translation></message>
+        <message><source>Live (no added delay)</source><translation>Live (no added delay)</translation></message>
+        <message><source>Waiting for new messages…</source><translation>Waiting for new messages…</translation></message>
+        <message><source>Syncing chat with video…</source><translation>Syncing chat with video…</translation></message>
+        <message><source>Animate chat emotes</source><translation>Animate chat emotes</translation></message>
+        <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</translation></message>
+        <message><source>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</source><translation>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</translation></message>
+        <message><source>Chat layout</source><translation>Chat layout</translation></message>
+        <message><source>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</source><translation>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</translation></message>
+        <message><source>Beside video</source><translation>Beside video</translation></message>
+        <message><source>Over video</source><translation>Over video</translation></message>
+        <message><source>Chat overlay position</source><translation>Chat overlay position</translation></message>
+        <message><source>Choose a corner for chat when Over video is selected.</source><translation>Choose a corner for chat when Over video is selected.</translation></message>
+        <message><source>Top left</source><translation>Top left</translation></message>
+        <message><source>Top right</source><translation>Top right</translation></message>
+        <message><source>Bottom left</source><translation>Bottom left</translation></message>
+        <message><source>Bottom right</source><translation>Bottom right</translation></message>
+        <message><source>Chat overlay background</source><translation>Chat overlay background</translation></message>
+        <message><source>Background opacity over video. Chat text and emotes stay fully visible.</source><translation>Background opacity over video. Chat text and emotes stay fully visible.</translation></message>
+        <message><source>25%</source><translation>25%</translation></message>
+        <message><source>50%</source><translation>50%</translation></message>
+        <message><source>75%</source><translation>75%</translation></message>
+        <message><source>100%</source><translation>100%</translation></message>
+        <message><source>{0} of {1}</source><translation>{0} of {1}</translation></message>
+        <message><source>Press Down or Back to hide controls</source><translation>Press Down or Back to hide controls</translation></message>
+        <message><source>PINNED</source><translation>PINNED</translation></message>
+        <message><source>Press * to pin</source><translation>Press * to pin</translation></message>
+        <message><source>Press * to unpin</source><translation>Press * to unpin</translation></message>
+        <message><source>Press * to pin to sidebar ({0} max)</source><translation>Press * to pin to sidebar ({0} max)</translation></message>
+        <message><source>Press * to unpin from sidebar</source><translation>Press * to unpin from sidebar</translation></message>
+        <message><source>Pin limit reached ({0}). Unpin a channel first.</source><translation>Pin limit reached ({0}). Unpin a channel first.</translation></message>
+        <message><source>Unfollow</source><translation>Unfollow</translation></message>
+        <message><source>Sign in to follow</source><translation>Sign in to follow</translation></message>
+        <message><source>Check follow status</source><translation>Check follow status</translation></message>
+        <message><source>You can't follow your own channel.</source><translation>You can't follow your own channel.</translation></message>
+        <message><source>Checking follow status…</source><translation>Checking follow status…</translation></message>
+        <message><source>Updating follow status…</source><translation>Updating follow status…</translation></message>
+        <message><source>Couldn't confirm follow status. Select again to check, or close this menu and try later.</source><translation>Couldn't confirm follow status. Select again to check, or close this menu and try later.</translation></message>
+        <message><source>Not following this channel.</source><translation>Not following this channel.</translation></message>
+        <message><source>Following this channel.</source><translation>Following this channel.</translation></message>
+        <message><source>Select again to refresh this menu.</source><translation>Select again to refresh this menu.</translation></message>
+        <message><source>Press * for sidebar actions</source><translation>Press * for sidebar actions</translation></message>
+        <message><source>Pin to sidebar</source><translation>Pin to sidebar</translation></message>
+        <message><source>Unpin from sidebar</source><translation>Unpin from sidebar</translation></message>
+        <message><source>Remove from sidebar</source><translation>Remove from sidebar</translation></message>
+        <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</translation></message>
     </context>
 </TS>

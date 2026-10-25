@@ -12,7 +12,9 @@ function HttpRequest(options as object) as object
     m.top.httpRequests = requests
     payload = m.top.fixturePlaylist
     status = 200
-    if options.url.Left(24) = "https://usher.ttvnw.net/"
+    if options.url.Right(7) = "/health"
+        payload = FormatJSON({ status: "ok", version: "0.3.0", selected_master_version: 1 })
+    else if options.url.Left(24) = "https://usher.ttvnw.net/"
         payload = m.top.fixtureMaster
         status = m.top.fixtureMasterStatus
     end if

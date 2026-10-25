@@ -218,7 +218,7 @@ sub onStatusAction(actionId as string)
 end sub
 
 function buildLiveRows(streams as object) as object
-    itemsPerRow = 3
+    itemsPerRow = getStreamTile().perRow
     contentCollection = createObject("roSGNode", "ContentNode")
     if streams = invalid or streams.count() = 0
         return contentCollection

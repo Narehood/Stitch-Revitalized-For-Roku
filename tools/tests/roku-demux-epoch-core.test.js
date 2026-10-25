@@ -17,6 +17,7 @@ const names = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxCommon', 'rokuDemuxPr
 const cases = ['content-ad-content-with-held-leases', 'several-short-mixed-boundaries-and-source-delay',
     'explicit-opt-in-and-legacy-startup-policy', 'byte-alias-distinct-from-genuine-stage-and-gate-refusal',
     'shared-source-identity-gap-epoch-and-track-refusals', 'atomic-pair-slot-pressure-and-old-lease-cleanup',
+    'mixed-shorter-tail-discard-and-health-deadline',
     'unchanged-deadlines-quotas-local-overflow-and-stop'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -183,7 +184,7 @@ test('removed staging/binding/pinning/pair/source guards fail at normal child ex
             assert.notEqual(changed, source);
             assert.deepEqual(bsc.Parser.parse(changed, { mode: bsc.ParseMode.BrightScript }).diagnostics, []);
             await fs.writeFile(path.join(dir, 'rokuDemuxCore.brs'), changed);
-            const subset = harness.replace(/^        (timelineEC|mixedEC|optionsEC|aliasesEC|identityEC|admissionEC|budgetsEC)\(\)\r?\n/gm,
+            const subset = harness.replace(/^        (timelineEC|mixedEC|optionsEC|aliasesEC|identityEC|admissionEC|staleTailEC|budgetsEC)\(\)\r?\n/gm,
                 (line, name) => mutation.cases.includes(name) ? line : '');
             await fs.writeFile(path.join(dir, 'main.brs'), subset);
             const result = await execute();
@@ -194,6 +195,46 @@ test('removed staging/binding/pinning/pair/source guards fail at normal child ex
             assert.throws(() => requirePositive(result, marker));
         }
         t.diagnostic(`${mutations.length} real production source controls reject normally exiting child output`);
+    });
+});
+
+test('stale-tail guard, strict comparison, polling and health mutations cannot pass', { timeout: 120000 }, async t => {
+    await withFixture(async ({ dir, sources, harness, execute }) => {
+        const source = sources.get('source/utils/rokuDemuxCore.brs').toString();
+        const feed = exactFunction(source, 'nativeLiveFeed');
+        const comparison = 'if window.segments[window.segments.Count() - 1].sequence < state.publishedLast';
+        const guard = feed.match(/^        if window\.segments\[window\.segments\.Count\(\) - 1\]\.sequence < state\.publishedLast\r?\n[^]*?^        end if\r?\n/m)?.[0];
+        assert.ok(guard, 'one real stale-tail discard before continuity and cached-history checks');
+        assert.ok(feed.indexOf(guard) < feed.indexOf('window = nlContinuityWindow('));
+        assert.ok(feed.indexOf(guard) < feed.indexOf('nlEpochAcceptWindow(state, parsed, window)'));
+        const subset = harness.replace(/^        (?:timelineEC|mixedEC|optionsEC|aliasesEC|identityEC|admissionEC|budgetsEC)\(\)\r?\n/gm, '');
+        const controls = [
+            { guard: '', retained: true, polling: false, expected: 'epoch-core-fixture: stale tail preserves published window and bounds' },
+            { guard: '', retained: false, polling: false, expected: 'native-live: published epoch history unavailable' },
+            { guard: guard.replace(comparison, comparison.replace(' < ', ' <= ')), retained: true, polling: false,
+                expected: 'epoch-core-fixture: unchanged tail still refreshes upstream health without publication' },
+            { guard: guard.replace('            return', '            state.lastUpstreamProgress = nowMs\n            return'), retained: true, polling: false,
+                expected: 'epoch-core-fixture: stale tail cannot refresh progress' },
+            { guard: guard.replace('if not state.pollFromRequest then state.nextPoll = nowMs + parsed.targetDuration * 500&', 'if not state.pollFromRequest then state.nextPoll = nowMs'), retained: true, polling: false,
+                expected: 'epoch-core-fixture: changed stale snapshot keeps source target polling floor' },
+            { guard: guard.replace('nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs, tail.sequence, tail.durationUs)', "' Deliberately removed request polling acceptance"), retained: true, polling: true,
+                expected: 'epoch-core-fixture: changed stale snapshot keeps source target polling floor' }
+        ];
+        for (const control of controls) {
+            const changed = source.replace(guard, control.guard);
+            assert.notEqual(changed, source);
+            assert.deepEqual(bsc.Parser.parse(changed, { mode: bsc.ParseMode.BrightScript }).diagnostics, []);
+            await fs.writeFile(path.join(dir, 'rokuDemuxCore.brs'), changed);
+            await fs.writeFile(path.join(dir, 'main.brs'), subset
+                .replace('for each retained in [true, false]', `for each retained in [${control.retained}]`)
+                .replace('for each requestPolling in [false, true]', `for each requestPolling in [${control.polling}]`));
+            const result = await execute();
+            requireExecution(result);
+            assert.deepEqual(result.output.split(/\r?\n/).filter(line => line.startsWith('STITCH_EPOCH_CORE_FAIL:')),
+                [`STITCH_EPOCH_CORE_FAIL: ${control.expected}`]);
+            assert.doesNotMatch(result.output, /STITCH_EPOCH_CORE_PASS:/);
+        }
+        t.diagnostic(`${controls.length} actual stale-tail mutations fail at normal child exit, including retained and retired history`);
     });
 });
 

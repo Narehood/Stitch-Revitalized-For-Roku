@@ -134,8 +134,8 @@ sub nlStart(state as object, intent as object, phase as string, port as object, 
     if phase = "get" then headers.Range = "bytes=0-" + (intent.limit - 1).ToStr()
     nlCheck(transfer.SetHeaders(headers), "request headers unavailable")
     transfer.SetUrl(intent.url)
-    ' A hung transfer is retried once (see nativeLiveTick); two attempts fit
-    ' inside the player's ten-second cushion and the upstream progress bound.
+    ' A hung transfer is retried once (see nlTimeout) within the upstream
+    ' progress bound; a short low-latency buffer may run dry sooner.
     op = { transfer: transfer, identity: transfer.GetIdentity(), kind: intent.kind, url: intent.url, limit: intent.limit, phase: phase, deadline: nowMs + 6000& }
     state.op = op ' Retain exactly one native object before starting it.
     nlUseWork(state, "transfer", nowMs)
@@ -148,6 +148,17 @@ sub nlStart(state as object, intent as object, phase as string, port as object, 
     end if
 end sub
 
+sub nlTimeout(state as object)
+    op = state.op
+    ' Retry one hung transfer for the same intent regardless of dispatch order.
+    ' A second timeout on that URL is fatal.
+    retried = false
+    if state.DoesExist("timedOutUrl") then retried = state.timedOutUrl = op.url
+    nlCheck(not retried and nlString(op.url), "upstream operation deadline")
+    state.timedOutUrl = op.url
+    nlCheck(nlCancelInput(state), "cancellation or input cleanup failed")
+end sub
+
 function nativeLiveTick(state as object, port as object, nowMs as dynamic) as object
     if state.closed or state.phase = "failed" then return nativeLiveStatus(state)
     try
@@ -156,13 +167,7 @@ function nativeLiveTick(state as object, port as object, nowMs as dynamic) as ob
         if state.op <> invalid
             op = state.op
             if nowMs >= op.deadline
-                ' Retry one hung transfer from a fresh request for the same
-                ' intent; a second timeout on that URL is fatal.
-                retried = false
-                if state.DoesExist("timedOutUrl") then retried = state.timedOutUrl = op.url
-                nlCheck(not retried and nlString(op.url), "upstream operation deadline")
-                state.timedOutUrl = op.url
-                nlCheck(nlCancelInput(state), "cancellation or input cleanup failed")
+                nlTimeout(state)
                 return nativeLiveStatus(state)
             end if
             if op.phase = "get"
@@ -200,7 +205,11 @@ function nativeLiveHandleUrlEvent(state as object, event as object, nowMs as dyn
     responseHeaders = invalid
     try
         nlTime(state, nowMs)
-        nlCheck(event.GetInt() = 1 and nowMs < op.deadline, "URL completion or deadline invalid")
+        if nowMs >= op.deadline
+            nlTimeout(state)
+            return true
+        end if
+        nlCheck(event.GetInt() = 1, "URL completion or deadline invalid")
         responseStatus = event.GetResponseCode()
         responseHeaders = event.GetResponseHeadersArray()
         count = nlHeaders(responseHeaders, responseStatus, op.limit, op.phase = "head", state.trustedExperimentalTransport)

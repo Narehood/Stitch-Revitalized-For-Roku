@@ -1,5 +1,6 @@
 sub init()
     m.disposed = false
+    m.channelActionsOpen = false
     initAdCountdown()
     if m.adBadge <> invalid
         m.adBadge.adLabel = tr("Ad")
@@ -12,6 +13,8 @@ sub init()
     ' Control overlay elements
     m.controlOverlay = m.top.findNode("controlOverlay")
     m.controlOverlay.visible = false
+    m.controlsHint = m.top.findNode("controlsHint")
+    m.controlsHint.text = tr("Press Down or Back to hide controls")
 
     ' Overlay layout elements (sized to the video area in layoutOverlay)
     m.scrim = m.top.findNode("scrim")
@@ -29,6 +32,8 @@ sub init()
     m.chatGroup = m.top.findNode("chatGroup")
     m.playPauseGroup = m.top.findNode("playPauseGroup")
     m.qualityGroup = m.top.findNode("qualityGroup")
+    m.channelGroup = m.top.findNode("channelGroup")
+    m.channelFocus = m.top.findNode("channelFocus")
     m.controlButton = m.top.findNode("controlButton")
     m.messagesButton = m.top.findNode("messagesButton")
     m.qualitySelectButton = m.top.findNode("qualitySelectButton")
@@ -41,6 +46,7 @@ sub init()
 
     ' Video info
     m.videoTitle = m.top.findNode("videoTitle")
+    m.viewerCount = m.top.findNode("viewerCount")
     m.channelUsername = m.top.findNode("channelUsername")
     m.avatar = m.top.findNode("avatar")
 
@@ -161,7 +167,7 @@ end sub
 ' The video area is 1280 wide, or 960 when chat is shown beside it. The
 ' scrim, caption, tag and controls stay inside that area's safe margins.
 function videoAreaWidth() as integer
-    if m.top.chatIsVisible = true then return 960
+    if m.top.chatIsVisible = true and m.top.chatOverlayMode <> true then return 960
     return 1280
 end function
 
@@ -169,25 +175,50 @@ sub layoutOverlay()
     if m.adBadge <> invalid then m.adBadge.videoAreaWidth = videoAreaWidth()
     width = videoAreaWidth()
     m.scrim.width = width
+    m.controlsHint.width = width - 96
     m.scrimFadeFill.width = width
     m.scrimFade.maskSize = [width, 48]
     m.latencyTag.translation = [width - 48 - 360, 69]
+    m.viewerCount.translation = [width - 96 - m.viewerCount.width, 34]
+    titleWidth = 900
     if width < 1280
-        m.videoTitle.maxWidth = 660
-    else
-        m.videoTitle.maxWidth = 900
+        titleWidth = 660
     end if
-    ' Four 64 px buttons with 12 px gaps, centered in the video area.
-    m.controls.translation = [Int((width - 292) / 2), 178]
+    if m.viewerCount.visible
+        availableTitleWidth = m.viewerCount.translation[0] - 64 - 24
+        if titleWidth > availableTitleWidth then titleWidth = availableTitleWidth
+    end if
+    m.videoTitle.maxWidth = titleWidth
+    controlsWidth = 292
+    if m.top.channelAvailable then controlsWidth += 76
+    m.controls.translation = [Int((width - controlsWidth) / 2), 178]
     if m.loadingOverlay <> invalid then m.loadingOverlay.translation = [Int(width / 2), 360]
     if m.messageOverlay <> invalid then m.messageOverlay.translation = [Int((width - 640) / 2), 0]
     updateCaption()
+end sub
+
+sub onViewersCountChange()
+    if m.viewerCount = invalid then return
+    m.viewerCount.visible = m.top.video_type = "LIVE" and m.top.viewersCount >= 0
+    m.viewerCount.text = ""
+    if m.viewerCount.visible
+        countWidth = fitLabelPlate(m.viewerCount, invalid, Substitute("{0} {1}", numberToText(m.top.viewersCount), tr("Viewers")), 0, 160)
+        if countWidth > 320 then m.viewerCount.width = 320
+    end if
+    layoutOverlay()
 end sub
 
 ' VideoPlayer sets lowLatency while the relay serves this wrapper. The tag
 ' states the mode, never a measured result.
 sub updateLatencyTag()
     m.latencyTag.visible = m.top.lowLatency
+end sub
+
+sub onChannelAvailableChange()
+    if m.disposed or m.channelGroup = invalid then return
+    m.channelGroup.visible = m.top.channelAvailable
+    if not m.top.channelAvailable and m.currentFocusedButton = 4 then focusButton(2)
+    layoutOverlay()
 end sub
 
 function captionForButton(index as integer) as string
@@ -203,6 +234,8 @@ function captionForButton(index as integer) as string
         quality = m.top.selectedQuality
         if quality <> invalid and quality <> "" then return tr("Quality · {0}").replace("{0}", quality)
         return tr("Quality")
+    else if index = 4
+        return tr("Channel actions")
     end if
     return ""
 end function
@@ -241,6 +274,8 @@ end sub
 ' outcome event from the prior stream, which would otherwise be emitted
 ' against the new stream's latency sample.
 sub onContentChange()
+    ' Counts are launch/refresh metadata; a new item must not keep the old count.
+    m.top.viewersCount = -1
     ignored = clearAdCountdown(m.adOwner)
     if m.top.content <> invalid
         m.startupSeekFired = false
@@ -582,10 +617,18 @@ sub hideOverlay()
 end sub
 
 sub onFadeAway()
+    if m.channelActionsOpen then return
     ' Only hide overlay if quality dialog is not visible
     if not m.qualityDialog.visible
         hideOverlay()
     end if
+end sub
+
+sub setChannelActionsOpen(open as boolean)
+    if m.disposed then return
+    m.channelActionsOpen = open
+    m.fadeAwayTimer.control = "stop"
+    if not open and m.isOverlayVisible then m.fadeAwayTimer.control = "start"
 end sub
 
 sub focusButton(buttonIndex)
@@ -600,6 +643,8 @@ sub focusButton(buttonIndex)
         m.playPauseFocus.visible = true
     else if buttonIndex = 3 ' Quality
         m.qualityFocus.visible = true
+    else if buttonIndex = 4
+        m.channelFocus.visible = true
     end if
     updateCaption()
 end sub
@@ -609,6 +654,7 @@ sub clearAllButtonFocus()
     m.chatFocus.visible = false
     m.playPauseFocus.visible = false
     m.qualityFocus.visible = false
+    m.channelFocus.visible = false
 end sub
 
 sub executeButtonAction()
@@ -623,6 +669,8 @@ sub executeButtonAction()
         togglePlayPause()
     else if m.currentFocusedButton = 3 ' Quality
         showQualityDialog()
+    else if m.currentFocusedButton = 4 and m.top.channelAvailable
+        m.top.channelActionsRequested = true
     end if
 end sub
 
@@ -750,6 +798,7 @@ end sub
 
 function onKeyEvent(key, press) as boolean
     if m.disposed then return false
+    if m.channelActionsOpen then return false
     ' ? "[StitchVideo] KeyEvent: "; key; " "; press
 
     if press
@@ -800,12 +849,16 @@ function handleMainKeys(key) as boolean
         if m.currentFocusedButton > 0
             focusButton(m.currentFocusedButton - 1)
         else
-            focusButton(3) ' Wrap to quality
+            lastButton = 3
+            if m.top.channelAvailable then lastButton = 4
+            focusButton(lastButton)
         end if
         return true
     else if key = "right"
         ' Live stream navigation: back(0) -> chat(1) -> play/pause(2) -> quality(3)
-        if m.currentFocusedButton < 3
+        lastButton = 3
+        if m.top.channelAvailable then lastButton = 4
+        if m.currentFocusedButton < lastButton
             focusButton(m.currentFocusedButton + 1)
         else
             focusButton(0) ' Wrap to back

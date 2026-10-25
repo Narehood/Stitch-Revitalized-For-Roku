@@ -61,6 +61,19 @@ sub main()
     runSelectionCase(host, invalidMetadata, proxy, "auto")
     checkSelection(host.response.contentType = "ERROR" and host.metadata.Count() = 0, "unserializable new selection fails closed without an unsafe ladder")
     checkSelection(host.response.description.InStr("refresh") >= 0, "selection failure provides a bounded refresh instruction")
+    host.fixtureLegacyProxy = true
+    runSelectionCase(host, mixed, proxy, "auto")
+    checkSelection(host.response.contentType = "ERROR" and host.response.errorCode = "proxy_upgrade_required", "legacy service gets an actionable upgrade result before a missing-route playback error")
+    checkSelection(host.response.description.InStr("Settings") >= 0, "legacy service refusal explains the on-Roku alternative")
+    runSelectionCase(host, mixed, "", "auto")
+    checkSelection(host.response.contentType <> "ERROR" and not host.response.isProxied, "clearing the old service retains compatible native playback")
+    host.fixtureLegacyProxy = false
+    for each failure in ["timeout", "http", "json"]
+        host.fixtureHealthFailure = failure
+        runSelectionCase(host, mixed, proxy, "auto")
+        checkSelection(host.response.contentType = "ERROR" and host.response.errorCode = "proxy_health_failed", "health failure is a connection problem rather than an upgrade: " + failure)
+        checkSelection(host.metadata.Count() = 0, "failed service health never publishes a selected route: " + failure)
+    end for
     checkSelection(host.fixtureFailures = 0, "no canned task case raises an unexpected exception")
     screen.Close()
     if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions, "; m.cases; " cases"

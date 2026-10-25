@@ -19,6 +19,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from yarl import URL
 
 from fmp4_demux_proxy.app import create_app
+from fmp4_demux_proxy.config import get_config
 from fmp4_demux_proxy.fmp4 import extract_track_map, iter_top_level_boxes
 from fmp4_demux_proxy.routes.segment_route import STORE_KEY, _fetch_cached
 from fmp4_demux_proxy.upstream import (
@@ -108,6 +109,93 @@ def proxy_factory(aiohttp_client: Any) -> Any:
 
 def media_request(cdn: FakeCDN, path: str, init: str, track: str = "video") -> str:
     return "/s?" + urlencode({"u": cdn.url(path), "i": cdn.url(init), "k": "media", "track": track})
+
+
+@pytest.mark.parametrize("track", ["video", "audio"])
+@pytest.mark.parametrize("kind", ["media", "part", "prefetch"])
+async def test_demux_renditions_refuse_transport_stream(
+    cdn: FakeCDN, proxy_factory: Any, track: str, kind: str
+) -> None:
+    cdn.bodies["/init"] = make_init_segment([(1, b"soun"), (2, b"vide")])
+    transport_stream = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/ad"] = transport_stream
+    client = await proxy_factory()
+    params = {"u": cdn.url("/ad"), "i": cdn.url("/init"), "k": kind, "track": track}
+    for headers in ({}, {"Range": "bytes=0-187"}):
+        response = await client.get("/s", params=params, headers=headers)
+        assert response.status == 502
+        assert "fmp4 demux failed" in await response.text()
+
+
+async def test_native_transport_stream_preserves_bytes_and_ranges(
+    cdn: FakeCDN, proxy_factory: Any
+) -> None:
+    transport_stream = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/ad"] = transport_stream
+    cdn.bodies["/playlist"] = b"#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nad\n"
+    client = await proxy_factory()
+    playlist = await client.get("/m3u8", params={"u": cdn.url("/playlist")})
+    assert playlist.status == 200
+    body = await playlist.text()
+    assert "#EXT-X-MEDIA:" not in body and "#EXT-X-MAP:" not in body
+    uri = next(line for line in body.splitlines() if line.startswith("http"))
+    assert parse_qs(urlparse(uri).query)["mode"] == ["passthrough"]
+    link = URL(uri).relative()
+    response = await client.get(link)
+    assert response.status == 200
+    assert await response.read() == transport_stream
+    partial = await client.get(link, headers={"Range": "bytes=0-187"})
+    assert partial.status == 206 and await partial.read() == transport_stream[:188]
+    assert partial.headers["Content-Range"] == "bytes 0-187/564"
+
+
+@pytest.mark.parametrize("track", ["video", "audio"])
+async def test_cmaf_transport_discontinuity_never_returns_combined_bytes(
+    cdn: FakeCDN, proxy_factory: Any, track: str
+) -> None:
+    cdn.bodies["/init"] = make_init_segment([(1, b"soun"), (2, b"vide")])
+    cdn.bodies["/before"] = make_split_media_segment(1, b"BEFORE", b"first", 2, 1)
+    cdn.bodies["/ad"] = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/after"] = make_split_media_segment(2, b"AFTER", b"second", 2, 1)
+    cdn.bodies["/playlist"] = (
+        b'#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MAP:URI="init"\n'
+        b"#EXTINF:2,\nbefore\n#EXT-X-DISCONTINUITY\n#EXTINF:2,\nad\n"
+        b"#EXT-X-DISCONTINUITY\n#EXTINF:2,\nafter\n"
+    )
+    client = await proxy_factory()
+    playlist = await client.get("/m3u8", params={"u": cdn.url("/playlist"), "track": track})
+    assert playlist.status == 200
+    links = [line for line in (await playlist.text()).splitlines() if line.startswith("http")]
+    before, ad, after = [await client.get(URL(link).relative()) for link in links]
+    assert before.status == after.status == 200
+    assert mdat(await before.read()) == (b"BEFORE" if track == "video" else b"first")
+    assert mdat(await after.read()) == (b"AFTER" if track == "video" else b"second")
+    assert ad.status == 502 and "fmp4 demux failed" in await ad.text()
+
+
+@pytest.mark.parametrize("corruption", ["sync", "truncated"])
+async def test_mixed_transport_refuses_malformed_packets(
+    cdn: FakeCDN, proxy_factory: Any, corruption: str
+) -> None:
+    cdn.bodies["/init"] = make_init_segment([(1, b"soun"), (2, b"vide")])
+    data = (b"\x47\x40\x00\x13" + b"\x00" * 184) * 3
+    cdn.bodies["/media"] = data[:376] + b"\x00" + data[377:] if corruption == "sync" else data[:-1]
+    client = await proxy_factory()
+    response = await client.get(media_request(cdn, "/media", "/init"))
+    assert response.status == 502
+
+
+def test_cloudfront_default_preserves_host_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UPSTREAM_HOST_ALLOWLIST", raising=False)
+    allowlist = get_config().upstream_host_allowlist
+    validate_upstream_url("https://example.cloudfront.net/media", allowlist)
+    with pytest.raises(web.HTTPBadRequest):
+        validate_upstream_url("https://example.cloudfront.net.evil.invalid/media", allowlist)
+    monkeypatch.setenv("UPSTREAM_HOST_ALLOWLIST", "ttvnw.net")
+    with pytest.raises(web.HTTPBadRequest):
+        validate_upstream_url(
+            "https://example.cloudfront.net/media", get_config().upstream_host_allowlist
+        )
 
 
 def mdat(data: bytes) -> bytes:

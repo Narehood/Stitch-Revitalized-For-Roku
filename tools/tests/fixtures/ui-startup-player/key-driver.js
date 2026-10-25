@@ -6,7 +6,7 @@ const path = require('node:path');
 // the engine's own keyboard path dispatches remote keys through the SceneGraph
 // focus chain. The fixture app requests each key by printing
 // "FIXTURE_KEY:<key>" or "FIXTURE_HOLD:<key>:<ms>"; nothing is replayed on a
-// timeline, so slow machines only make the run slower.
+// timeline. Fixtures must still wait for the requested SceneGraph result.
 // Usage: node key-driver.js <brs.cli.js> <package.zip>
 
 const [cliArg, zipArg] = process.argv.slice(2);
@@ -21,15 +21,19 @@ const zip = path.resolve(zipArg);
 const keys = {
     up: 'up', down: 'down', left: 'left', right: 'right', ok: 'return',
     back: 'escape', play: 'end', rewind: 'pageup', fastforward: 'pagedown',
+    options: 'insert',
 };
 const holdLimitMs = 3000;
 // brs-node releases a key 150 ms after its last terminal press and treats an
 // earlier repeat of that key as the same held press. A different key releases
 // the previous one at once, so only back-to-back identical presses are spaced.
-// Requests stay in order.
+// Chain from actual emissions: overdue timers must not bunch separate presses
+// together or interleave a later key with an unfinished hold.
 const repeatGapMs = 250;
-let nextFree = 0;
+let lastEmission = 0;
 let lastKey = '';
+let pendingKeys = Promise.resolve();
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function emit(name) {
     process.stdin.emit('keypress', '', { name, ctrl: false, meta: false, shift: false, sequence: '' });
@@ -41,20 +45,21 @@ function press(key, holdMs) {
         console.error(`FIXTURE_DRIVER_ERROR: unknown key ${key}`);
         process.exit(2);
     }
-    const hold = Math.min(holdMs, holdLimitMs);
-    const start = Math.max(Date.now() + 20, nextFree + (key === lastKey ? repeatGapMs : 30));
-    nextFree = start + hold;
-    lastKey = key;
-    setTimeout(() => {
+    const hold = Math.min(holdMs || 0, holdLimitMs);
+    pendingKeys = pendingKeys.then(async () => {
+        const gap = key === lastKey ? repeatGapMs : 30;
+        await pause(Math.max(20, lastEmission + gap - Date.now()));
         // Repeated terminal presses of one key keep it held; the engine sends
         // a single press now and the release after the repeats stop.
         const started = Date.now();
-        const repeat = () => {
+        do {
             emit(name);
-            if (Date.now() - started < hold) setTimeout(repeat, 50);
-        };
-        repeat();
-    }, start - Date.now());
+            lastEmission = Date.now();
+            lastKey = key;
+            if (Date.now() - started >= hold) break;
+            await pause(50);
+        } while (true);
+    });
 }
 
 process.stdin.isTTY = true;

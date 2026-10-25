@@ -5,6 +5,7 @@
     <interface>
         <field id="supportsDisposal" type="boolean" value="true" />
         <function name="onDestroy" />
+        <function name="setChannelActionsOpen" />
         <function name="showMessage" />
         <function name="hideMessage" />
         <function name="beginAdCountdown" />
@@ -14,18 +15,22 @@
         <field id="videoBookmarks" type="assocarray" />
         <field id="back" type="bool" value="false" />
         <field id="toggleChat" type="bool" value="false" />
+        <field id="channelAvailable" type="boolean" value="false" onChange="onChannelAvailableChange" />
+        <field id="channelActionsRequested" type="boolean" value="false" alwaysNotify="true" />
         <field id="chatIsVisible" type="bool" />
+        <field id="chatOverlayMode" type="bool" value="false" onChange="onChatVisibilityChange" />
         <field id="streamLayoutMode" type="Integer" value="-1" />
         <field id="busySpinner" type="bool" />
         <field id="channelAvatar" type="string" alias="avatar.uri" />
         <field id="channelUsername" type="string" alias="channelUsername.text" />
         <field id="videoTitle" type="string" alias="videoTitle.text" />
+        <field id="viewersCount" type="integer" value="-1" onChange="onViewersCountChange" />
         <field id="QualityChangeRequestFlag" type="bool" value="false" alwaysNotify="true" />
         <field id="QualityChangeRequest" type="Integer" />
         <field id="streamDurationSeconds" type="Integer" value="0" />
         <field id="currentProgressBarState" type="Integer" value="1" />
         <field id="video_id" type="string" />
-        <field id="video_type" type="string" />
+        <field id="video_type" type="string" onChange="onViewersCountChange" />
         <field id="qualityOptions" type="array" />
         <field id="selectedQuality" type="string" value="" />
         <!-- Set to roDateTime.AsSeconds() right before issuing an app-initiated
@@ -61,6 +66,9 @@
                 <Rectangle id="scrimFadeFill" width="1280" height="48" color="0x0E0E10D9" />
             </MaskGroup>
             <Rectangle id="scrim" width="1280" height="214" translation="[0,48]" color="0x0E0E10D9" />
+            <Label id="controlsHint" translation="[48,232]" width="1184" height="26" horizAlign="center" color="0xADADB8FF">
+                <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
+            </Label>
 
             <Group id="infoRow" translation="[48,66]">
                 <CirclePoster id="avatar" width="48" height="48" translation="[0,0]" />
@@ -76,6 +84,9 @@
                 <EmojiLabel id="videoTitle" height="28" maxWidth="900" horizAlign="left" color="0xADADB8FF" translation="[64,48]">
                     <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="20" />
                 </EmojiLabel>
+                <Label id="viewerCount" visible="false" width="160" height="28" translation="[1024,34]" horizAlign="right" vertAlign="center" color="0xEFEFF1FF">
+                    <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
+                </Label>
             </Group>
             <!-- Shown only while this session uses the low-latency experiment. -->
             <Label id="latencyTag" visible="false" width="360" height="26" translation="[872,69]" horizAlign="right" vertAlign="center" color="0xFFD37AFF">
@@ -113,6 +124,15 @@
                     <Poster id="qualityBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
                     <Poster id="qualityFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster id="qualitySelectButton" uri="pkg:/images/icons/sliders.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
+                </Group>
+                <Group id="channelGroup" translation="[304,0]" visible="false">
+                    <Poster uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="channelFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
+                    <Group translation="[18,10]">
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[0,11]" blendColor="0xFFFFFFFF" />
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[11,11]" blendColor="0xFFFFFFFF" />
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[22,11]" blendColor="0xFFFFFFFF" />
+                    </Group>
                 </Group>
             </Group>
         </Group>

@@ -20,10 +20,12 @@
                 id="avatar"
                 width="54"
                 height="54"
+                translation="[3, 3]"
                 outlinecolor="0x00000000"
                 backgroundVisible="false"
             />
-            <!-- Focus ring just outside the avatar, so the face stays clear -->
+            <!-- CirclePoster insets the face by 2px. Its [3,3] origin puts the
+                 face at [5,5], centered inside the full nonnegative focus ring. -->
             <Poster
                 id="selectionIndicator"
                 uri="pkg:/images/twitch-redesign/ring-64.png"
@@ -31,7 +33,7 @@
                 visible="false"
                 width="64"
                 height="64"
-                translation="[-5, -5]"
+                translation="[0, 0]"
             />
             <!-- Live indicator dot — sibling of CirclePoster (not nested) because
                  CirclePoster masks its children to a circle, clipping the dot. -->
@@ -40,7 +42,7 @@
                 uri="pkg:/images/twitch-redesign/live-dot.png"
                 width="18"
                 height="18"
-                translation="[38, 38]"
+                translation="[41, 41]"
                 visible="false"
             />
         </Group>

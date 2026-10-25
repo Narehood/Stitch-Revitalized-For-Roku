@@ -235,7 +235,7 @@ sub pollPinnedChat()
     try
         headers = { "Client-Id": "ue6666qo983tsx6so1t0vnawi233wa", "Device-ID": m.deviceId, "Content-Type": "application/json" }
         rsp = engagementHttp("https://gql.twitch.tv/gql", "POST", headers, formatJson({
-            "query": "query StitchPinnedChat($channelID: ID!) { channel(id: $channelID) { id pinnedChatMessages(first: 1, messageType: MOD) { edges { node { id type startsAt updatedAt endsAt pinnedMessage { id sentAt content { text } sender { id login displayName } } } } } } }",
+            "query": "query StitchPinnedChat($channelID: ID!) { channel(id: $channelID) { id pinnedChatMessages(first: 1, messageType: MOD) { edges { node { id type startsAt updatedAt endsAt pinnedMessage { id sentAt content { text } sender { id login displayName } senderBadges { setID version } } } } } } }",
             "variables": { "channelID": m.top.channelId }
         }), 131072)
         if rsp = invalid or rsp.status <> 200 then return

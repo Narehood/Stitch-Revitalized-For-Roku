@@ -20,6 +20,7 @@ const caseNames = ['binary-goldens-and-strict-malformed',
     'rolling-past-finite-limits-with-held-lease', 'poll-gaps-contiguous-and-fail-closed',
     'actual-cache-leases-and-atomic-admission', 'active-publication-generation-cap',
     'monotonic-long-clock-quotas-and-exhaustion',
+    'shorter-tail-discard-before-cached-history',
     'finite-default-and-real-progress-deadlines'];
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 
@@ -174,7 +175,7 @@ test('actual duration guard mutations and a corrupt full-byte golden cannot pass
         assert.equal(protocol.split(sourceGuard).length, 2, 'one actual source rounded duration guard');
         // Reuse the actual Core/publication/manifest case without repeatedly
         // running its unrelated historical 260-pair rolling matrix.
-        const durationHarness = harness.replace(/^        (?:bulkCore|startupWindowCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
+        const durationHarness = harness.replace(/^        (?:bulkCore|startupWindowCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|staleTailCore|finiteLivenessCore)\(\)\r?\n/gm, '');
         await fs.writeFile(path.join(dir, 'main.brs'), durationHarness);
         for (const control of [
             { before: localGuard, after: 'if segment.durationUs > 2000000 then return false', expected: 'actual fractional Core publication accepted 2.002' },
@@ -213,7 +214,7 @@ test('actual startup wait guards and finite polling mutations cannot pass', { ti
     await withFixture(async ({ dir, sources, marker, harness, execute }) => {
         const corePath = path.join(dir, 'rokuDemuxCore.brs');
         const core = sources.get('source/utils/rokuDemuxCore.brs').toString();
-        const startupHarness = harness.replace(/^        (?:bulkCore|publicationDurationCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|finiteLivenessCore)\(\)\r?\n/gm, '');
+        const startupHarness = harness.replace(/^        (?:bulkCore|publicationDurationCore|rollingCore|continuityCore|admissionCore|generationPinsCore|clockQuotaCore|staleTailCore|finiteLivenessCore)\(\)\r?\n/gm, '');
         await fs.writeFile(path.join(dir, 'main.brs'), startupHarness);
         const windowCall = 'window = nlWindow(parsed, state.delayUs, waitForStartup, false, windowUs)';
         const pollGate = '        if nowMs < state.nextPoll then return invalid';

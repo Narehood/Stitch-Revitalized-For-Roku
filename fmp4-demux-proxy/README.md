@@ -36,9 +36,13 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Compose passes supported settings from `.env` and uses a read-only filesystem, nonroot user, no Linux capabilities, and memory/process limits. The image uses Python 3.14 and a digest-pinned uv installer with locked production dependencies.
+Compose passes supported settings from `.env` and uses a read-only filesystem, nonroot user, no Linux capabilities, and memory/process limits. The image uses Python 3.14.9 on Debian Trixie and a uv installer, both pinned by multiarch digest, with locked production dependencies.
 
-Published images use `ghcr.io/narehood/fmp4-demux-proxy:main`. That tag reflects published main, so it may predate a pending modernization PR. Build the checkout to exercise its changes.
+The shared build/runtime base refreshes `ca-certificates` and regenerates the system store. Builds and container CI require Debian's patched package `20250419+deb13u1` or newer and check Python's active TLS roots, including OpenSSL's hashed CA directory. The check rejects the exact DER SHA-256 fingerprints of **emSign ECC Root CA - G3** and **AAA Certificate Services** (Debian's label: "Comodo AAA Services root"), following the [Debian security update](https://tracker.debian.org/news/1813397/accepted-ca-certificates-20250419deb13u1-source-into-stable-security/). Other eMudhra/emSign roots remain governed by Debian's trust policy; this is not a blanket issuer ban. TLS certificate and hostname verification stay enabled.
+
+To rebuild with a fresh CA package lookup, run `docker compose build --pull --no-cache` before `docker compose up -d`. Docker's build cache can otherwise reuse an earlier successful package refresh. For an existing container, run `docker compose exec fmp4-demux-proxy python /usr/local/bin/check-ca-trust.py` to print the installed CA package version and active root count, or fail if the policy is violated. Direct Python installations use the host's trust store and must receive their host's CA security updates separately.
+
+The versioned release image is `ghcr.io/narehood/fmp4-demux-proxy:0.3.1`. The moving `:main` tag follows published main. Both include the CA trust checks above; build this checkout to test changes before publication.
 
 ## Configuration
 
@@ -47,7 +51,7 @@ Published images use `ghcr.io/narehood/fmp4-demux-proxy:main`. That tag reflects
 | PORT | 8080 | Listening port |
 | LOG_LEVEL | INFO | Application log level |
 | PROXY_PUBLIC_URL | Request scheme and Host | Base URL reachable by Roku; set explicitly behind a reverse proxy or when port/path mapping changes it |
-| UPSTREAM_HOST_ALLOWLIST | ttvnw.net,twitch.tv,twitchcdn.net | Permitted upstream domain suffixes; enforced before every redirect |
+| UPSTREAM_HOST_ALLOWLIST | ttvnw.net,twitch.tv,twitchcdn.net,cloudfront.net | Permitted upstream domain suffixes; enforced before every redirect |
 | UPSTREAM_CONNECT_TIMEOUT | 5 | Connection deadline in seconds |
 | UPSTREAM_READ_TIMEOUT | 30 | Read inactivity deadline in seconds |
 | UPSTREAM_TOTAL_TIMEOUT | 45 | Deadline including queueing, redirect chain and response body |
@@ -84,6 +88,8 @@ A 400 response can indicate an invalid URL, host policy, track, or missing init 
 Do not disable the allowlist to repair a new CDN hostname. Verify the actual stream host and add only the necessary trusted hostname/suffix. Additional historical VOD CDNs still need captured-stream verification.
 
 Demux currently supports unencrypted fragments with movie-fragment-relative addressing, explicit sample-run offsets and resolvable sample sizes. Absolute/implicit fragment addressing, encrypted combined fragments, and open-ended preload ranges fail explicitly. A CDN that ignores a requested source byte range is also rejected. These constraints need captured-stream evidence before the splitter is extended.
+
+A demuxed CMAF stream that changes to MPEG-TS during an ad is unsupported and returns 502 for those segments. The service does not send a combined transport stream into either separated rendition. Native MPEG-TS playlists still use the ordinary passthrough path. Mixed-container transitions need track separation, matching initialization and timeline handling, and Roku ad-boundary verification before support can be enabled.
 
 A passing health check proves the service is reachable, not that a Roku can decode a selected stream. Confirm picture, audible audio, quality changes, VOD seeking and sustained playback on the target device.
 

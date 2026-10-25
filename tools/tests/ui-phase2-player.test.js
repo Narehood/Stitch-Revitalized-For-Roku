@@ -59,9 +59,12 @@ async function addComponent(dir, folder, name, probe = '', xmlName = name) {
 async function addCommon(dir, title, marker, main) {
     await addFile(dir, 'manifest', `title=${title}\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n`);
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/analytics.brs', 'source/utils/uiContrast.brs',
+        'source/utils/analytics.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
+        'components/Modules/Chat/ChatAnimations.brs',
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster', 'components/Modules/AdCountdown']) await copyTree(dir, folder);
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await addFile(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    await addFile(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
     // Explicit I/O boundary: an in-memory registry on the global node.
     await addFile(dir, 'source/utils/config.brs', await fixture('config.brs'));
     await addFile(dir, 'components/PhaseTwoHost.xml', await fixture('PhaseTwoHost.xml'));
@@ -74,6 +77,52 @@ async function addEmojiLabel(dir, probe = '') {
     await addComponent(dir, 'components/Modules/EmojiLabel', 'EmojiLabel', probe);
     await copyFile(dir, 'components/Modules/EmojiLabel/EmojiLabelUtil.brs');
     await addFile(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fixture('EmojiLabelRegex.brs'));
+}
+
+// brs-engine implements JS regex rather than Roku PCRE. Convert the actual
+// versioned pattern to equivalent UTF-16 alternatives; no subset emoji stub.
+// Native Rooibos separately compiles the production PCRE without this adapter.
+function engineEmojiPattern(source) {
+    const native = source.match(/return "([^"\r\n]+)"/)[1];
+    const escape = point => {
+        const text = String.fromCodePoint(point);
+        return Array.from({ length: text.length }, (_, i) => `\\u${text.charCodeAt(i).toString(16).padStart(4, '0')}`).join('');
+    };
+    let converted = native.replace(/\[([^\]]*\\x\{[^\]]*)\]/g, (_, body) => {
+        const tokens = body.match(/\\x\{[\da-f]+\}|\\.|./gi);
+        const point = token => token.startsWith('\\x{') ? parseInt(token.slice(3, -1), 16) : token.replace(/^\\/, '').codePointAt(0);
+        const alternatives = [];
+        for (let i = 0; i < tokens.length; i++) {
+            const start = point(tokens[i]);
+            const end = tokens[i + 1] === '-' ? point(tokens[i += 2]) : start;
+            for (let cp = start; cp <= end; cp++) alternatives.push(escape(cp));
+        }
+        return `(?:${alternatives.join('|')})`;
+    });
+    converted = converted.replace(/\\x\{([\da-f]+)\}/gi, (_, point) => escape(parseInt(point, 16)));
+    // Compare the adapter against the actual scalar PCRE escapes in JS Unicode
+    // mode before handing it to the engine's non-Unicode regex implementation.
+    const unicode = native.replace(/\\x\{([\da-f]+)\}/gi, '\\u{$1}');
+    for (const sample of ['hello\u{1f600}world', '\u2764\ufe0f', '\u{1f44d}\u{1f3fd}',
+        '\u{1f468}\u200d\u{1f469}\u200d\u{1f467}\u200d\u{1f466}', '\u{1f1fa}\u{1f1f8}',
+        '1\ufe0f\u20e3', '\u{1f600}\u{1f600}', '\u{1f3f3}\ufe0f\u200d\u{1f308}',
+        '\u{1fae8}\u{1fa77}', 'abc 123 #* caf\u00e9 \u4f60\u597d']) {
+        assert.deepEqual([...sample.matchAll(new RegExp(converted, 'g'))].map(m => m[0]),
+            [...sample.matchAll(new RegExp(unicode, 'gu'))].map(m => m[0]), `UTF-16 adapter differs for ${sample}`);
+    }
+    return `' Actual production pattern adapted to the simulator's UTF-16 JS regex engine.\nfunction emojiRegexSource() as string\n    if m.fixtureBuilds = invalid then m.fixtureBuilds = 0\n    m.fixtureBuilds += 1\n    return "${converted}"\nend function\n`;
+}
+
+async function buildEmojiRenderPackage(dir, marker) {
+    await addCommon(dir, 'Chat Emoji Renderer Fixture', marker, 'chat-main.brs');
+    const folder = path.join(__dirname, 'fixtures/chat-emotes');
+    await addFile(dir, 'source/main.brs', await fs.readFile(path.join(folder, 'main.brs')));
+    await copyFile(dir, 'source/utils/ircParser.brs');
+    for (const file of ['ChatJob.xml', 'EmoteJob.xml']) await addFile(dir, `components/${file}`, await fixture(file));
+    await addEmojiLabel(dir, await fs.readFile(path.join(folder, 'EmojiProbe.brs'), 'utf8'));
+    await addFile(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs',
+        engineEmojiPattern(await fs.readFile(path.join(root, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs'), 'utf8')));
+    await addComponent(dir, 'components/Modules/Chat', 'Chat', await fs.readFile(path.join(folder, 'ChatProbe.brs'), 'utf8'));
 }
 
 const wrapperProbes = {
@@ -147,8 +196,10 @@ function fixtureEngagement() as object
 end function
 `);
     await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
-    for (const file of ['source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
+    await copyFile(dir, 'components/Scenes/VideoPlayer/ChannelFollow.brs');
+    for (const file of ['source/utils/recentlyWatched.brs', 'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
 }
@@ -224,8 +275,22 @@ function fixtureRead() as object
     end for
     age = -1
     if m.hypeAge <> invalid then age = m.hypeAge.totalMilliseconds()
-    return { rows: rows, seq: m.moderationSeq, translation: m.translation, start: m.lower_bound - m.line_height, job: m.chat <> invalid, hypeVisible: m.hypePanel.visible, hypeTitle: m.hypeTitle.text, hypeDetail: m.hypeDetail.text, hypeProgress: m.hypeProgress.width, hypeTimer: m.hypeTimer, hypeAgeMs: age, pinVisible: m.pinPanel.visible, pinText: m.pinText.text, pinAuthor: m.pinAuthor.text, pinY: m.pinPanel.translation[1], pinTimer: m.pinTimer, pinDialog: m.pinDialog }
+    return { rows: rows, seq: m.moderationSeq, translation: m.translation, start: m.lower_bound - m.line_height, job: m.chat <> invalid, emoteJob: m.EmoteJob, emoteChannel: m.emoteChannel, presentation: m.chatPresentationState, statusVisible: m.chatStatus.visible, status: m.chatStatus.text, hypeVisible: m.hypePanel.visible, hypeTitle: m.hypeTitle.text, hypeDetail: m.hypeDetail.text, hypeProgress: m.hypeProgress.width, hypeTimer: m.hypeTimer, hypeAgeMs: age, pinVisible: m.pinPanel.visible, pinText: m.pinText.text, pinAuthor: m.pinAuthor.text, pinY: m.pinPanel.translation[1], pinTimer: m.pinTimer, pinDialog: m.pinDialog }
 end function
+sub fixtureStaleEvent(job as object)
+    event = { node: job, getRoSGNode: fixtureEventNode }
+    onNewCommentObj(event)
+    onModeration(event)
+    onConnectionStateChange(event)
+    onDeliveryStateChange(event)
+    onEmotesCompleted(event)
+end sub
+function fixtureEventNode() as object
+    return m.node
+end function
+sub fixtureTryRender(comment as object)
+    m.chat.nextCommentObj = comment
+end sub
 function fixtureText(node as object) as string
     if node.hasField("text") then return node.text
     text = ""
@@ -243,6 +308,30 @@ function fixturePosters(node as object) as integer
     return count
 end function
 `);
+}
+
+async function buildEmoteAbsencePackage(dir, marker, mutate = source => source) {
+    await addCommon(dir, 'Chat Emote Absence Fixture', marker, 'chat-main.brs');
+    const folder = path.join(__dirname, 'fixtures/chat-transport');
+    await addFile(dir, 'source/main.brs', await fs.readFile(path.join(folder, 'reopen.brs')));
+    await addEmojiLabel(dir);
+    await addFile(dir, 'components/ChatJob.xml', await fixture('ChatJob.xml'));
+    await addComponent(dir, 'components/Modules/Chat', 'Chat', `function fixtureRead() as object
+    return { job: m.chat, emote: m.EmoteJob, cached: m.emoteChannel }
+end function
+`);
+    const provider = 'components/Modules/Chat/EmoteJob/';
+    const xml = await fs.readFile(path.join(root, provider, 'EmoteJob.xml'), 'utf8');
+    await addFile(dir, provider + 'EmoteJob.xml', xml.replace('pkg:/source/utils/http.brs', 'ProviderHttp.brs'));
+    await addFile(dir, provider + 'EmoteJob.brs', mutate(await fs.readFile(path.join(root, provider, 'EmoteJob.brs'), 'utf8')));
+    const http = await fs.readFile(path.join(root, 'source/utils/http.brs'), 'utf8');
+    const decoders = [...http.matchAll(/^function decodeJson(?:Response|Body)\([^\r\n]*\) as dynamic\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
+    assert.equal(decoders.length, 2, 'complete production response and JSON body decoders');
+    const decoder = decoders.map(match => match[0]).join('\n');
+    assert.equal(decoder.split('type(event) <> "roUrlEvent"').length, 2);
+    // Only the native event identity is adapted; status and body decoding execute unchanged.
+    await addFile(dir, provider + 'ProviderHttp.brs', (await fs.readFile(path.join(folder, 'ProviderHttp.brs'), 'utf8')) + '\n' +
+        decoder.replace('type(event) <> "roUrlEvent"', 'event = invalid'));
 }
 
 function runPackage(zip, cwd) {
@@ -323,4 +412,22 @@ test('chat removes displayed and in-flight moderation targets, preserves later m
 test('actual player owns opt-in watch samples independently of chat, rejects stale owners and cleans up workers', { timeout: 90000 }, async t => {
     const count = await runFixture('stitch-ui-engagement-', buildEngagementPackage);
     t.diagnostic(`${count} actual Player/Chat assertions; engagement Task is inert, no network, media or reward credit is tested`);
+});
+
+test('actual chat and EmojiLabel render Unicode/provider images, wrap text and clean up failed images', { timeout: 90000 }, async t => {
+    const count = await runFixture('stitch-ui-chat-emotes-', buildEmojiRenderPackage);
+    t.diagnostic(`${count} actual renderer assertions; full pattern adapted from PCRE to simulator UTF-16 regex; native PCRE and CDN decoding require native QA`);
+});
+
+test('actual Chat reuses completed optional emote absence after hide/show and retries malformed or transient failures', { timeout: 90000 }, async t => {
+    const count = await runFixture('stitch-ui-emote-absence-', buildEmoteAbsencePackage);
+    t.diagnostic(`${count} actual Chat/EmoteJob Task/decoder assertions; only HTTP events, registry and IRC transport are offline boundaries`);
+});
+
+test('discarding optional channel 404 status fails the actual Chat hide/show fixture', { timeout: 90000 }, async () => {
+    await assert.rejects(runFixture('stitch-ui-emote-absence-red-', (dir, marker) => buildEmoteAbsencePackage(dir, marker, source => {
+        const gate = 'if response.getResponseCode() = 404 then return invalid';
+        assert.equal(source.split(gate).length, 2, 'one optional-absence status gate');
+        return source.replace(gate, 'if false then return invalid');
+    })), /optional404 completes and remembers its cache/);
 });

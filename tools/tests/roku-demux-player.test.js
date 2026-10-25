@@ -61,10 +61,19 @@ async function fixture(name) {
     return fs.readFile(path.join(fixtures, name), 'utf8');
 }
 
+function selectRecoveryEntry(main, recoveryOnly) {
+    const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+    assert.ok(start, 'fixture main entry required');
+    const recoveryCalls = ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()'];
+    for (const call of recoveryCalls) assert.equal(start.split(call).length, 2, `one actual ${call} entry required`);
+    return main.replace(start, start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
+        || recoveryCalls.includes(line.trim()) === recoveryOnly).join('\n'));
+}
+
 async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, 'manifest', 'title=Roku Player Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/analytics.brs', 'source/utils/uiContrast.brs',
+        'source/utils/analytics.brs', 'source/utils/recentlyWatched.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
         'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
         'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
@@ -85,7 +94,9 @@ async function buildPackage(dir, marker, mode = 'normal') {
         return match[0];
     }).join('\n\n');
     await addFile(dir, 'source/ActualLiveWindow.brs', liveWindowBodies);
-    for (const file of ['Chat.xml', 'Chat.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
+    for (const asset of ['ChatAnimationAsset.xml', 'ChatAnimationAsset.brs', 'ChatGifAtlas.brs']) await addFile(dir, `components/Modules/Chat/ChatAnimationAsset/${asset}`, await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset', asset)));
+    await addFile(dir, 'source/utils/chatAnimationWebp.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+    for (const file of ['Chat.xml', 'Chat.brs', 'ChatAnimations.brs']) await copyFile(dir, `components/Modules/Chat/${file}`);
     // Actual EmojiLabel rendering code; pattern construction is an explicit
     // existing engine boundary. Transport/bookmarks/registry never start.
     for (const file of ['EmojiLabel.xml', 'EmojiLabel.brs', 'EmojiLabelUtil.brs']) await copyFile(dir, `components/Modules/EmojiLabel/${file}`);
@@ -109,6 +120,8 @@ async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, snapshotFiles[1], xml);
     await addFile(dir, 'components/PlayerProbe.brs', probe);
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/ChannelFollow.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
     for (const file of [snapshotFiles[0], snapshotFiles[2]]) {
         await copyFile(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), `${file} must execute unchanged`);
@@ -124,6 +137,16 @@ async function buildPackage(dir, marker, mode = 'normal') {
     const controlledWatchdog = watchdogSource.replace(nativeClock, 'nowSec = fixtureWatchdogClock()');
     assert.equal(controlledWatchdog.replace('nowSec = fixtureWatchdogClock()', nativeClock), watchdogSource);
     await addFile(dir, playerPath, actualPlayer.replace(watchdog, controlledWatchdog));
+    // The absolute startup clock is the second explicit time boundary. Keep
+    // the actual assignment/Mark and all deadline/progress decisions intact.
+    const startupClock = 'm.playbackInitTime = CreateObject("roTimeSpan")';
+    const elapsedClock = 'm.playbackInitTime.TotalMilliseconds()';
+    let controlledPlayer = await fs.readFile(path.join(dir, playerPath), 'utf8');
+    assert.equal(controlledPlayer.split(startupClock).length, 2, 'one prepared-Video startup clock required');
+    assert.equal(controlledPlayer.split(elapsedClock).length, 3, 'two actual remaining-startup reads required');
+    controlledPlayer = controlledPlayer.replace(startupClock, 'm.playbackInitTime = fixtureStartupClock()')
+        .replaceAll(elapsedClock, 'fixtureStartupElapsed()');
+    await addFile(dir, playerPath, controlledPlayer);
     if (mode === 'old-buffer-downgrade' || mode === 'old-error-downgrade') {
         const buffer = mode === 'old-buffer-downgrade';
         const name = buffer ? 'findLowerQuality' : 'getNextLowerQuality';
@@ -193,7 +216,11 @@ async function buildPackage(dir, marker, mode = 'normal') {
         await addFile(dir, playerPath, script.replace(start, 'if m.rokuLowLatency then contentNodeToPlay.PlayStart = 4'));
     }
     let main = await fixture('main.brs');
-    if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+    if (mode === 'normal' || mode === 'crash-recovery') {
+        // The dedicated recovery run owns this expensive trio; core keeps all
+        // remaining cases within the unchanged per-child time budget.
+        main = selectRecoveryEntry(main, mode === 'crash-recovery');
+    } else if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testFailedRetryAndRecovery()'));
         const retryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testFailedRetryAndRecovery()').join('\n');
@@ -276,7 +303,8 @@ function runChild(command, args, cwd, timeoutMs = 60000, outputLimit = 1024 * 10
 }
 
 function childDiagnostic(result, context = 'fixture') {
-    return `${context}: code=${result.code} signal=${result.signal} timedOut=${result.timedOut} exceeded=${result.exceeded} elapsedMs=${result.elapsedMs}\n${result.output.slice(-16000)}`;
+    const failures = result.output.split(/\r?\n/).filter(line => line.includes('STITCH_UI_FAIL:')).join('\n');
+    return `${context}: code=${result.code} signal=${result.signal} timedOut=${result.timedOut} exceeded=${result.exceeded} elapsedMs=${result.elapsedMs}\n${failures}\n${result.output.slice(-16000)}`;
 }
 
 function assertNormalExit(result, context = 'fixture') {
@@ -344,6 +372,20 @@ async function runFixture(mode = 'normal') {
     }
 }
 
+test('core and dedicated recovery entries cover every actual fixture case once', async () => {
+    const main = await fixture('main.brs');
+    const cases = source => source.match(/sub main\(\)[\s\S]*?end sub/)[0]
+        .match(/^\s+test\w+\(\)/gm).map(line => line.trim());
+    const core = cases(selectRecoveryEntry(main, false));
+    const recovery = cases(selectRecoveryEntry(main, true));
+    assert.deepEqual(recovery, ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()']);
+    const combined = [...core, ...recovery];
+    assert.equal(new Set(combined).size, combined.length, 'core and recovery must not repeat cases');
+    assert.deepEqual(combined.sort(), cases(main).sort(), 'every original entry must still run');
+    const declared = [...main.matchAll(/^sub (test\w+)\(\)/gm)].map(match => `${match[1]}()`);
+    assert.deepEqual(combined, declared.sort(), 'every actual test method must have an entry');
+});
+
 test('actual player callbacks start eligible Roku playback, session ready, retry, quality switch, Back and disposal', { timeout: 90000 }, async t => {
     const { result, marker } = await runFixture();
     const count = acceptResult(result, marker);
@@ -357,6 +399,11 @@ test('opted-in native startup retains the complete minimum window and rejects a 
     assertNormalExit(late.result, 'late-native-start');
     assert.match(late.result.output, /STITCH_UI_FAIL:actual selected window retains six seconds after the requested native start/);
     assert.throws(() => acceptResult(late.result, late.marker));
+});
+
+test('actual recovery callbacks preserve absolute native startup and discard only obsolete healthy-owner reconnects', { timeout: 90000 }, async t => {
+    const { result, marker } = await runFixture('crash-recovery');
+    t.diagnostic(`${acceptResult(result, marker)} actual callback assertions with controlled clocks and inert network/session boundaries; no native decoder proof`);
 });
 
 test('manual LIVE quality intent survives a missing recovery rung and rejects genuine intent loss', { timeout: 150000 }, async t => {

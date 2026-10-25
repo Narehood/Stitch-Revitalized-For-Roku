@@ -394,8 +394,8 @@ sub nativeLivePlaylistStarted(state as object, nowMs as dynamic)
     state.playlistRequestPending = true
 end sub
 
-' RFC8216 6.3.4: source reload floor starts at the request, not publication.
-sub nlAcceptPlaylistPoll(state as object, text as string, target as integer, nowMs as dynamic)
+' Reload timing starts at the request, not publication or conversion.
+sub nlAcceptPlaylistPoll(state as object, text as string, target as integer, nowMs as dynamic, lastSequence = -1& as dynamic, lastDurationUs = 0& as dynamic)
     if not state.pollFromRequest then return
     nlCheck(state.DoesExist("playlistRequestStartedAt") and state.DoesExist("playlistRequestPending"), "playlist polling start missing")
     nlInteger(state.playlistRequestStartedAt, 0&, nowMs)
@@ -407,9 +407,29 @@ sub nlAcceptPlaylistPoll(state as object, text as string, target as integer, now
         nlClearPlaylistPoll(state)
         return
     end if
+    nlInteger(lastSequence, -1&, 4294967295&)
+    nlInteger(lastDurationUs, 0&, 30000000&)
+    advancing = false
+    if lastSequence >= 0&
+        advancing = true
+        if state.DoesExist("playlistLastTail") then advancing = lastSequence > state.playlistLastTail
+        if advancing then state.playlistLastTail = lastSequence
+    end if
     interval = target * 1000&
     if state.DoesExist("playlistSnapshot")
         if state.playlistSnapshot = text then interval = target * 500&
+    end if
+    nearEdge = false
+    if state.DoesExist("windowUs") then nearEdge = state.windowUs >= 6000000& and state.windowUs <= 8000000&
+    if nearEdge and state.sourceTransitions and state.started and state.delayUs = 0& and lastSequence >= 0& and lastDurationUs > 0& and lastDurationUs < 2500000&
+        ' Like hls.js computeReloadInterval, use the short tail only on media advance.
+        ' This opt-in intentionally polls sooner than RFC8216's full target floor.
+        interval = target * 500&
+        if advancing
+            interval = (lastDurationUs + 999&) \ 1000&
+            if interval < 1000& then interval = 1000&
+            if interval > target * 1000& then interval = target * 1000&
+        end if
     end if
     state.nextPoll = state.playlistRequestStartedAt + interval
     state.playlistSnapshot = text
@@ -417,7 +437,7 @@ sub nlAcceptPlaylistPoll(state as object, text as string, target as integer, now
 end sub
 
 sub nlClearPlaylistPoll(state as object)
-    for each key in ["playlistSnapshot", "playlistRequestStartedAt", "playlistRequestPending"]
+    for each key in ["playlistSnapshot", "playlistRequestStartedAt", "playlistRequestPending", "playlistLastTail"]
         state.Delete(key)
     end for
 end sub
@@ -620,6 +640,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         nlCheck(nlString(payload), "playlist payload must be string")
         parsed = nativeLiveParsePlaylist(payload, state.sourceUrl, state.approvedOrigins)
         nlCheck(parsed.mediaSequence >= state.lastPlaylistSequence, "playlist sequence moved backwards")
+        tail = parsed.segments[parsed.segments.Count() - 1]
         waitForStartup = state.steadyMode and not state.started and state.publishedLast < 0& and state.initIds.Count() = 0 and not parsed.ended
         windowUs = 6000000&
         if state.DoesExist("windowUs") then windowUs = state.windowUs
@@ -633,8 +654,15 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             state.lastPlaylistSequence = parsed.mediaSequence
             nlIncrement(state, "playlistCount")
             state.nextPoll = nowMs + parsed.targetDuration * 500&
-            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
+            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs, tail.sequence, tail.durationUs)
             if state.steadyMode then state.lastUpstreamProgress = nowMs
+            return
+        end if
+        if window.segments[window.segments.Count() - 1].sequence < state.publishedLast
+            ' A stale tail must not replace the window or consult retired history.
+            state.phase = "ready"
+            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs, tail.sequence, tail.durationUs)
+            if not state.pollFromRequest then state.nextPoll = nowMs + parsed.targetDuration * 500&
             return
         end if
         if state.sourceTransitions and state.started
@@ -648,7 +676,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
         end if
         if state.sourceTransitions and state.started
             nlEpochAcceptWindow(state, parsed, window)
-            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
+            nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs, tail.sequence, tail.durationUs)
             state.lastUpstreamProgress = nowMs
             return
         end if
@@ -676,7 +704,7 @@ sub nativeLiveFeed(state as object, kind as string, payload as dynamic, nowMs as
             state.phase = "init"
             if state.initIds.Count() = 2 then state.phase = "segment"
         end if
-        nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs)
+        nlAcceptPlaylistPoll(state, payload, parsed.targetDuration, nowMs, tail.sequence, tail.durationUs)
     else
         nlCheck(Type(payload) = "roByteArray", "binary payload must be bytearray")
         nlCheck(payload.Count() > 0 and payload.Count() <= intent.limit, "binary payload bound")

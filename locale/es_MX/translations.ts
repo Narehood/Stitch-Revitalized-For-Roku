@@ -432,6 +432,13 @@
             <translation>Cargando transmisión…</translation>
         </message>
         <message>
+            <source>Open channel</source>
+            <translation>Abrir canal</translation>
+        </message>
+        <message><source>Channel actions</source><translation>Acciones del canal</translation></message>
+        <message><source>Pin streamer</source><translation>Fijar streamer</translation></message>
+        <message><source>Unpin streamer</source><translation>Desfijar streamer</translation></message>
+        <message>
             <source>Exit player</source>
             <translation>Salir del reproductor</translation>
         </message>
@@ -1022,5 +1029,62 @@
         <message><source>Show the current pinned message above live chat. Press Down when player controls are hidden to read its full text. Experimental; updates may be delayed. Takes effect when opening a stream.</source><translation>Muestra el mensaje fijado sobre el chat en vivo. Pulsa Abajo con los controles del reproductor ocultos para leerlo completo. Experimental; las actualizaciones pueden tardar. Se aplica al abrir una transmisión.</translation></message>
         <message><source>Pinned message</source><translation>Mensaje fijado</translation></message>
         <message><source>Press Down to read the full message</source><translation>Pulsa Abajo para leer el mensaje completo</translation></message>
+        <message>
+            <source>Built-in Enhanced Broadcasting Splitter</source>
+            <translation>Separador integrado de Enhanced Broadcasting</translation>
+        </message>
+        <message>
+            <source>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</source>
+            <translation>Reproduce transmisiones compatibles con audio y video combinados en este Roku sin otra computadora. Los cambios se aplican al abrir una transmisión.</translation>
+        </message>
+        <message><source>Choose the startup quality. A preferred resolution falls back to the nearest lower option, or the lowest available if none is lower. You can still change quality while watching.</source><translation>Elige la calidad inicial. Si la resolución preferida no está disponible, se usa la más cercana de menor resolución, o la menor disponible si no hay ninguna inferior. Puedes cambiar la calidad mientras ves el video.</translation></message>
+        <message><source>Chat timing</source><translation>Sincronización del chat</translation></message>
+        <message><source>Match video delays messages to follow the stream. Live shows new messages as they arrive and may reveal reactions before the video. Takes effect when chat opens.</source><translation>Sincronizar con el video retrasa los mensajes para seguir la transmisión. En vivo muestra los mensajes al llegar y puede mostrar reacciones antes que el video. Se aplica al abrir el chat.</translation></message>
+        <message><source>Match video</source><translation>Sincronizar con el video</translation></message>
+        <message><source>Live (no added delay)</source><translation>En vivo (sin retraso adicional)</translation></message>
+        <message><source>Waiting for new messages…</source><translation>Esperando mensajes nuevos…</translation></message>
+        <message><source>Syncing chat with video…</source><translation>Sincronizando el chat con el video…</translation></message>
+        <message><source>Animate chat emotes</source><translation>Animar emotes del chat</translation></message>
+        <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Anima un emote visible a la vez en dispositivos Roku compatibles. Los demás emotes permanecen estáticos. Se aplica al abrir el chat.</translation></message>
+        <message><source>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</source><translation>Abre el chat en vivo con el diseño elegido. Puedes mostrar u ocultar el chat mientras ves un video. El chat está disponible en transmisiones en vivo.</translation></message>
+        <message><source>Chat layout</source><translation>Diseño del chat</translation></message>
+        <message><source>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</source><translation>Muestra el chat junto al video o sobre el video en pantalla completa. Se aplica al abrir el chat.</translation></message>
+        <message><source>Beside video</source><translation>Junto al video</translation></message>
+        <message><source>Over video</source><translation>Sobre el video</translation></message>
+        <message><source>Chat overlay position</source><translation>Posición del chat superpuesto</translation></message>
+        <message><source>Choose a corner for chat when Over video is selected.</source><translation>Elige una esquina para el chat cuando se selecciona Sobre el video.</translation></message>
+        <message><source>Top left</source><translation>Arriba a la izquierda</translation></message>
+        <message><source>Top right</source><translation>Arriba a la derecha</translation></message>
+        <message><source>Bottom left</source><translation>Abajo a la izquierda</translation></message>
+        <message><source>Bottom right</source><translation>Abajo a la derecha</translation></message>
+        <message><source>Chat overlay background</source><translation>Fondo del chat superpuesto</translation></message>
+        <message><source>Background opacity over video. Chat text and emotes stay fully visible.</source><translation>Opacidad del fondo sobre el video. El texto y los emotes del chat permanecen totalmente visibles.</translation></message>
+        <message><source>25%</source><translation>25%</translation></message>
+        <message><source>50%</source><translation>50%</translation></message>
+        <message><source>75%</source><translation>75%</translation></message>
+        <message><source>100%</source><translation>100%</translation></message>
+        <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
+        <message><source>Press Down or Back to hide controls</source><translation>Presiona Abajo o Atrás para ocultar los controles</translation></message>
+        <message><source>PINNED</source><translation>FIJADOS</translation></message>
+        <message><source>Press * to pin</source><translation>Presiona * para fijar</translation></message>
+        <message><source>Press * to unpin</source><translation>Presiona * para desfijar</translation></message>
+        <message><source>Press * to pin to sidebar ({0} max)</source><translation>Presiona * para fijar en la barra lateral (máx. {0})</translation></message>
+        <message><source>Press * to unpin from sidebar</source><translation>Presiona * para desfijar de la barra lateral</translation></message>
+        <message><source>Pin limit reached ({0}). Unpin a channel first.</source><translation>Límite de canales fijados ({0}). Desfija uno primero.</translation></message>
+        <message><source>Unfollow</source><translation>Dejar de seguir</translation></message>
+        <message><source>Sign in to follow</source><translation>Inicia sesión para seguir</translation></message>
+        <message><source>Check follow status</source><translation>Consultar seguimiento</translation></message>
+        <message><source>You can't follow your own channel.</source><translation>No puedes seguir tu propio canal.</translation></message>
+        <message><source>Checking follow status…</source><translation>Consultando seguimiento…</translation></message>
+        <message><source>Updating follow status…</source><translation>Actualizando seguimiento…</translation></message>
+        <message><source>Couldn't confirm follow status. Select again to check, or close this menu and try later.</source><translation>No se pudo confirmar si sigues este canal. Selecciona otra vez para consultar, o cierra el menú e inténtalo después.</translation></message>
+        <message><source>Not following this channel.</source><translation>No sigues este canal.</translation></message>
+        <message><source>Following this channel.</source><translation>Sigues este canal.</translation></message>
+        <message><source>Select again to refresh this menu.</source><translation>Selecciona otra vez para actualizar este menú.</translation></message>
+        <message><source>Press * for sidebar actions</source><translation>Pulsa * para opciones de la barra</translation></message>
+        <message><source>Pin to sidebar</source><translation>Fijar en la barra lateral</translation></message>
+        <message><source>Unpin from sidebar</source><translation>Desfijar de la barra lateral</translation></message>
+        <message><source>Remove from sidebar</source><translation>Quitar de la barra lateral</translation></message>
+        <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Los cambios de la barra lateral se guardan en este Roku y no cambian a quién sigues en Twitch.</translation></message>
     </context>
 </TS>

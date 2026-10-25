@@ -135,7 +135,7 @@ test('actual same-init MAP rotation retains approved assets and refuses changed 
         } finally {builder.program?.dispose();}
         const coreName = 'source/utils/rokuDemuxCore.brs';
         const fetch = sources.get('source/utils/rokuDemuxFetch.brs').toString();
-        const fetchBodies = ['nlInputPath', 'nativeLiveInputCleanup', 'nlCancelInput', 'nlSafeError',
+        const fetchBodies = ['nlInputPath', 'nativeLiveInputCleanup', 'nlCancelInput', 'nlSafeError', 'nlTimeout',
             'nativeLiveTick', 'nativeLiveDiagnostics', 'nativeLiveClose', 'rokuDemuxFeedInput']
             .map(name => exactFunction(fetch, name)).join('\n');
         await add('fetch-reference.brs', fetchBodies);

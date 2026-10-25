@@ -2,6 +2,11 @@
 sub main()
     m.selectionAssertions = 0
     m.selectionFailures = 0
+    for each health in [invalid, {}, { status: 3 }, { status: false }, { status: "ok" }, { status: "ok", version: "0.1.0" }, { status: "ok", selected_master_version: "1" }, { status: "error", selected_master_version: 1 }]
+        selectionCheck(not proxySupportsSelectedMaster(health), "legacy or malformed service does not advertise selected-master support")
+    end for
+    selectionCheck(proxySupportsSelectedMaster({ status: "ok", version: "0.3.0" }), "released service remains compatible before capability field")
+    selectionCheck(proxySupportsSelectedMaster({ status: "ok", version: "0.4.0", selected_master_version: 1 }), "future service negotiates explicit supported protocol")
     attrs = {
         "BANDWIDTH": "8042999", "AVERAGE-BANDWIDTH": "7999999", "RESOLUTION": "1920x1080", "FRAME-RATE": "60.000",
         "CODECS": "avc1.4D401F,mp4a.40.2", "AUDIO": "shared", "VIDEO": "shared", "SUBTITLES": "shared", "CLOSED-CAPTIONS": "captions",

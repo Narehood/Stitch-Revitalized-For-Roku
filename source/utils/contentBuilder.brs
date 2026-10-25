@@ -1,3 +1,8 @@
+' Shared stream geometry in the redesigned interface's HD coordinate space.
+function getStreamTile() as object
+    return { width: 320, height: 180, perRow: 3 }
+end function
+
 ' Returns row item size and height config for a given content type.
 ' contentType: string — the contentType field from a TwitchContentNode child
 ' hasRowLabel: boolean — whether the row has a visible label (affects height)
@@ -8,7 +13,8 @@ function getRowConfig(contentType, hasRowLabel as boolean, tallRows = false as b
     if contentType = invalid then return invalid
 
     if contentType = "LIVE" or contentType = "VOD" or contentType = "CLIP"
-        itemSize = [320, 180]
+        tile = getStreamTile()
+        itemSize = [tile.width, tile.height]
         if tallRows
             if hasRowLabel
                 rowHeight = 295

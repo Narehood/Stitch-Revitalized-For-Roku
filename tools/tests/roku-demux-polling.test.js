@@ -13,6 +13,7 @@ const root = path.resolve(__dirname, '../..');
 const fixture = path.join(__dirname, 'fixtures/roku-demux-polling');
 const names = ['rokuDemuxBulk', 'rokuDemuxCore', 'rokuDemuxFetch', 'rokuDemuxCommon', 'rokuDemuxProtocol'];
 const cases = ['default-and-trusted-server-wiring', 'changed-unchanged-source-target-floor',
+    'advancing-media-tail-header-unchanged-stale-and-recovery', 'short-fragment-profile-duration-clamps-and-legacy-manual-calls',
     'successful-dispatch-failure-and-timeout-retry', 'mixed-startup-and-epoch-conversion',
     'map-alias-terminal-and-private-snapshot-release', 'unchanged-publication-deadline-and-clock-quota-bounds'];
 
@@ -132,7 +133,7 @@ async function withFixture(run) {
     }
 }
 
-test('actual Core/Fetch request-start scheduling preserves source floors, default path, conversion and cleanup', {timeout: 60000}, async t => {
+test('actual Core/Fetch media-tail cadence preserves request anchoring, default path, conversion and cleanup', {timeout: 60000}, async t => {
     await withFixture(async ({execute}) => {
         const result = await execute();
         t.diagnostic(JSON.stringify(positive(result, result.marker)));
@@ -140,14 +141,26 @@ test('actual Core/Fetch request-start scheduling preserves source floors, defaul
     });
 });
 
-test('publication reset, source floor, dispatch and trusted wiring mutations fail at normal exit', {timeout: 150000}, async t => {
+test('publication, tail progression, duration bounds, dispatch and trusted wiring mutations fail at normal exit', {timeout: 180000}, async t => {
     await withFixture(async ({execute}) => {
         for (const mutation of [
             {file: 'source/utils/rokuDemuxCore.brs', before: 'if not state.pollFromRequest then state.nextPoll = nowMs + window.targetDuration * 500&',
                 after: 'state.nextPoll = nowMs + window.targetDuration * 500&', failure: 'publication preserves successful request source floor'},
-            {file: 'source/utils/rokuDemuxCore.brs', before: 'interval = target * 1000&', after: 'interval = target * 500&', failure: 'first changed source waits full target from dispatch'},
-            {file: 'source/utils/rokuDemuxCore.brs', before: 'if state.playlistSnapshot = text then interval = target * 500&', after: "' Removed unchanged snapshot half target", failure: 'identical source uses half target without fabricated publication'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: '\n    interval = target * 1000&', after: '\n    interval = target * 500&', failure: 'first changed source waits full target from dispatch'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'if state.playlistSnapshot = text then interval = target * 500&', after: "' Removed unchanged snapshot half target", failure: 'legacy manual unchanged call retains half target'},
             {file: 'source/utils/rokuDemuxCore.brs', before: 'state.nextPoll = state.playlistRequestStartedAt + interval', after: 'state.nextPoll = nowMs + interval', failure: 'first changed source waits full target from dispatch'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'interval = (lastDurationUs + 999&) \\ 1000&', after: 'interval = target * 1000&', failure: 'advancing short tail schedules its duration from dispatch'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'if state.DoesExist("playlistLastTail") then advancing = lastSequence > state.playlistLastTail',
+                after: 'if state.DoesExist("playlistSnapshot") then advancing = state.playlistSnapshot <> text', failure: 'header-only target change uses half new declared target'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'if advancing then state.playlistLastTail = lastSequence', after: 'state.playlistLastTail = lastSequence', failure: 'stale response keeps maximum tail and half declared target'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'if interval < 1000& then interval = 1000&', after: "' Removed safe minimum", failure: 'advancing tail uses integer ceiling with one second floor and declared target cap'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'interval = (lastDurationUs + 999&) \\ 1000&', after: 'interval = lastDurationUs \\ 1000&', failure: 'advancing tail uses integer ceiling with one second floor and declared target cap'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'if interval > target * 1000& then interval = target * 1000&', after: "' Removed declared target cap", failure: 'advancing tail uses integer ceiling with one second floor and declared target cap'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'nearEdge and state.sourceTransitions and state.started', after: 'nearEdge and state.sourceTransitions', failure: 'first changed source waits full target from dispatch'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'nearEdge and state.sourceTransitions and state.started', after: 'nearEdge and state.started', failure: 'long missing delayed or nontransition profile keeps changed full target'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'state.windowUs <= 8000000&', after: 'state.windowUs <= 14000000&', failure: 'long missing delayed or nontransition profile keeps changed full target'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'and state.delayUs = 0& and lastSequence', after: 'and lastSequence', failure: 'long missing delayed or nontransition profile keeps changed full target'},
+            {file: 'source/utils/rokuDemuxCore.brs', before: 'and lastDurationUs < 2500000&', after: '', failure: 'longer fragment scalar retains changed full target'},
             {file: 'source/utils/rokuDemuxFetch.brs', before: 'if intent.kind = "playlist" then nativeLivePlaylistStarted(state, nowMs)', after: "' Removed successful GET callback", failure: 'successful actual GET records request dispatch'},
             {file: 'components/Tasks/RokuDemuxServer/RokuDemuxServer.brs', before: 'state.pollFromRequest = m.top.lowLatency', after: 'state.pollFromRequest = true', failure: 'trusted default retains14s and original polling'}
         ]) {

@@ -112,7 +112,7 @@ sub handleRecommendedSections()
             row = createObject("RoSGNode", "ContentNode")
             row.title = tr("followedLiveUsers")
             first = true
-            itemsPerRow = 3
+            itemsPerRow = getStreamTile().perRow
             appended = false
             for i = 0 to (rsp.liveFollows.count() - 1) step 1
                 if first
@@ -181,6 +181,8 @@ sub handleRecommendedSections()
         ? "[Following] handleRecommendedSections: offline follows parse error: "; e
     end try
     if contentCollection.getChildCount() = 0
+        m.rowlist.content = contentCollection
+        m.rowlist.numRows = 0
         setPageStatus("empty", tr("You're not following anyone yet"), tr("Channels you follow on Twitch appear here. Find something to watch in Browse."), ["browse"])
         return
     end if
@@ -252,6 +254,15 @@ end sub
 
 sub onGetFocus()
     if m.disposed then return
+    ' focusedChild also notifies when a retained page loses focus.
+    if not m.top.IsInFocusChain()
+        updateRowListFocusFeedback()
+        return
+    end if
+    if m.top.followRefreshPending
+        m.top.followRefreshPending = false
+        loadFollowing()
+    end if
     ' While the status panel offers actions, it holds page focus.
     if not focusStatusIfActive()
         if m.rowlist.focusedChild = invalid
@@ -269,7 +280,7 @@ end sub
 sub updateRowListFocusFeedback()
     if m.rowlist = invalid then return
     hasFocus = false
-    if m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
+    if m.top.IsInFocusChain() and m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
         hasFocus = true
     end if
     m.rowlist.drawFocusFeedback = hasFocus

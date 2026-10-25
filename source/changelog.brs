@@ -3,6 +3,29 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.9": [
+            "3.0.7 release (Roku package version 3.0.9)",
+            "New: Pin streamers with Options; pinned channels stay first in the left rail",
+            "Pins: Author badges and emotes refresh independently of chat sync",
+            "New: Save a preferred startup resolution with a lower-quality fallback",
+            "New: Choose chat timing: Match video or Live",
+            "Fix: Chat shows when it is waiting or syncing, and stays stopped while hidden",
+            "Fix: Unicode emoji and BTTV/7TV images, including recent-channel emotes",
+            "New: Animate one visible BTTV or 7TV emote at a time on compatible Roku devices",
+            "New: Twitch subscriber GIF attachments with readable title fallbacks",
+            "New: Translucent chat over full-size video with four corner positions",
+            "Fix: Pinned emotes, mention highlighting and invisible chat characters",
+            "Improved: Settings scroll indicators and player controls dismissal hints",
+            "Fix: Channel live thumbnails, player viewer counts and recent-avatar focus alignment",
+            "Fix: Playback recovery allows startup time and cancels retries after playback resumes",
+            "Fix: Lower live latency refreshes advancing short segments more frequently",
+            "Fix: Stale playlists cannot rewind the Roku-only media window",
+            "Fix: Backward live timeline changes no longer trigger a false stall",
+            "Fix: Settings opens on the saved choice and honors Audio Splitter Off",
+            "Improved: Clear connection and upgrade messages for the optional audio service",
+            "Fix: Sign-out request safety and optional diagnostics startup delivery",
+            "Retains the redesigned interface and experimental feature defaults"
+        ],
         "3.0.8": [
             "3.0.6 release (Roku package version 3.0.8)",
             "New: Subscription, gift, raid, Bits and reward notices in live chat",

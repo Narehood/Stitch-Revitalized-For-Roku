@@ -14,6 +14,7 @@ sub main()
     scene = m.screen.createScene("ModerationHost")
     m.screen.show()
     m.log = []
+    checkStartupLifecycle(scene)
 
     chat = createObject("roSGNode", "Chat")
     scene.appendChild(chat)
@@ -171,6 +172,121 @@ sub main()
     scene.removeChild(chat)
     checkPins(scene)
     finish()
+end sub
+
+sub checkStartupLifecycle(scene as object)
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.visible = false
+    chat.channel_id = "42"
+    chat.channel = "startup"
+    settle(80)
+    state = chat.callFunc("fixtureRead")
+    check(not state.job and state.emoteJob = invalid, "hidden startup creates neither chat nor emote worker")
+    chat.visible = true
+    waitUntil(chat, "job", true, "opening hidden chat starts its job")
+    state = chat.callFunc("fixtureRead")
+    job = chat.callFunc("fixtureJob")
+    emotes = state.emoteJob
+    check(emotes <> invalid and state.presentation = "connecting" and state.statusVisible, "opening chat starts both workers and shows connecting")
+
+    job.connectionState = "connected"
+    waitUntil(chat, "presentation", "waiting", "welcome waits for new messages")
+    check(chat.callFunc("fixtureRead").statusVisible, "IRC welcome keeps the empty-panel status visible")
+    job.deliveryState = "syncing"
+    waitUntil(chat, "presentation", "syncing", "queued messages show their video sync hold")
+    check(chat.callFunc("fixtureRead").status = "Syncing chat with video…", "sync status explains the intentional video delay")
+    chat.callFunc("fixtureTryRender", { tags: {}, parameters: "", command: { command: "USERNOTICE" }, moderationSeq: 0 })
+    settle(50)
+    check(chat.callFunc("fixtureRead").statusVisible and rows(chat).count() = 0, "an empty notice cannot dismiss the startup status")
+    chat.callFunc("fixtureTryRender", { tags: invalid, parameters: "bad" })
+    settle(50)
+    check(job.readyForNextComment and chat.callFunc("fixtureRead").statusVisible, "a failed render keeps the status visible and acknowledges the message")
+    job.moderation = { seq: 1, events: [event(1, "message", "removed")] }
+    waitUntil(chat, "seq", 1, "startup deletion arrives")
+    deliver(job, privmsg("removed", "101", "alice", "deleted"), 0)
+    check(rows(chat).count() = 0 and chat.callFunc("fixtureRead").statusVisible, "an in-flight deleted first message cannot dismiss the status")
+    deliver(job, privmsg("approved", "101", "alice", "first visible"), 1)
+    check(ids(rows(chat)) = "approved" and not chat.callFunc("fixtureRead").statusVisible, "only the first approved successful render dismisses the status")
+    job.deliveryState = "waiting"
+    settle(30)
+    check(not chat.callFunc("fixtureRead").statusVisible, "later quiet periods do not cover messages with startup status")
+
+    chat.visible = false
+    waitUntil(chat, "job", false, "hiding chat stops its job")
+    state = chat.callFunc("fixtureRead")
+    check(state.emoteJob = invalid and emotes.stopRequested and emotes.control = "stop" and emotes.getParent() = invalid, "hiding chat cancels and detaches an unfinished emote fetch")
+    check(state.emoteChannel = "", "canceled emote fetch is never marked complete")
+    emotes.completed = true
+    job.connectionState = "unavailable"
+    job.deliveryState = "syncing"
+    job.moderation = { seq: 2, events: [event(2, "room", "")] }
+    job.nextCommentObj = withIdentity(privmsg("hidden", "101", "alice", "late"), 2)
+    settle(50)
+    check(chat.callFunc("fixtureRead").presentation = "stopped" and ids(rows(chat)) = "approved", "hidden workers cannot publish status, completion, moderation or messages")
+
+    chat.visible = true
+    waitUntil(chat, "job", true, "reopening chat starts fresh jobs")
+    state = chat.callFunc("fixtureRead")
+    fresh = chat.callFunc("fixtureJob")
+    freshEmotes = state.emoteJob
+    check(freshEmotes <> invalid and not freshEmotes.isSameNode(emotes) and not fresh.isSameNode(job), "unfinished emote loading retries on reopen")
+    chat.callFunc("fixtureStaleEvent", job)
+    chat.callFunc("fixtureStaleEvent", emotes)
+    check(chat.callFunc("fixtureRead").presentation = "connecting" and ids(rows(chat)) = "approved", "already-queued callbacks from old workers are rejected by node identity")
+    check(chat.callFunc("fixtureRead").emoteJob.isSameNode(freshEmotes), "stale completion cannot release the replacement emote fetch")
+    freshEmotes.cacheComplete = true
+    freshEmotes.completed = true
+    settle(50)
+    state = chat.callFunc("fixtureRead")
+    check(state.emoteJob = invalid and state.emoteChannel = "startup" and freshEmotes.getParent() = invalid, "completed emote loading releases its observer and remembers its cache")
+    chat.visible = false
+    waitUntil(chat, "job", false, "completed chat hides")
+    chat.visible = true
+    waitUntil(chat, "job", true, "completed chat reopens")
+    check(chat.callFunc("fixtureRead").emoteJob = invalid, "completed emote cache survives hide and reopen without another fetch")
+    chat.callFunc("onDestroy")
+    freshEmotes.completed = false
+    freshEmotes.completed = true
+    check(not chat.callFunc("fixtureRead").job and chat.callFunc("fixtureRead").emoteJob = invalid, "disposal leaves no worker and ignores completion")
+    scene.removeChild(chat)
+    checkEmoteIdentity(scene)
+    m.log = []
+end sub
+
+sub checkEmoteIdentity(scene as object)
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.channel = "late-id"
+    waitUntil(chat, "job", true, "chat starts before its channel ID arrives")
+    originalChat = chat.callFunc("fixtureJob")
+    initial = chat.callFunc("fixtureRead").emoteJob
+    check(initial <> invalid and initial.channel_id = "", "missing channel ID still permits global emotes and login-based badges")
+    initial.completed = true
+    settle(30)
+    check(chat.callFunc("fixtureRead").emoteChannel = "", "partial loading is never marked as a completed cache")
+    chat.channel_id = "42"
+    settle(30)
+    loading = chat.callFunc("fixtureRead").emoteJob
+    check(loading <> invalid and loading.channel_id = "42" and originalChat.isSameNode(chat.callFunc("fixtureJob")), "a late channel ID restarts only the emote loader")
+    chat.channel_id = "43"
+    settle(30)
+    updated = chat.callFunc("fixtureRead").emoteJob
+    check(loading.stopRequested and loading.getParent() = invalid and updated.channel_id = "43", "an updated channel ID cancels the old loader before starting its replacement")
+    updated.completed = true
+    settle(30)
+    check(chat.callFunc("fixtureRead").emoteJob = invalid and chat.callFunc("fixtureRead").emoteChannel = "", "provider partial failure releases the worker without caching a success marker")
+    chat.visible = false
+    waitUntil(chat, "job", false, "partial cache hides")
+    chat.visible = true
+    waitUntil(chat, "job", true, "partial cache retries on reopen")
+    retry = chat.callFunc("fixtureRead").emoteJob
+    check(retry <> invalid and retry.channel_id = "43", "provider partial failure can retry on a later reopen")
+    retry.cacheComplete = true
+    retry.completed = true
+    settle(30)
+    chat.callFunc("onDestroy")
+    scene.removeChild(chat)
 end sub
 
 sub checkPins(scene as object)

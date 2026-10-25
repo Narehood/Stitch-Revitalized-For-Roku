@@ -79,7 +79,7 @@ function requireFreshSummary(result, marker) {
     assert.equal(lines.length, 1, `expected one fresh fixture summary\n${detail}`);
     const counts = lines[0].match(/:\s*(\d+) assertions,\s*(\d+) cases$/);
     assert.ok(counts && Number(counts[1]) >= 140, detail);
-    assert.equal(Number(counts[2]), 31, detail);
+    assert.equal(Number(counts[2]), 39, detail);
     return counts;
 }
 
@@ -196,6 +196,10 @@ test('actual guarded content task preserves fixed identity, existing transports 
                 source: taskSource.replace(automaticPolicy,
                     '        if m.rokuDemuxEnabled then automatic = rokuDemuxAutomaticEntry(metadata)'),
                 failure: /STITCH_ROKU_DESCRIPTOR_FAIL: mixed ladder Automatic retains direct native preference/ },
+            { name: 'ignored-preferred-resolution',
+                source: taskSource.replace('index = playbackPreferredQualityIndex(metadata, preference)',
+                    'index = playbackPreferredQualityIndex(metadata, preference)\n    if preference = "1080p" then index = 0'),
+                failure: /STITCH_ROKU_DESCRIPTOR_FAIL: preferred resolution selects a complete existing contract/ },
         ]) {
             assert.notEqual(mutation.source, taskSource, `${mutation.name} must change the actual task`);
             await add(taskPath, mutation.source);
