@@ -2,15 +2,16 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.7](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.7)** adds preferred startup resolutions and chat timing choices, and reconciles community fixes for playback, Settings and the optional audio service while retaining the redesigned interface. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.9 so it updates correctly after the earlier release and alpha builds.
+**[3.1.0](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.1.0)** adds pinned streamers, preferred startup resolutions, richer chat and player channel actions, and reconciles community fixes for playback, Settings and the optional audio service while retaining the redesigned interface. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.1.0.
 
-**[Download the 3.0.7 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.7/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.1.0 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.1.0/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.7
+## What's new in 3.1.0
 
-- **Pinned streamers:** press **Options** on a recent streamer or their channel page, or use **Channel actions** in the player, to pin or unpin them. Pinned channels appear first in the left rail with a **PINNED** badge and survive recent-history changes. Each profile, including anonymous viewing, keeps its own pins.
+- **Pinned streamers:** press **Options** on a sidebar streamer or their channel page, or use **Channel actions** in the player, to pin or unpin them. The sidebar separates **Pinned** channels from **Live** recent channels, with labels outside the avatars. **Remove from sidebar** clears an individual channel's local pin and history without changing Twitch follows. Watching it again can add it back to recent history. Each profile, including anonymous viewing, keeps its own pins.
+- **Player channel actions:** open the streamer's channel to browse VODs and clips, pin or unpin them, or check Follow/Unfollow status. Opening a channel waits for playback cleanup; pinning keeps the stream playing.
 - **Startup quality:** choose a preferred resolution in **Settings → Video quality**. Stitch selects the closest lower supported resolution if that choice is unavailable, or the lowest available when none is lower. Automatic, Highest and Lowest remain available.
 - **Chat timing:** **Match video** keeps messages synchronized with playback; **Live (no added delay)** displays new messages as they arrive. Chat shows when it is waiting or syncing, and hidden chat stops its chat and emote workers.
 - **Chat layout:** Keep chat beside the video or choose **Over video** in Settings to retain full-size video. Choose a corner and background opacity; chat text and emotes remain opaque. Settings shows your position in scrollable lists, and player controls show how to hide them.
@@ -19,6 +20,7 @@ This checkout incorporates work from [jeremy-albinet's maintained fork](https://
 - **Live details:** channel pages restore missing live thumbnails, live player controls show a viewer-count snapshot, and the recent-channel focus ring is centered around its avatar.
 - **Settings:** choice lists open on the saved value, and a saved **Audio Splitter Off** preference is honored. New installations retain the existing On default.
 - **Optional audio service:** the channel verifies selected-master support before starting service playback and distinguishes connection failures from required upgrades. CloudFront hosts retain URL, DNS and redirect checks. Mixed MPEG-TS ads inside separated CMAF remain unsupported; native TS playback is preserved.
+- **Proxy container:** version 0.3.1 pins an updated Debian 13/Python base, refreshes CA certificates and verifies the patched Debian package and active trust store during image build and container CI. The checks reject emSign ECC Root CA - G3 and AAA Certificate Services; other emSign roots remain accepted.
 - **Account requests and diagnostics:** credentials are read once per request, startup diagnostics are delivered when opted in, and successful identification is deduplicated within the session.
 
 ### Also included from 3.0.6

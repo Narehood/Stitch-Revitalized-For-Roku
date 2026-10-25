@@ -10,6 +10,6 @@ async def health_handler(request: web.Request) -> web.Response:
 
     Response body::
 
-        {"status": "ok", "version": "0.3.0", "selected_master_version": 1}
+        {"status": "ok", "version": "0.3.1", "selected_master_version": 1}
     """
     return web.json_response({"status": "ok", "version": __version__, "selected_master_version": 1})

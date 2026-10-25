@@ -1,9 +1,19 @@
 # syntax=docker/dockerfile:1
 
+# Refresh once for both stages; tag and multiarch index verified on 2026-10-25.
+FROM python:3.14.9-slim-trixie@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8 AS base
+
+COPY src/fmp4_demux_proxy/ca_trust.py /usr/local/bin/check-ca-trust.py
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && update-ca-certificates --fresh \
+    && python /usr/local/bin/check-ca-trust.py \
+    && rm -rf /var/lib/apt/lists/*
+
 # ---------------------------------------------------------------------------
 # Stage 1: builder -- install dependencies with uv (reproducible from lock)
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim AS builder
+FROM base AS builder
 
 # Pinned by digest for reproducible builds; Dependabot watches the `:TAG` part.
 # Tag/digest verified against GHCR; Dependabot maintains the pin.
@@ -30,7 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 # Stage 2: runtime -- minimal image, non-root user
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim AS runtime
+FROM base AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/Narehood/Stitch-Revitalized-For-Roku/tree/main/fmp4-demux-proxy" \
       org.opencontainers.image.description="HLS/fMP4 proxy that demuxes Twitch EB streams for Roku playback"

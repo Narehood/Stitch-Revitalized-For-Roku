@@ -44,7 +44,7 @@ jobs:
           uvx pip-audit==2.10.1 --disable-pip --require-hashes --strict -r runtime-requirements.txt
 
   container:
-    name: Container build and startup health
+    name: Container build, CA trust and startup health
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build container
-        run: docker build --tag fmp4-demux-proxy:ci fmp4-demux-proxy
+        run: docker build --pull --tag fmp4-demux-proxy:ci fmp4-demux-proxy
       - name: Verify container startup and health
         run: |
           docker run --detach --name fmp4-demux-proxy-ci \
@@ -80,6 +80,8 @@ jobs:
           assert "version" in body, body
           assert body["selected_master_version"] == 1, body
           PY
+      - name: Verify runtime CA package and Python trust store
+        run: docker exec fmp4-demux-proxy-ci python /usr/local/bin/check-ca-trust.py
       - name: Show container logs and clean up
         if: always()
         run: |
