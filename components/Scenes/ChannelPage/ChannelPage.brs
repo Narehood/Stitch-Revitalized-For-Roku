@@ -15,10 +15,44 @@ end sub
 
 sub updatePage()
     m.username.text = m.top.contentRequested.streamerDisplayName
+    updatePinHint()
     loadChannelInfo()
     m.GetShellTask = createApiTask("getChannelShell", "updateChannelShell", {
         params: { id: m.top.contentRequested.streamerLogin }
     })
+end sub
+
+sub updatePinHint()
+    hint = m.top.findNode("pinHint")
+    if RW_IsPinned(m.top.contentRequested.streamerLogin)
+        hint.text = tr("Press * to unpin from sidebar")
+    else
+        hint.text = Substitute(tr("Press * to pin to sidebar ({0} max)"), RW_MaxItems().ToStr())
+    end if
+end sub
+
+sub toggleChannelPin()
+    content = m.top.contentRequested
+    if content = invalid then return
+    entry = {
+        login: content.streamerLogin,
+        displayName: content.streamerDisplayName,
+        iconUrl: content.streamerProfileImageUrl,
+        id: content.streamerId
+    }
+    ' Prefer resolved metadata without mutating the shared navigation request.
+    if m.GetContentTask <> invalid
+        rsp = m.GetContentTask.response
+        if type(rsp) = "roAssociativeArray"
+            if rsp.streamerId <> invalid then entry.id = rsp.streamerId
+            if rsp.profileImageUrl <> invalid then entry.iconUrl = rsp.profileImageUrl
+        end if
+    end if
+    result = RW_SetPinned(entry, not RW_IsPinned(content.streamerLogin))
+    updatePinHint()
+    if result = "limit"
+        m.top.findNode("pinHint").text = Substitute(tr("Pin limit reached ({0}). Unpin a channel first."), RW_MaxItems().ToStr())
+    end if
 end sub
 
 ' One finite request on open or explicit Try again. The banner keeps its
@@ -229,6 +263,7 @@ end sub
 
 sub onGetFocus()
     if m.disposed then return
+    if m.top.contentRequested <> invalid then updatePinHint()
     ' While the status panel offers actions, it holds page focus.
     if not focusStatusIfActive() then FocusRowlist()
     updateRowListFocusFeedback()
@@ -252,7 +287,11 @@ sub onDestroy()
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
-    if press
+    if press and not m.disposed
+        if key = "options"
+            toggleChannelPin()
+            return true
+        end if
         if key = "back"
             m.top.backPressed = true
             return true

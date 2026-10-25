@@ -1058,5 +1058,11 @@
         <message><source>100%</source><translation>100%</translation></message>
         <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
         <message><source>Press Down or Back to hide controls</source><translation>Presiona Abajo o Atrás para ocultar los controles</translation></message>
+        <message><source>PIN</source><translation>PIN</translation></message>
+        <message><source>Press * to pin</source><translation>Presiona * para fijar</translation></message>
+        <message><source>Press * to unpin</source><translation>Presiona * para desfijar</translation></message>
+        <message><source>Press * to pin to sidebar ({0} max)</source><translation>Presiona * para fijar en la barra lateral (máx. {0})</translation></message>
+        <message><source>Press * to unpin from sidebar</source><translation>Presiona * para desfijar de la barra lateral</translation></message>
+        <message><source>Pin limit reached ({0}). Unpin a channel first.</source><translation>Límite de canales fijados ({0}). Desfija uno primero.</translation></message>
     </context>
 </TS>

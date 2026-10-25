@@ -10,6 +10,7 @@ This checkout incorporates work from [jeremy-albinet's maintained fork](https://
 
 ## What's new in 3.0.7
 
+- **Pinned streamers:** press **Options** on a recent streamer or their channel page to pin or unpin them. Pinned channels appear first in the left rail with a **PIN** badge and survive recent-history changes. Each profile, including anonymous viewing, keeps its own pins.
 - **Startup quality:** choose a preferred resolution in **Settings → Video quality**. Stitch selects the closest lower supported resolution if that choice is unavailable, or the lowest available when none is lower. Automatic, Highest and Lowest remain available.
 - **Chat timing:** **Match video** keeps messages synchronized with playback; **Live (no added delay)** displays new messages as they arrive. Chat shows when it is waiting or syncing, and hidden chat stops its chat and emote workers.
 - **Chat layout:** Keep chat beside the video or choose **Over video** in Settings to retain full-size video. Choose a corner and background opacity; chat text and emotes remain opaque. Settings shows your position in scrollable lists, and player controls show how to hide them.

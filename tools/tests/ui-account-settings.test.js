@@ -75,7 +75,7 @@ async function buildPackage(dir, marker, negative) {
     await addFile(dir, 'manifest', 'title=Offline Account and Settings Regression Fixture\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of [
         'source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/sceneFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/contentBuilder.brs',
+        'source/utils/sceneFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/contentBuilder.brs', 'source/utils/recentlyWatched.brs',
         'source/utils/playbackHls.brs',
         'settings/settings.json', 'components/SceneManager/Group/SceneManagerGroup.xml',
         'components/SceneManager/Group/SceneManagerGroup.brs', proxySource,

@@ -5,6 +5,8 @@ function getChangelog() as object
     return {
         "3.0.9": [
             "3.0.7 release (Roku package version 3.0.9)",
+            "New: Pin streamers with Options; pinned channels stay first in the left rail",
+            "Pins: Author badges and emotes refresh independently of chat sync",
             "New: Save a preferred startup resolution with a lower-quality fallback",
             "New: Choose chat timing: Match video or Live",
             "Fix: Chat shows when it is waiting or syncing, and stays stopped while hidden",

@@ -21,6 +21,7 @@ const zip = path.resolve(zipArg);
 const keys = {
     up: 'up', down: 'down', left: 'left', right: 'right', ok: 'return',
     back: 'escape', play: 'end', rewind: 'pageup', fastforward: 'pagedown',
+    options: 'insert',
 };
 const holdLimitMs = 3000;
 // brs-node releases a key 150 ms after its last terminal press and treats an

@@ -12,6 +12,7 @@ sub init()
     m.caption = m.top.findNode("caption")
     m.captionPlate = m.top.findNode("captionPlate")
     m.captionLabel = m.top.findNode("captionLabel")
+    m.captionHint = m.top.findNode("captionHint")
 
     ' Layout constants
     m.itemSpacing = 62 ' px between item origins
@@ -38,6 +39,12 @@ end sub
 ' Called on init and by refresh timer.
 sub buildItems()
     if m.disposed then return
+    selectedLogin = ""
+    previousIndex = m.currentIndex
+    sameAccount = m.accountSection = RW_Section()
+    if sameAccount and m.currentIndex < m.items.Count() then selectedLogin = m.items[m.currentIndex].itemData.login
+    m.accountSection = RW_Section()
+    m.liveStatusTask = destroyTask(m.liveStatusTask, "response")
     ' Remove previously created item children (tracked in m.items)
     if m.items.Count() > 0
         for each item in m.items
@@ -53,19 +60,29 @@ sub buildItems()
     m.max = m.visibleWindow - 1
     updateCaption()
 
-    history = RW_Load()
+    history = RW_LoadRail()
     if history = invalid or history.Count() = 0
         m.top.hasItems = false
         return
     end if
 
-    translationY = m.itemStartY
+    if sameAccount
+        m.currentIndex = previousIndex
+        for i = 0 to history.Count() - 1
+            if history[i].login = selectedLogin then m.currentIndex = i
+        end for
+        if m.currentIndex >= history.Count() then m.currentIndex = history.Count() - 1
+    end if
+    if m.currentIndex >= m.visibleWindow then m.min = m.currentIndex - m.visibleWindow + 1
+    m.max = m.min + m.visibleWindow - 1
+    translationY = m.itemStartY - m.min * m.itemSpacing
     index = 0
 
     for each entry in history
         item = CreateObject("roSGNode", "RecentlyWatchedItem")
         item.translation = [m.itemX, translationY]
         item.itemData = entry
+        item.focused = m.top.itemHasFocus and index = m.currentIndex
         item.visible = (index >= m.min and index <= m.max)
         m.top.appendChild(item)
         m.items.push(item)
@@ -73,6 +90,7 @@ sub buildItems()
         index += 1
     end for
     m.top.hasItems = m.items.Count() > 0
+    updateCaption()
 
     fetchLiveStatus()
 end sub
@@ -97,8 +115,12 @@ end sub
 ' Callback when live status task completes.
 ' rsp is an AA: login (lowercase) -> boolean
 ' Always resets all dots first so a failed/empty response clears stale state.
-sub onLiveStatusResponse()
+sub onLiveStatusResponse(event = invalid as dynamic)
     if m.disposed or m.liveStatusTask = invalid then return
+    if m.accountSection <> RW_Section() then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.liveStatusTask) then return
+    end if
     rsp = m.liveStatusTask.response
 
     ' Clear all dots unconditionally — empty AA means failure or all-offline.
@@ -106,7 +128,7 @@ sub onLiveStatusResponse()
         item.isLive = false
     end for
 
-    if rsp = invalid or rsp.Count() = 0
+    if type(rsp) <> "roAssociativeArray"
         updateCaption()
         return
     end if
@@ -116,7 +138,7 @@ sub onLiveStatusResponse()
         if data <> invalid and data.login <> invalid
             login = LCase(data.login)
             if rsp.doesExist(login)
-                item.isLive = rsp[login]
+                if GetInterface(rsp[login], "ifBoolean") <> invalid then item.isLive = rsp[login]
             end if
         end if
     end for
@@ -173,14 +195,23 @@ sub updateCaption()
     catch e
     end try
     if width <= 0 then width = len(name) * 11
-    m.captionPlate.width = width + 28
+    hint = tr("Press * to pin")
+    if data.pinned = true then hint = tr("Press * to unpin")
+    m.captionHint.text = hint
+    m.captionHint.translation = [width + 28, 0]
+    m.captionPlate.width = width + 42 + Len(hint) * 10
     ' Centre the 40px tooltip on the 64px focus footprint.
     m.caption.translation = [88, item.translation[1] + 12]
     m.caption.visible = true
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
-    if not press then return false
+    if not press or m.disposed then return false
+
+    if key = "options" and m.accountSection <> RW_Section()
+        buildItems()
+        return true
+    end if
 
     ' Left key: trap it — don't let focus escape further left
     if key = "left" then return true
@@ -227,6 +258,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
         updateCaption()
         return true
 
+    else if key = "options"
+        data = m.items[m.currentIndex].itemData
+        result = RW_SetPinned(data, data.pinned <> true)
+        if result = "pinned" or result = "unpinned" then buildItems()
+        return true
+
     else if key = "OK"
         if m.currentIndex >= m.items.Count() then return false
         selected = m.items[m.currentIndex]
@@ -236,6 +273,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
         content = CreateObject("roSGNode", "TwitchContentNode")
         content.contentType = "LIVE"
         content.streamerLogin = data.login
+        if data.id <> invalid then content.streamerId = data.id
         content.streamerDisplayName = data.displayName
         content.streamerProfileImageUrl = data.iconUrl
 

@@ -10,6 +10,7 @@
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/recentlyWatched.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/components/Modules/StatusPanel/StatusPanelHost.brs" />
     <children>
@@ -72,6 +73,9 @@
                 rowFocusAnimationStyle="fixedFocus">
                 <Font role="rowLabelFont" uri="pkg:/fonts/Archivo-Bold.otf" size="24" />
             </RowList>
+            <Label id="pinHint" color="0xADADB8FF" width="470" height="48" wrap="true" translation="[600,250]">
+                <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
+            </Label>
         </Group>
         <StatusPanel id="status" translation="[110, 330]" />
     </children>

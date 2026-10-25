@@ -16,6 +16,7 @@ sub init()
     m.footprints = []
     m.recentBar = m.top.findNode("recentlyWatchedBar")
     m.recentBar.observeField("contentSelected", "onRecentSelected")
+    m.recentBar.observeField("hasItems", "onRecentItemsChanged")
     m.menu = m.top.findNode("MenuBar")
     m.menu.showSearchIcon = false
     m.menu.menuOptionsText = [
@@ -79,6 +80,7 @@ sub ValidateUserLogin()
     if response = invalid then return
     if response.validationState = "invalid"
         cleanUserData()
+        if m.recentBar <> invalid then m.recentBar.callFunc("buildItems")
         m.menu.updateUserIcon = true
     end if
 end sub
@@ -333,6 +335,10 @@ end sub
 
 sub onLoginFinished()
     if m.disposed then return
+    if m.recentBar <> invalid
+        m.recentBar.itemHasFocus = false
+        m.recentBar.callFunc("buildItems")
+    end if
     m.menu.updateUserIcon = true
     if get_user_setting("device_code") = invalid
         startDeviceCode()
@@ -347,6 +353,10 @@ end sub
 
 sub onLogoutFinished()
     if m.disposed then return
+    if m.recentBar <> invalid
+        m.recentBar.itemHasFocus = false
+        m.recentBar.callFunc("buildItems")
+    end if
     ' Signing out from the Account panel returns to anonymous browsing;
     ' Settings rebuilds itself so its account row updates.
     target = "Settings"
@@ -406,6 +416,16 @@ sub onMenuRequest()
     if not isContentTab(target) then return
     m.menu.focusItem = target
     openPage(target)
+end sub
+
+sub onRecentItemsChanged()
+    if m.disposed or m.recentBar.hasItems or not m.recentBar.itemHasFocus then return
+    m.recentBar.itemHasFocus = false
+    if m.activeNode <> invalid
+        m.activeNode.setFocus(true)
+    else
+        m.menu.setFocus(true)
+    end if
 end sub
 
 sub onRecentSelected()
@@ -473,6 +493,7 @@ end sub
 sub onBackPressed()
     if m.disposed or m.activeNode = invalid then return
     if m.activeNode.backPressed = invalid or not m.activeNode.backPressed then return
+    if m.recentBar <> invalid then m.recentBar.callFunc("buildItems")
     if m.footprints.Count() > 0
         if m.activeNode <> invalid
             discardScene(m.activeNode)
@@ -536,6 +557,7 @@ function onKeyEvent(key, press) as boolean
     if key = "left"
         if m.activeNode.id <> "GamePage" and m.activeNode.id <> "ChannelPage" and m.activeNode.id <> "VideoPlayer"
             ' An empty rail has nothing to focus; keep focus on the page.
+            m.recentBar.callFunc("buildItems")
             if m.recentBar.hasItems <> true then return true
             m.recentBar.setFocus(true)
             m.recentBar.itemHasFocus = true
@@ -581,6 +603,7 @@ sub onDestroy()
     end if
     if m.recentBar <> invalid
         m.recentBar.unobserveField("contentSelected")
+        m.recentBar.unobserveField("hasItems")
     end if
     if m.menu <> invalid
         m.menu.unobserveField("buttonSelected")

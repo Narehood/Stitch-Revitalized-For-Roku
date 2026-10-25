@@ -35,6 +35,12 @@
                 height="64"
                 translation="[0, 0]"
             />
+            <Group id="pinBadge" translation="[17, 8]" visible="false">
+                <Rectangle color="0x18181BFF" width="30" height="16" />
+                <Label id="pinLabel" color="0xEFEFF1FF" width="30" height="16" horizAlign="center" vertAlign="center">
+                    <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="12" />
+                </Label>
+            </Group>
             <!-- Live indicator dot — sibling of CirclePoster (not nested) because
                  CirclePoster masks its children to a circle, clipping the dot. -->
             <Poster

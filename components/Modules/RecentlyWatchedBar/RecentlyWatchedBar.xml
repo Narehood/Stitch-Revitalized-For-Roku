@@ -2,6 +2,7 @@
 <component name="RecentlyWatchedBar" extends="Group">
     <interface>
         <function name="onDestroy" />
+        <function name="buildItems" />
         <field id="supportsDisposal" type="boolean" value="true" />
         <!-- Set true to give focus into the bar, false to release it back -->
         <field id="itemHasFocus" type="bool" value="false" onChange="onFocusToggle" alwaysNotify="true" />
@@ -38,6 +39,9 @@
             <Poster id="captionPlate" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x1F1F23FF" width="120" height="40" />
             <Label id="captionLabel" color="0xEFEFF1FF" height="40" vertAlign="center" translation="[14, 0]">
                 <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />
+            </Label>
+            <Label id="captionHint" color="0xADADB8FF" height="40" vertAlign="center">
+                <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
             </Label>
         </Group>
     </children>
