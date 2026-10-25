@@ -422,6 +422,13 @@
             <translation>Loading stream…</translation>
         </message>
         <message>
+            <source>Open channel</source>
+            <translation>Open channel</translation>
+        </message>
+        <message><source>Channel actions</source><translation>Channel actions</translation></message>
+        <message><source>Pin streamer</source><translation>Pin streamer</translation></message>
+        <message><source>Unpin streamer</source><translation>Unpin streamer</translation></message>
+        <message>
             <source>Exit player</source>
             <translation>Exit player</translation>
         </message>

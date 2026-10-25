@@ -1,5 +1,6 @@
 sub init()
     m.disposed = false
+    m.channelActionsOpen = false
     initAdCountdown()
     if m.adBadge <> invalid
         m.adBadge.adLabel = tr("Ad")
@@ -31,6 +32,8 @@ sub init()
     m.chatGroup = m.top.findNode("chatGroup")
     m.playPauseGroup = m.top.findNode("playPauseGroup")
     m.qualityGroup = m.top.findNode("qualityGroup")
+    m.channelGroup = m.top.findNode("channelGroup")
+    m.channelFocus = m.top.findNode("channelFocus")
     m.controlButton = m.top.findNode("controlButton")
     m.messagesButton = m.top.findNode("messagesButton")
     m.qualitySelectButton = m.top.findNode("qualitySelectButton")
@@ -186,8 +189,9 @@ sub layoutOverlay()
         if titleWidth > availableTitleWidth then titleWidth = availableTitleWidth
     end if
     m.videoTitle.maxWidth = titleWidth
-    ' Four 64 px buttons with 12 px gaps, centered in the video area.
-    m.controls.translation = [Int((width - 292) / 2), 178]
+    controlsWidth = 292
+    if m.top.channelAvailable then controlsWidth += 76
+    m.controls.translation = [Int((width - controlsWidth) / 2), 178]
     if m.loadingOverlay <> invalid then m.loadingOverlay.translation = [Int(width / 2), 360]
     if m.messageOverlay <> invalid then m.messageOverlay.translation = [Int((width - 640) / 2), 0]
     updateCaption()
@@ -210,6 +214,13 @@ sub updateLatencyTag()
     m.latencyTag.visible = m.top.lowLatency
 end sub
 
+sub onChannelAvailableChange()
+    if m.disposed or m.channelGroup = invalid then return
+    m.channelGroup.visible = m.top.channelAvailable
+    if not m.top.channelAvailable and m.currentFocusedButton = 4 then focusButton(2)
+    layoutOverlay()
+end sub
+
 function captionForButton(index as integer) as string
     if index = 0
         return tr("Exit player")
@@ -223,6 +234,8 @@ function captionForButton(index as integer) as string
         quality = m.top.selectedQuality
         if quality <> invalid and quality <> "" then return tr("Quality · {0}").replace("{0}", quality)
         return tr("Quality")
+    else if index = 4
+        return tr("Channel actions")
     end if
     return ""
 end function
@@ -604,10 +617,18 @@ sub hideOverlay()
 end sub
 
 sub onFadeAway()
+    if m.channelActionsOpen then return
     ' Only hide overlay if quality dialog is not visible
     if not m.qualityDialog.visible
         hideOverlay()
     end if
+end sub
+
+sub setChannelActionsOpen(open as boolean)
+    if m.disposed then return
+    m.channelActionsOpen = open
+    m.fadeAwayTimer.control = "stop"
+    if not open and m.isOverlayVisible then m.fadeAwayTimer.control = "start"
 end sub
 
 sub focusButton(buttonIndex)
@@ -622,6 +643,8 @@ sub focusButton(buttonIndex)
         m.playPauseFocus.visible = true
     else if buttonIndex = 3 ' Quality
         m.qualityFocus.visible = true
+    else if buttonIndex = 4
+        m.channelFocus.visible = true
     end if
     updateCaption()
 end sub
@@ -631,6 +654,7 @@ sub clearAllButtonFocus()
     m.chatFocus.visible = false
     m.playPauseFocus.visible = false
     m.qualityFocus.visible = false
+    m.channelFocus.visible = false
 end sub
 
 sub executeButtonAction()
@@ -645,6 +669,8 @@ sub executeButtonAction()
         togglePlayPause()
     else if m.currentFocusedButton = 3 ' Quality
         showQualityDialog()
+    else if m.currentFocusedButton = 4 and m.top.channelAvailable
+        m.top.channelActionsRequested = true
     end if
 end sub
 
@@ -772,6 +798,7 @@ end sub
 
 function onKeyEvent(key, press) as boolean
     if m.disposed then return false
+    if m.channelActionsOpen then return false
     ' ? "[StitchVideo] KeyEvent: "; key; " "; press
 
     if press
@@ -822,12 +849,16 @@ function handleMainKeys(key) as boolean
         if m.currentFocusedButton > 0
             focusButton(m.currentFocusedButton - 1)
         else
-            focusButton(3) ' Wrap to quality
+            lastButton = 3
+            if m.top.channelAvailable then lastButton = 4
+            focusButton(lastButton)
         end if
         return true
     else if key = "right"
         ' Live stream navigation: back(0) -> chat(1) -> play/pause(2) -> quality(3)
-        if m.currentFocusedButton < 3
+        lastButton = 3
+        if m.top.channelAvailable then lastButton = 4
+        if m.currentFocusedButton < lastButton
             focusButton(m.currentFocusedButton + 1)
         else
             focusButton(0) ' Wrap to back

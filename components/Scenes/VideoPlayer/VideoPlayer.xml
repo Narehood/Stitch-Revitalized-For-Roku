@@ -3,6 +3,8 @@
     <interface>
         <function name="onDestroy" />
         <function name="requestBack" />
+        <field id="channelRequested" type="node" />
+        <field id="channelPinChanged" type="boolean" alwaysNotify="true" />
         <field id="contentRequested" type="Node" onChange="handleContent" />
         <field id="contentStore" type="assocarray" />
         <field id="metadata" type="array" />
@@ -30,6 +32,7 @@
     <script type="text/brightscript" uri="pkg:/source/utils/twitchAdCountdown.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/recentlyWatched.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/analytics.brs" />
     <children>

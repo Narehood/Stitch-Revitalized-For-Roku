@@ -296,6 +296,8 @@ function buildNode(name)
     newNode.observeField("backPressed", "onBackPressed")
     newNode.observeField("contentSelected", "onContentSelected")
     if newNode.hasField("menuRequest") then newNode.observeField("menuRequest", "onMenuRequest")
+    if name = "VideoPlayer" then newNode.observeField("channelRequested", "onPlayerChannelRequested")
+    if name = "VideoPlayer" then newNode.observeField("channelPinChanged", "onPlayerPinChanged")
 
     ' Tree placement
     if name = "GamePage" or name = "ChannelPage" or name = "VideoPlayer"
@@ -325,6 +327,8 @@ sub discardScene(node as dynamic)
     ' Suppress navigation callbacks before component cleanup changes fields.
     node.unobserveField("backPressed")
     node.unobserveField("contentSelected")
+    if node.hasField("channelRequested") then node.unobserveField("channelRequested")
+    if node.hasField("channelPinChanged") then node.unobserveField("channelPinChanged")
     node.unobserveField("finished")
     if node.hasField("signedOut") then node.unobserveField("signedOut")
     if node.hasField("menuRequest") then node.unobserveField("menuRequest")
@@ -488,6 +492,43 @@ sub onContentSelected()
     end if
     m.activeNode.contentRequested = content
     m.activeNode.setfocus(true)
+end sub
+
+' Pinning refreshes the rail while the active Player keeps playback and focus.
+sub onPlayerPinChanged(event as object)
+    if m.disposed or m.activeNode = invalid then return
+    if not event.getRoSGNode().isSameNode(m.activeNode) then return
+    if m.recentBar <> invalid then m.recentBar.callFunc("buildItems")
+end sub
+
+' A finished Player is replaced, never retained as a playable footprint.
+sub onPlayerChannelRequested(event as object)
+    if m.disposed or m.activeNode = invalid then return
+    player = event.getRoSGNode()
+    if not player.isSameNode(m.activeNode) or not player.isSubtype("VideoPlayer") then return
+    if player.state <> "done" or player.channelRequested = invalid then return
+    content = player.channelRequested
+    m.activeNode = invalid
+    discardScene(player)
+    ' Opening a VOD from this very profile should return to the retained page.
+    if m.footprints.Count() > 0
+        previous = m.footprints.Peek()
+        if previous.isSubtype("ChannelPage") and previous.contentRequested <> invalid
+            if LCase(previous.contentRequested.streamerLogin) = LCase(content.streamerLogin)
+                m.activeNode = m.footprints.Pop()
+            end if
+        end if
+    end if
+    if m.activeNode = invalid
+        m.activeNode = buildNode("ChannelPage")
+        if m.activeNode = invalid then return
+        m.activeNode.contentRequested = content
+    end if
+    if m.activeNode.lastFocus <> invalid
+        m.activeNode.lastFocus.setFocus(true)
+    else
+        m.activeNode.setFocus(true)
+    end if
 end sub
 
 sub onBackPressed()

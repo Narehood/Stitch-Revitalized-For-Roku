@@ -1,6 +1,7 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    closeChannelActions(false)
     stopTwitchEngagement()
     if m.rokuSession = invalid then initRokuPlayback()
     stopPlaybackForDialog()
@@ -236,7 +237,9 @@ sub playContent(isRecovery = false as boolean)
     end if
 
     ' Clean up existing video node and its observers
+    closeChannelActions(false)
     if m.video <> invalid
+        m.video.unobserveField("channelActionsRequested")
         m.video.unobserveField("toggleChat")
         m.video.unobserveField("QualityChangeRequestFlag") ' StitchVideo specific
         m.video.unobserveField("qualityChangeRequest") ' StitchVideo specific
@@ -305,6 +308,8 @@ sub playContent(isRecovery = false as boolean)
     m.video.notificationInterval = 0.5 ' fire position/bufferingStatus every 500ms
 
     ' Add observers to the new video node
+    m.video.channelAvailable = playerChannelContent() <> invalid
+    m.video.observeField("channelActionsRequested", "onChannelActionsRequested")
     m.video.observeField("toggleChat", "onToggleChat")
     if isLiveContent
         m.video.observeField("QualityChangeRequestFlag", "onQualityChangeRequested") ' StitchVideo specific
@@ -461,6 +466,125 @@ sub cancelBookmarkWait()
     end if
 end sub
 
+' ChannelPage queries by login, independently of account authentication. Never
+' copy the playback ID, clip slug, URL or local descriptor into navigation.
+function playerChannelContent() as object
+    source = m.top.contentRequested
+    if source = invalid then return invalid
+    login = source.streamerLogin
+    if GetInterface(login, "ifString") = invalid then return invalid
+    login = login.Trim()
+    if not CreateObject("roRegex", "^[a-zA-Z0-9_]{1,25}$", "").IsMatch(login) then return invalid
+    content = CreateObject("roSGNode", "TwitchContentNode")
+    content.contentType = "STREAMER"
+    content.contentId = source.streamerId
+    content.streamerId = source.streamerId
+    content.streamerLogin = login
+    content.streamerDisplayName = source.streamerDisplayName
+    if content.streamerDisplayName = "" then content.streamerDisplayName = login
+    content.streamerProfileImageUrl = source.streamerProfileImageUrl
+    return content
+end function
+
+sub onChannelActionsRequested(event as object)
+    if m.disposed or m.isExiting or m.rokuExitPending or m.pendingChannel <> invalid or m.video = invalid then return
+    if not event.getRoSGNode().isSameNode(m.video) or not m.video.channelActionsRequested then return
+    if m.channelActionsDialog <> invalid then return
+    content = playerChannelContent()
+    if content = invalid then return
+    scene = m.top.GetScene()
+    if scene = invalid or scene.dialog <> invalid then return
+    m.channelActionsContent = content
+    m.channelActionsAccount = RW_Section()
+    m.channelActionsPinned = RW_IsPinned(content.streamerLogin)
+    pinLabel = tr("Pin streamer")
+    name = content.streamerDisplayName
+    if m.channelActionsPinned
+        pinLabel = tr("Unpin streamer")
+        name += " · " + tr("PIN")
+    end if
+    dialog = CreateObject("roSGNode", "StandardMessageDialog")
+    dialog.title = tr("Channel actions")
+    dialog.message = [name]
+    dialog.buttons = [tr("Open channel"), pinLabel, tr("Cancel")]
+    applyDialogPalette(dialog)
+    dialog.observeField("buttonSelected", "onChannelActionSelected")
+    dialog.observeField("wasClosed", "onChannelActionsClosed")
+    m.channelActionsDialog = dialog
+    m.video.callFunc("setChannelActionsOpen", true)
+    scene.dialog = dialog
+    dialog.SetFocus(true)
+end sub
+
+sub onChannelActionSelected(event as object)
+    if m.disposed or m.isExiting or m.channelActionsDialog = invalid then return
+    if not event.getRoSGNode().isSameNode(m.channelActionsDialog) then return
+    scene = m.top.GetScene()
+    if scene = invalid then return
+    if scene.dialog = invalid then return
+    if not scene.dialog.IsSameNode(m.channelActionsDialog) then return
+    selected = m.channelActionsDialog.buttonSelected
+    content = m.channelActionsContent
+    account = m.channelActionsAccount
+    pinned = m.channelActionsPinned
+    closeChannelActions()
+    ' An old dialog must never write into a newly selected account.
+    if account <> RW_Section() or content = invalid then return
+    if selected = 0
+        m.pendingChannel = content
+        m.allowBreak = true
+        m.PlayVideo = destroyTask(m.PlayVideo, "response")
+        exitPlayer()
+    else if selected = 1
+        result = RW_SetPinned({ login: content.streamerLogin, id: content.streamerId, displayName: content.streamerDisplayName, iconUrl: content.streamerProfileImageUrl }, not pinned)
+        if result = "pinned" or result = "unpinned"
+            m.top.channelPinChanged = true
+        else if result = "limit"
+            showTemporaryMessage(Substitute(tr("Pin limit reached ({0}). Unpin a channel first."), RW_MaxItems().ToStr()))
+        end if
+    end if
+end sub
+
+sub onChannelActionsClosed()
+    closeChannelActions()
+end sub
+
+sub closeChannelActions(restoreFocus = true as boolean)
+    dialog = m.channelActionsDialog
+    if dialog = invalid then return
+    m.channelActionsDialog = invalid
+    m.channelActionsContent = invalid
+    dialog.unobserveField("buttonSelected")
+    dialog.unobserveField("wasClosed")
+    scene = m.top.GetScene()
+    ownsFocus = true
+    if scene <> invalid and scene.dialog <> invalid
+        if scene.dialog.IsSameNode(dialog)
+            scene.dialog = invalid
+        else
+            ownsFocus = false
+        end if
+    end if
+    if restoreFocus and not m.disposed and not m.isExiting and m.video <> invalid
+        m.video.callFunc("setChannelActionsOpen", false)
+        if ownsFocus then m.video.SetFocus(true)
+    end if
+end sub
+
+' Both direct playback and the acknowledged local stop finish here. Publish
+' last: the root may permanently destroy this Player inside its observer.
+sub finishPlayerExit()
+    if m.disposed or m.top.state = "done" then return
+    m.top.state = "done"
+    if m.pendingChannel <> invalid
+        content = m.pendingChannel
+        m.pendingChannel = invalid
+        m.top.channelRequested = content
+    else
+        m.top.backPressed = true
+    end if
+end sub
+
 sub exitPlayer()
     m.liveReconnect = invalid
     pauseTwitchEngagement()
@@ -500,6 +624,7 @@ sub exitPlayer()
     cleanupReconnectTask()
 
     if m.video <> invalid
+        m.video.unobserveField("channelActionsRequested")
         m.video.unobserveField("toggleChat")
         if m.video.isSubtype("StitchVideo")
             m.video.unobserveField("QualityChangeRequestFlag")
@@ -516,8 +641,7 @@ sub exitPlayer()
 
     if m.allowBreak
         if not stopRokuPlayback(true)
-            m.top.state = "done"
-            m.top.backpressed = true ' Ensure this signals back correctly
+            finishPlayerExit()
         end if
     end if
 end sub
@@ -543,6 +667,7 @@ end function
 
 sub init()
     m.disposed = false
+    m.pendingChannel = invalid
     m.engagementTask = invalid
     m.engagementOwner = ""
     m.engagementGeneration = 0
@@ -1544,6 +1669,7 @@ function tryNativePlaybackFallback() as boolean
 end function
 
 sub stopPlaybackForDialog()
+    closeChannelActions(false)
     m.liveReconnect = invalid
     pauseTwitchEngagement()
     cancelBookmarkWait()
@@ -1599,6 +1725,7 @@ sub onDestroy()
     stopAdMetadata()
     if m.disposed then return
     m.disposed = true
+    m.pendingChannel = invalid
     stopTwitchEngagement()
     m.isExiting = true
     cancelBookmarkWait()
@@ -1614,6 +1741,7 @@ sub onDestroy()
     end if
     if m.video <> invalid
         m.video.callFunc("onDestroy")
+        m.video.unobserveField("channelActionsRequested")
         m.video.unobserveField("toggleChat")
         m.video.unobserveField("position")
         m.video.unobserveField("state")
@@ -1717,6 +1845,7 @@ sub stopTwitchEngagement()
 end sub
 
 sub closeOwnedPlayerDialogs()
+    closeChannelActions(false)
     scene = m.top.GetScene()
     for each dialog in [m.errorDialog, m.infoDialog, m.transmuxDialog]
         if dialog <> invalid

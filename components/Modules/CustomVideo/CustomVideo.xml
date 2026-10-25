@@ -5,6 +5,7 @@
     <interface>
         <field id="supportsDisposal" type="boolean" value="true" />
         <function name="onDestroy" />
+        <function name="setChannelActionsOpen" />
         <function name="showMessage" />
         <function name="hideMessage" />
         <function name="beginAdCountdown" />
@@ -14,6 +15,8 @@
         <field id="videoBookmarks" type="assocarray" />
         <field id="back" type="bool" value="false" />
         <field id="toggleChat" type="bool" value="false" />
+        <field id="channelAvailable" type="boolean" value="false" onChange="onChannelAvailableChange" />
+        <field id="channelActionsRequested" type="boolean" value="false" alwaysNotify="true" />
         <field id="chatIsVisible" type="bool" />
         <field id="streamLayoutMode" type="Integer" value="-1" />
         <field id="busySpinner" type="bool" />
@@ -124,6 +127,13 @@
                     <Poster id="chatBg" uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
                     <Poster id="chatFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
                     <Poster uri="pkg:/images/messages.png" width="28" height="28" loadDisplayMode="scaleToFit" translation="[18,10]" />
+                </Group>
+                <Group id="channelGroup" translation="[456,0]" visible="false">
+                    <Poster uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
+                    <Poster id="channelFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
+                    <Label width="64" height="48" horizAlign="center" vertAlign="center" text="↗" color="0xFFFFFFFF">
+                        <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
+                    </Label>
                 </Group>
             </Group>
         </Group>

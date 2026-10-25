@@ -189,8 +189,7 @@ sub onRokuSessionBusy()
     m.rokuPendingContent = invalid
     if m.rokuExitPending
         m.rokuExitPending = false
-        m.top.state = "done"
-        m.top.backPressed = true
+        finishPlayerExit()
     else
         m.rokuDeferredPlay = false
         playContent(m.rokuPlayRecovery)

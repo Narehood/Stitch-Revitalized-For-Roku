@@ -1,5 +1,6 @@
 sub init()
     m.disposed = false
+    m.channelActionsOpen = false
     initAdCountdown()
     if m.adBadge <> invalid
         m.adBadge.adLabel = tr("Ad")
@@ -41,8 +42,10 @@ sub init()
     m.timeTravelGroup = m.top.findNode("timeTravelGroup")
     m.chatGroup = m.top.findNode("chatGroup")
     m.backGroup = m.top.findNode("backGroup")
+    m.channelGroup = m.top.findNode("channelGroup")
+    m.channelFocus = m.top.findNode("channelFocus")
     m.controlButton = m.top.findNode("controlButton")
-    m.buttonGroups = [m.backGroup, m.timeTravelGroup, m.rewindGroup, m.playPauseGroup, m.fastForwardGroup, m.chatGroup]
+    m.buttonGroups = [m.backGroup, m.timeTravelGroup, m.rewindGroup, m.playPauseGroup, m.fastForwardGroup, m.chatGroup, m.channelGroup]
 
     ' Focus backgrounds
     m.playPauseFocus = m.top.findNode("playPauseFocus")
@@ -216,6 +219,13 @@ function focusedButtonNode() as object
     return m.buttonGroups[m.currentFocusedButton]
 end function
 
+sub onChannelAvailableChange()
+    if m.disposed or m.channelGroup = invalid then return
+    m.channelGroup.visible = m.top.channelAvailable and not m.isLiveStream
+    if not m.channelGroup.visible and m.currentFocusedButton = 6 then focusButton(3)
+    layoutControls()
+end sub
+
 function captionForButton() as string
     node = focusedButtonNode()
     if node = invalid then return ""
@@ -235,6 +245,8 @@ function captionForButton() as string
         if not m.isLiveStream then return tr("Chat replay unavailable")
         if m.top.chatIsVisible = true then return tr("Hide chat")
         return tr("Show chat")
+    else if node.isSameNode(m.channelGroup)
+        return tr("Channel actions")
     end if
     return ""
 end function
@@ -432,9 +444,18 @@ sub restartFade()
 end sub
 
 sub onFadeAway()
+    if m.channelActionsOpen then return
     ' A pending seek preview or the time dialog keeps the controls on screen.
     if m.isTimeTravelDialogOpen or m.isSeekMode then return
     hideOverlay()
+end sub
+
+sub setChannelActionsOpen(open as boolean)
+    if m.disposed then return
+    m.channelActionsOpen = open
+    if open then stopHold()
+    m.fadeAwayTimer.control = "stop"
+    if not open and m.isOverlayVisible then m.fadeAwayTimer.control = "start"
 end sub
 
 sub focusButton(buttonIndex)
@@ -467,6 +488,8 @@ sub focusButton(buttonIndex)
             m.fastForwardFocus.visible = true
         else if buttonIndex = 5 ' Chat
             m.chatFocus.visible = true
+        else if buttonIndex = 6
+            m.channelFocus.visible = true
         end if
     end if
     updateCaption()
@@ -480,9 +503,15 @@ sub clearAllButtonFocus()
     m.timeTravelFocus.visible = false
     m.chatFocus.visible = false
     m.backFocus.visible = false
+    m.channelFocus.visible = false
 end sub
 
 sub executeButtonAction()
+    if m.disposed then return
+    if not m.isLiveStream and m.currentFocusedButton = 6 and m.top.channelAvailable
+        m.top.channelActionsRequested = true
+        return
+    end if
     if m.isLiveStream
         ' Live stream button actions
         if m.currentFocusedButton = 0 ' Back
@@ -950,6 +979,8 @@ sub hideLoadingOverlay()
 end sub
 
 function onKeyEvent(key, press) as boolean
+    if m.disposed then return false
+    if m.channelActionsOpen then return false
     ? getLogTimestamp(); " [CustomVideo] KeyEvent: "; key; " "; press
 
     if press
@@ -1003,7 +1034,9 @@ function handleMainKeys(key) as boolean
             if m.currentFocusedButton > 0
                 focusButton(m.currentFocusedButton - 1)
             else
-                focusButton(5) ' Wrap to chat button
+                lastButton = 5
+                if m.top.channelAvailable then lastButton = 6
+                focusButton(lastButton)
             end if
         end if
         return true
@@ -1017,7 +1050,9 @@ function handleMainKeys(key) as boolean
             end if
         else
             ' Normal navigation
-            if m.currentFocusedButton < 5
+            lastButton = 5
+            if m.top.channelAvailable then lastButton = 6
+            if m.currentFocusedButton < lastButton
                 focusButton(m.currentFocusedButton + 1)
             else
                 focusButton(0) ' Wrap to back button

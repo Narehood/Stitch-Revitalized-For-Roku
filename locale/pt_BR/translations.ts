@@ -430,6 +430,13 @@
             <translation>Carregando transmissão…</translation>
         </message>
         <message>
+            <source>Open channel</source>
+            <translation>Abrir canal</translation>
+        </message>
+        <message><source>Channel actions</source><translation>Ações do canal</translation></message>
+        <message><source>Pin streamer</source><translation>Fixar streamer</translation></message>
+        <message><source>Unpin streamer</source><translation>Desafixar streamer</translation></message>
+        <message>
             <source>Exit player</source>
             <translation>Sair do player</translation>
         </message>
