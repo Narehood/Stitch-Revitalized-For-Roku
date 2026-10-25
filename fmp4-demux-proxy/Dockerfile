@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Refresh once for both stages; tag and multiarch index verified on 2026-10-25.
-FROM python:3.15.0-slim-trixie@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS base
+FROM python:3.15.1-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS base
 
 COPY src/fmp4_demux_proxy/ca_trust.py /usr/local/bin/check-ca-trust.py
 RUN apt-get update \

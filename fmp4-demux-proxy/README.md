@@ -36,7 +36,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Compose passes supported settings from `.env` and uses a read-only filesystem, nonroot user, no Linux capabilities, and memory/process limits. The image uses Python 3.15.0 on Debian Trixie and a uv installer, both pinned by multiarch digest, with locked production dependencies.
+Compose passes supported settings from `.env` and uses a read-only filesystem, nonroot user, no Linux capabilities, and memory/process limits. The image uses Python 3.15.1 on Debian Trixie and a uv installer, both pinned by multiarch digest, with locked production dependencies.
 
 The shared build/runtime base refreshes `ca-certificates` and regenerates the system store. Builds and container CI require Debian's patched package `20250419+deb13u1` or newer and check Python's active TLS roots, including OpenSSL's hashed CA directory. The check rejects the exact DER SHA-256 fingerprints of **emSign ECC Root CA - G3** and **AAA Certificate Services** (Debian's label: "Comodo AAA Services root"), following the [Debian security update](https://tracker.debian.org/news/1813397/accepted-ca-certificates-20250419deb13u1-source-into-stable-security/). Other eMudhra/emSign roots remain governed by Debian's trust policy; this is not a blanket issuer ban. TLS certificate and hostname verification stay enabled.
 
