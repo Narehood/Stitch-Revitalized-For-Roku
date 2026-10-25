@@ -7,6 +7,7 @@ sub main()
         testLateBindingAndOrdinaryPaths()
         testChoiceReadyAndBack()
         testNativeLiveStartupWindow()
+        ' Core skips this group; crash-recovery runs it separately.
         testNativeRecoveryStartupDeadline()
         testObsoleteLiveReconnect()
         testFailedRefreshRecoveryOwnership()

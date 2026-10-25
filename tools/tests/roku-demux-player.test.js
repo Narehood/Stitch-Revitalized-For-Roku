@@ -61,6 +61,15 @@ async function fixture(name) {
     return fs.readFile(path.join(fixtures, name), 'utf8');
 }
 
+function selectRecoveryEntry(main, recoveryOnly) {
+    const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
+    assert.ok(start, 'fixture main entry required');
+    const recoveryCalls = ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()'];
+    for (const call of recoveryCalls) assert.equal(start.split(call).length, 2, `one actual ${call} entry required`);
+    return main.replace(start, start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
+        || recoveryCalls.includes(line.trim()) === recoveryOnly).join('\n'));
+}
+
 async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, 'manifest', 'title=Roku Player Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
@@ -203,7 +212,11 @@ async function buildPackage(dir, marker, mode = 'normal') {
         await addFile(dir, playerPath, script.replace(start, 'if m.rokuLowLatency then contentNodeToPlay.PlayStart = 4'));
     }
     let main = await fixture('main.brs');
-    if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
+    if (mode === 'normal' || mode === 'crash-recovery') {
+        // The dedicated recovery run owns this expensive trio; core keeps all
+        // remaining cases within the unchanged per-child time budget.
+        main = selectRecoveryEntry(main, mode === 'crash-recovery');
+    } else if (['repeated-retry', 'fixed-retry-wait', 'dropped-retry'].includes(mode)) {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testFailedRetryAndRecovery()'));
         const retryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line) || line.trim() === 'testFailedRetryAndRecovery()').join('\n');
@@ -221,11 +234,6 @@ async function buildPackage(dir, marker, mode = 'normal') {
         const summaryOnly = start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
             || line.trim() === 'testChoiceReadyAndBack()').join('\n');
         main = main.replace(start, summaryOnly);
-    } else if (mode === 'crash-recovery') {
-        const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
-        assert.ok(start?.includes('    testNativeRecoveryStartupDeadline()'));
-        main = main.replace(start, start.split(/\r?\n/).filter(line => !/^\s+test/.test(line)
-            || ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()'].includes(line.trim())).join('\n'));
     } else if (mode === 'native-live-start' || mode === 'late-native-start') {
         const start = main.match(/sub main\(\)[\s\S]*?end sub/)?.[0];
         assert.ok(start?.includes('    testNativeLiveStartupWindow()'));
@@ -359,6 +367,20 @@ async function runFixture(mode = 'normal') {
         await fs.rm(resolved, { recursive: true, force: true });
     }
 }
+
+test('core and dedicated recovery entries cover every actual fixture case once', async () => {
+    const main = await fixture('main.brs');
+    const cases = source => source.match(/sub main\(\)[\s\S]*?end sub/)[0]
+        .match(/^\s+test\w+\(\)/gm).map(line => line.trim());
+    const core = cases(selectRecoveryEntry(main, false));
+    const recovery = cases(selectRecoveryEntry(main, true));
+    assert.deepEqual(recovery, ['testNativeRecoveryStartupDeadline()', 'testObsoleteLiveReconnect()', 'testFailedRefreshRecoveryOwnership()']);
+    const combined = [...core, ...recovery];
+    assert.equal(new Set(combined).size, combined.length, 'core and recovery must not repeat cases');
+    assert.deepEqual(combined.sort(), cases(main).sort(), 'every original entry must still run');
+    const declared = [...main.matchAll(/^sub (test\w+)\(\)/gm)].map(match => `${match[1]}()`);
+    assert.deepEqual(combined, declared.sort(), 'every actual test method must have an entry');
+});
 
 test('actual player callbacks start eligible Roku playback, session ready, retry, quality switch, Back and disposal', { timeout: 90000 }, async t => {
     const { result, marker } = await runFixture();
