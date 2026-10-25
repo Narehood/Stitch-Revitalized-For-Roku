@@ -4,6 +4,7 @@ Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATIO
 
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
+| P1 | Add safe mixed-container ad support to the external demux service | Combined MPEG-TS segments are rejected on separated CMAF renditions; native TS passthrough remains supported. Convert or separate tracks with matching initialization and discontinuity timelines, cover media/parts/prefetches and byte ranges, and verify picture/audio across a real proxied ad boundary on Roku before enabling the fallback |
 | P1 | Validate the community integration candidate on Roku before release | The community-based branch keeps the redesigned HD interface and bounded playback, preserves stored splitter Off preferences, and adds proxy protocol negotiation. Run fresh native playback/audio, ads, legacy-service upgrade, chat, VOD seek and sustained-session checks; previous branch evidence is not verification of this candidate |
 | P2 | Port the redesigned interface to a coherent FHD coordinate space | Community main uses 1920x1080 and four stream tiles per row; the selected redesign remains internally consistent at 1280x720. Port all geometry, masks, focus, chat and controls together and verify both HD and FHD devices before changing the manifest |
 | P3 | Restore the community developer Anonymous preview in the redesigned navigation | Keep real anonymous browsing independent of sign-in; preview mode needs explicit SDK request/error behavior and navigation coverage rather than only a renamed tab |

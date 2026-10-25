@@ -85,6 +85,8 @@ Do not disable the allowlist to repair a new CDN hostname. Verify the actual str
 
 Demux currently supports unencrypted fragments with movie-fragment-relative addressing, explicit sample-run offsets and resolvable sample sizes. Absolute/implicit fragment addressing, encrypted combined fragments, and open-ended preload ranges fail explicitly. A CDN that ignores a requested source byte range is also rejected. These constraints need captured-stream evidence before the splitter is extended.
 
+A demuxed CMAF stream that changes to MPEG-TS during an ad is unsupported and returns 502 for those segments. The service does not send a combined transport stream into either separated rendition. Native MPEG-TS playlists still use the ordinary passthrough path. Mixed-container transitions need track separation, matching initialization and timeline handling, and Roku ad-boundary verification before support can be enabled.
+
 A passing health check proves the service is reachable, not that a Roku can decode a selected stream. Confirm picture, audible audio, quality changes, VOD seeking and sustained playback on the target device.
 
 ## Development
