@@ -66,7 +66,7 @@ function accept(result, marker, sg = false) {
     assert.ok(count && Number(count[1]) > 0, `missing fresh nonzero test summary\n${result.output.slice(-12000)}`);
     return Number(count[1]);
 }
-async function execute(build, sg = false) {
+async function execute(build, sg = false, validate = accept, timeout = 60000) {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stitch-chat-animation-'));
     const marker = `CHAT_ANIMATION_PASS_${randomUUID()}`;
     try {
@@ -75,11 +75,11 @@ async function execute(build, sg = false) {
             const zip = path.join(dir, 'app.zip');
             await zipFolder(path.join(dir, 'package'), zip);
             const driver = path.join(__dirname, 'fixtures/ui-startup-player/key-driver.js');
-            const result = await run([driver, cli, zip], dir, 60000);
-            return accept(result, marker, true);
+            const result = await run([driver, cli, zip], dir, timeout);
+            return validate(result, marker, true);
         }
         const files = (await fs.readdir(dir)).filter(name => name.endsWith('.brs'));
-        return accept(await run([cli, '--no-sg', '--root', dir, ...files], dir), marker);
+        return validate(await run([cli, '--no-sg', '--root', dir, ...files], dir), marker);
     } finally {
         assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
         assert.ok(path.basename(dir).startsWith('stitch-chat-animation-'));
@@ -246,6 +246,59 @@ async function buildChat(dir, marker, nativeMutation = '', scenario = 'testChatA
     await add(dir, 'one-mib.webp', corpus.cases.find(sample => sample.name === 'one-mib').bytes);
     for (const font of ['Archivo-Regular.otf', 'Archivo-Bold.otf']) await copy(dir, `fonts/${font}`);
 }
+
+// Keep enclosing-Player disposal separate from the existing renderer/cache entries.
+async function buildPlayerDisposal(dir, marker, mutation = '') {
+    await buildChat(dir, marker, mutation, 'testPlayerDisposal');
+    const pkg = path.join(dir, 'package');
+    await copy(pkg, 'source/utils/lifecycle.brs');
+    for (const [component, file, handlers] of [
+        ['PlayerDisposalHero', 'components/heroScene.brs', ['onBackPressed', 'discardScene']],
+        ['PlayerDisposalPlayer', 'components/Scenes/VideoPlayer/VideoPlayer.brs', ['requestBack', 'exitPlayer', 'finishPlayerExit', 'onDestroy']],
+    ]) {
+        const source = await fs.readFile(path.join(root, file), 'utf8');
+        const extracted = handlers.map(name => {
+            const matches = [...source.matchAll(new RegExp(`^(?:sub|function) ${name}\\([^]*?^end (?:sub|function)\\b`, 'gmi'))];
+            assert.equal(matches.length, 1, `one complete production ${file}:${name} required`);
+            assert.equal([...matches[0][0].matchAll(/^(?:sub|function)\b/gmi)].length, 1, 'extraction crossed a function boundary');
+            return matches[0][0];
+        });
+        const shell = await fixture(`${component}.brs`);
+        assert.equal(shell.split("' __PRODUCTION_HANDLERS__").length, 2);
+        await add(pkg, `components/${component}.brs`, shell.replace("' __PRODUCTION_HANDLERS__", () => extracted.join('\n\n')));
+        await add(pkg, `components/${component}.xml`, await fixture(`${component}.xml`));
+    }
+    const main = await fs.readFile(path.join(pkg, 'source/main.brs'), 'utf8');
+    assert.equal(main.split('createScene("PhaseTwoHost")').length, 2);
+    await add(pkg, 'source/main.brs', main.replace('createScene("PhaseTwoHost")', 'createScene("PlayerDisposalHero")')
+        .replaceAll('https://cdn.example/', 'pkg:/disposal/'));
+    await add(pkg, 'source/player-disposal.brs', await fixture('player-disposal-main.brs'));
+    await add(pkg, 'disposal/0/static.webp', corpus.petpet);
+}
+
+test('enclosing Player Back/discard drains cached and post-response purge Tasks and fails closed on deletion', {timeout: 45000}, async t => {
+    const count = await execute(buildPlayerDisposal, true, accept, 30000);
+    t.diagnostic(`${count} actual Back/discard/Chat/Task/virtual-filesystem assertions; playback, native decoder and HTTP are offline boundaries`);
+});
+
+test('enclosing Player Back/discard negative control rejects early reservation release with a normal fixture failure', {timeout: 45000}, async t => {
+    await execute((dir, marker) => buildPlayerDisposal(dir, marker, source => {
+        const declaration = 'sub stopChatAnimations(purge = false as boolean)';
+        assert.equal(source.split(declaration).length, 2);
+        return source.replace(declaration, `${declaration}\n    if m.disposed then m.global.setField("chatAnimationStorageOwners", {})`);
+    }), true, (result, marker) => {
+        assert.equal(result.timedOut, false, result.output);
+        assert.equal(result.excessive, false);
+        assert.equal(result.code, 0, result.output);
+        assert.match(result.output, /EXIT_USER_NAV/);
+        assert.doesNotMatch(result.output, /runtime error|BrightScript Debugger|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|unhandled exception/i);
+        assert.match(result.output, /STITCH_UI_FAIL:cached: reservation retained through purge epilogue/);
+        assert.match(result.output, /STITCH_UI_FAIL:\s*1 failures;/);
+        assert.doesNotMatch(result.output, /CHAT_ANIMATION_PASS_[^\s:]+:\s*\d+ assertions/);
+        assert.throws(() => accept(result, marker, true), /STITCH_UI_FAIL/);
+        t.diagnostic('early ledger release produces one ownership assertion failure and EXIT_USER_NAV; no crash, timeout or positive/stale marker accepted');
+    }, 30000);
+});
 
 test('normal Chat entries execute every original case once without repeating the dense cache case', async () => {
     const main = await fixture('chat-main.brs');
