@@ -13,7 +13,12 @@ sub main()
     face = chr(&h1F600)
     heart = chr(&h2764) + chr(&hFE0F)
     family = chr(&h1F468) + chr(&h200D) + chr(&h1F469) + chr(&h200D) + chr(&h1F467) + chr(&h200D) + chr(&h1F466)
+    joiner = chr(&h034F)
     samples = [
+        { text: joiner, images: "", plain: " " },
+        { text: joiner + joiner, images: "", plain: " " },
+        { text: "before" + joiner + face + joiner + "after", images: "1f600", plain: "beforeafter " },
+        { text: "a" + chr(&h0301) + joiner, images: "", plain: "a" + chr(&h0301) + " " },
         { text: "hello" + face + "world", images: "1f600", plain: "helloworld " },
         { text: heart, images: "2764", plain: " " },
         { text: chr(&h1F44D) + chr(&h1F3FD), images: "1f44d-1f3fd", plain: " " },
@@ -29,6 +34,7 @@ sub main()
         group = chat.callFunc("fixtureBuild", sample.text)
         check(points(group) = sample.images, "image runs and pinned URIs for " + sample.text)
         check(textOf(group) = sample.plain, "ordinary text preserved around emoji for " + sample.text)
+        check(group.chatMessageText = sample.text, "presentation preserves the original message, including invisible joiners")
         check(inBounds(group, state), "image/text runs fit chat bounds")
         chat.callFunc("fixturePrune", group)
     end for
@@ -61,7 +67,7 @@ sub main()
     chat.channel = "fixture"
     state = chat.callFunc("fixtureState")
     job = state.job
-    message = ircParseMessage("@id=unicode;display-name=Viewer;emotes=25:2-6 :viewer!viewer@host PRIVMSG #fixture :" + face + " Kappa")
+    message = ircParseMessage("@id=unicode;display-name=Viewer;emotes=25:4-8 :viewer!viewer@host PRIVMSG #fixture :" + joiner + " " + face + " Kappa " + joiner)
     message.identity = { id: "unicode", userId: "1", login: "viewer" }
     message.moderationSeq = 0
     job.nextCommentObj = message
@@ -70,6 +76,7 @@ sub main()
     panel = chat.callFunc("fixtureState").panel
     nodes = posters(panel)
     check(nodes.count() = 2, "actual comment renders both Unicode and Twitch emote images")
+    check(textOf(panel).instr(joiner) < 0, "actual IRC rendering keeps invisible joiners out of labels after consuming emote offsets")
     if nodes.count() = 2
         old = nodes[1]
         chat.callFunc("fixtureImageStatus", old, "failed")

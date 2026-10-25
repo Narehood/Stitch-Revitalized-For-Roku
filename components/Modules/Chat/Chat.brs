@@ -586,7 +586,8 @@ function chatTextNode(text as string, highlighted = false as boolean) as object
     node = createObject("roSGNode", "SimpleLabel")
     node.fontSize = m.font_size
     node.fontUri = "pkg:/fonts/Archivo-Regular.otf"
-    node.text = text
+    ' CGJ is invisible; Archivo otherwise draws it as a missing-glyph box.
+    node.text = text.replace(chr(&h034F), "")
     if highlighted then node.color = m.linkColor
     return node
 end function
