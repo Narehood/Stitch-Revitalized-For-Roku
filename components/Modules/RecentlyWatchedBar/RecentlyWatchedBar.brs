@@ -15,8 +15,8 @@ sub init()
 
     ' Layout constants
     m.itemSpacing = 62 ' px between item origins
-    m.itemStartY = 56 ' px below the icon (icon top 16 + height 24 + space 16)
-    m.itemX = 12 ' centres the 54 px avatar in the 78 px rail
+    m.itemStartY = 51 ' keeps the ring at its existing position below the icon
+    m.itemX = 7 ' centres the full 64 px focus footprint in the 78 px rail
     m.visibleWindow = 8 ' number of items visible at once before scrolling
 
     m.items = []
@@ -174,8 +174,8 @@ sub updateCaption()
     end try
     if width <= 0 then width = len(name) * 11
     m.captionPlate.width = width + 28
-    ' Centre the 40px tooltip on the 54px avatar.
-    m.caption.translation = [88, item.translation[1] + 7]
+    ' Centre the 40px tooltip on the 64px focus footprint.
+    m.caption.translation = [88, item.translation[1] + 12]
     m.caption.visible = true
 end sub
 

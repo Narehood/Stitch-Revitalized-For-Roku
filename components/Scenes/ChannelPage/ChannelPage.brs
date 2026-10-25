@@ -132,6 +132,12 @@ function buildContentNodeFromShelves(rsp)
                 previewImageURL: Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", request.streamerLogin)
             })
         end if
+        if rowItem.previewImageURL = invalid or rowItem.previewImageURL = ""
+            rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", rowItem.streamerLogin)
+        end if
+        if GetInterface(rsp.liveViewersCount, "ifInt") <> invalid
+            if rsp.liveViewersCount >= 0 then rowItem.viewersCount = rsp.liveViewersCount
+        end if
         row.appendChild(rowItem)
         contentCollection.appendChild(row)
     end if

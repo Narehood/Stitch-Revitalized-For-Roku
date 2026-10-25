@@ -41,6 +41,7 @@ sub init()
 
     ' Video info
     m.videoTitle = m.top.findNode("videoTitle")
+    m.viewerCount = m.top.findNode("viewerCount")
     m.channelUsername = m.top.findNode("channelUsername")
     m.avatar = m.top.findNode("avatar")
 
@@ -172,16 +173,32 @@ sub layoutOverlay()
     m.scrimFadeFill.width = width
     m.scrimFade.maskSize = [width, 48]
     m.latencyTag.translation = [width - 48 - 360, 69]
+    m.viewerCount.translation = [width - 96 - m.viewerCount.width, 34]
+    titleWidth = 900
     if width < 1280
-        m.videoTitle.maxWidth = 660
-    else
-        m.videoTitle.maxWidth = 900
+        titleWidth = 660
     end if
+    if m.viewerCount.visible
+        availableTitleWidth = m.viewerCount.translation[0] - 64 - 24
+        if titleWidth > availableTitleWidth then titleWidth = availableTitleWidth
+    end if
+    m.videoTitle.maxWidth = titleWidth
     ' Four 64 px buttons with 12 px gaps, centered in the video area.
     m.controls.translation = [Int((width - 292) / 2), 178]
     if m.loadingOverlay <> invalid then m.loadingOverlay.translation = [Int(width / 2), 360]
     if m.messageOverlay <> invalid then m.messageOverlay.translation = [Int((width - 640) / 2), 0]
     updateCaption()
+end sub
+
+sub onViewersCountChange()
+    if m.viewerCount = invalid then return
+    m.viewerCount.visible = m.top.video_type = "LIVE" and m.top.viewersCount >= 0
+    m.viewerCount.text = ""
+    if m.viewerCount.visible
+        countWidth = fitLabelPlate(m.viewerCount, invalid, Substitute("{0} {1}", numberToText(m.top.viewersCount), tr("Viewers")), 0, 160)
+        if countWidth > 320 then m.viewerCount.width = 320
+    end if
+    layoutOverlay()
 end sub
 
 ' VideoPlayer sets lowLatency while the relay serves this wrapper. The tag
@@ -241,6 +258,8 @@ end sub
 ' outcome event from the prior stream, which would otherwise be emitted
 ' against the new stream's latency sample.
 sub onContentChange()
+    ' Counts are launch/refresh metadata; a new item must not keep the old count.
+    m.top.viewersCount = -1
     ignored = clearAdCountdown(m.adOwner)
     if m.top.content <> invalid
         m.startupSeekFired = false

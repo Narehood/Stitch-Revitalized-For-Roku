@@ -20,12 +20,13 @@
         <field id="channelAvatar" type="string" alias="avatar.uri" />
         <field id="channelUsername" type="string" alias="channelUsername.text" />
         <field id="videoTitle" type="string" alias="videoTitle.text" />
+        <field id="viewersCount" type="integer" value="-1" onChange="onViewersCountChange" />
         <field id="QualityChangeRequestFlag" type="bool" value="false" alwaysNotify="true" />
         <field id="QualityChangeRequest" type="Integer" />
         <field id="streamDurationSeconds" type="Integer" value="0" />
         <field id="currentProgressBarState" type="Integer" value="1" />
         <field id="video_id" type="string" />
-        <field id="video_type" type="string" />
+        <field id="video_type" type="string" onChange="onViewersCountChange" />
         <field id="qualityOptions" type="array" />
         <field id="selectedQuality" type="string" value="" />
         <!-- Set to roDateTime.AsSeconds() right before issuing an app-initiated
@@ -76,6 +77,9 @@
                 <EmojiLabel id="videoTitle" height="28" maxWidth="900" horizAlign="left" color="0xADADB8FF" translation="[64,48]">
                     <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="20" />
                 </EmojiLabel>
+                <Label id="viewerCount" visible="false" width="160" height="28" translation="[1024,34]" horizAlign="right" vertAlign="center" color="0xEFEFF1FF">
+                    <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="18" />
+                </Label>
             </Group>
             <!-- Shown only while this session uses the low-latency experiment. -->
             <Label id="latencyTag" visible="false" width="360" height="26" translation="[872,69]" horizAlign="right" vertAlign="center" color="0xFFD37AFF">

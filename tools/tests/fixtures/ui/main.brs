@@ -10,6 +10,8 @@ sub main()
     testFollowing(scene, fixtureGlobal)
     testRetainedSelection(scene, fixtureGlobal)
     testChannelBroadcasterId(scene)
+    testChannelLiveThumbnail(scene)
+    testChannelLiveViewers(scene)
     testLateAccountResponse(scene, fixtureGlobal)
     testBrowse(scene)
     testDetailPages(scene)
@@ -23,6 +25,55 @@ sub main()
     else
         print "STITCH_UI_FAIL:"; m.failures; " failures; "; m.assertions; " assertions"
     end if
+end sub
+
+sub testChannelLiveThumbnail(scene as object)
+    generated = "https://static-cdn.jtvnw.net/previews-ttv/live_user_recent_channel-1280x720.jpg"
+    for each sample in [
+        { kind: "LIVE", preview: "", expected: generated },
+        { kind: "LIVE", preview: "pkg:/images/default_banner.png", expected: "pkg:/images/default_banner.png" },
+        { kind: "USER", preview: "", expected: generated }
+    ]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        fields = cardFields(sample.kind, "recent_channel")
+        fields.previewImageURL = sample.preview
+        setTwitchContentFields(content, fields)
+        page.contentRequested = content
+        state = inspect(page)
+        state.task.response = channelIdResponse()
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(live.previewImageURL = sample.expected, sample.kind + " live card has a preview when opened from Recents and preserves an existing preview")
+        page.callFunc("fixtureSelect", 0)
+        check(page.playContent and page.contentSelected.previewImageURL = sample.expected, sample.kind + " live selection retains the thumbnail and playback contract")
+        disposePage(scene, page)
+    end for
+end sub
+
+sub testChannelLiveViewers(scene as object)
+    for each sample in [
+        { count: 2468, expected: 2468 },
+        { count: 0, expected: 0 },
+        { count: invalid, expected: 99 },
+        { count: "invalid", expected: 99 },
+        { count: -1, expected: 99 }
+    ]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        fields = cardFields("LIVE", "recent_channel")
+        fields.viewersCount = 99
+        setTwitchContentFields(content, fields)
+        page.contentRequested = content
+        response = channelIdResponse()
+        response.liveViewersCount = sample.count
+        state = inspect(page)
+        state.task.response = response
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(live.isSameNode(content) and live.viewersCount = sample.expected, "current channel viewers refresh a retained LIVE request, including zero, without erasing valid counts on bad data")
+        page.callFunc("fixtureSelect", 0)
+        check(page.contentSelected.viewersCount = sample.expected, "live playback selection carries the refreshed viewer count")
+        disposePage(scene, page)
+    end for
 end sub
 
 sub testChannelBroadcasterId(scene as object)

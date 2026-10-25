@@ -394,6 +394,12 @@ sub playContent(isRecovery = false as boolean)
         if contentNodeToPlay.contentTitle <> invalid
             m.video.videoTitle = contentNodeToPlay.contentTitle
         end if
+        if isLiveContent
+            viewersCount = contentNodeToPlay.viewersCount
+            if GetInterface(viewersCount, "ifInt") <> invalid
+                if viewersCount >= 0 then m.video.viewersCount = viewersCount
+            end if
+        end if
 
         m.engagementGeneration++
         m.engagementPaused = false
