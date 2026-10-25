@@ -1,6 +1,10 @@
 ' Copyright Kasper Gammeltoft and other contributors. Licensed under MIT
 ' https://github.com/KasperGam/EmojiOnRoku/blob/main/LICENSE
 sub init()
+    m.disposed = false
+    ' The emoji pattern is compiled once per label, on first non-empty text.
+    m.emojiRegex = invalid
+    m.emojiRegexFailed = false
     m.components = m.top.findNode("layout")
     m.top.observeField("text", "setText")
     m.animation = m.top.findNode("testAnimation")
@@ -26,6 +30,8 @@ sub init()
     if m.timer <> invalid
         m.timer.observeField("fire", "onTimerFireChange")
     end if
+    m.scrollStartTimer = m.top.findNode("scrollStartTimer")
+    if m.scrollStartTimer <> invalid then m.scrollStartTimer.observeField("fire", "onScrollStart")
     setText()
 end sub
 
@@ -38,31 +44,38 @@ sub onTimerFireChange() as void
 end sub
 
 sub doScroll()
-    if m.animation = invalid or m.timer = invalid then return
-    if m.top.repeatCount <> invalid
-        if m.top.repeatCount <> 0
-            m.animation.repeat = true
-            m.timer.repeat = true
-            ' this sleep is so that when you change from one item to another,
-            ' you have enough time to read the first 1-2 words before scrolling.
-            sleep(200)
-            m.animation.control = "start"
-            m.timer.control = "start"
-            m.animation.duration = (m.top.width / m.top.maxWidth) * 2
-            m.timer.duration = (m.top.width / m.top.maxWidth) * 2
-            ' else
-            '     m.animation.repeat = false
-            '     ' m.animation.control = "stop"
-            '     m.animation.duration = 0
-            '     m.timer.repeat = false
-            '     m.timer.control = "stop"
-        else
-            m.animation.repeat = false
-            m.animation.control = "stop"
-            m.components.translation = [0, 0]
-            m.timer.control = "stop"
+    if m.disposed then return
+    cancelScroll()
+    if m.top.repeatCount <> invalid and m.top.repeatCount <> 0 and m.top.text <> ""
+        if m.scrollStartTimer <> invalid
+            m.scrollStartPending = true
+            m.scrollStartTimer.control = "start"
         end if
     end if
+end sub
+
+sub onScrollStart()
+    if m.scrollStartPending <> true then return
+    m.scrollStartPending = false
+    if m.disposed or m.top.repeatCount = 0 or m.top.text = "" then return
+    if m.animation = invalid or m.timer = invalid or m.top.maxWidth <= 0 then return
+    m.animation.repeat = true
+    m.timer.repeat = true
+    m.animation.duration = (m.top.width / m.top.maxWidth) * 2
+    m.timer.duration = m.animation.duration
+    m.animation.control = "start"
+    m.timer.control = "start"
+end sub
+
+sub cancelScroll()
+    m.scrollStartPending = false
+    if m.scrollStartTimer <> invalid then m.scrollStartTimer.control = "stop"
+    if m.timer <> invalid then m.timer.control = "stop"
+    if m.animation <> invalid
+        m.animation.repeat = false
+        m.animation.control = "stop"
+    end if
+    if m.components <> invalid then m.components.translation = [0, 0]
 end sub
 
 ' Will update the components if an interface field has changed.
@@ -111,7 +124,11 @@ sub updateComponents()
 
         ' Check if we need to use ellipsis for this label
         ' checkBoundingWidth()
-        boundingWidth = m.components.boundingRect().width
+        boundingWidth = totalWidth
+        try
+            boundingWidth = m.components.boundingRect().width
+        catch e
+        end try
         if width = 0 or boundingWidth > width
             width = boundingWidth
         end if
@@ -226,37 +243,18 @@ end sub
 
 ' Updates the entire label components with new text.
 sub setText()
+    cancelScroll()
     labelText = m.top.text
 
     resetComponents()
     if labelText <> ""
-        ' Check for emojis in this text
-        emojiRegex = createObject("roRegex", regex(), "m")
-        matches = emojiRegex.matchAll(labelText)
-
-        for each match in matches
-            matchText = match[0]
-            ' Create the label representing all text before this match,
-            ' if there is any
-            loc = labelText.instr(matchText)
-            if loc > 0
-                leftText = labelText.left(loc)
-                m.components.appendChild(createLabel(leftText))
+        for each segment in emojiTextRuns(labelText)
+            if segment.uri = ""
+                m.components.appendChild(createLabel(segment.text))
+            else
+                m.components.appendChild(createPoster(segment.uri, emojiFallback(segment.text)))
             end if
-
-            ' Get the URI for this emoji and create the poster
-            pointURI = emojiPointName(matchText)
-            m.components.appendChild(createPoster(pointURI))
-
-            ' Update the remaining text. Set to be text after this emoji.
-            labelText = labelText.mid(loc + matchText.len())
         end for
-
-        ' If we have text at the end after the last emoji match, create
-        ' a label for that text.
-        if labelText <> ""
-            m.components.appendChild(createLabel(labelText))
-        end if
     end if
 
     ' Update the components.
@@ -278,8 +276,10 @@ function createLabel(withText as string)
 end function
 
 ' Create a new poster to show an emoji with.
-function createPoster(uri as string)
+function createPoster(uri as string, fallback as string)
     poster = CreateObject("roSGNode", "Poster")
+    poster.addFields({ emojiFallbackText: fallback })
+    poster.observeField("loadStatus", "onEmojiImageStatus")
     poster.uri = uri
 
     ' Use emoji size first if set
@@ -295,6 +295,24 @@ function createPoster(uri as string)
     return poster
 end function
 
+sub onEmojiImageStatus(event as object)
+    poster = event.getRoSGNode()
+    status = event.getData()
+    if status <> "ready" and status <> "failed" then return
+    poster.unobserveField("loadStatus")
+    if m.disposed or status = "ready" then return
+    parent = poster.getParent()
+    if parent = invalid then return
+    label = createLabel(poster.emojiFallbackText)
+    for index = 0 to parent.getChildCount() - 1
+        if parent.getChild(index).isSameNode(poster)
+            parent.replaceChild(label, index)
+            exit for
+        end if
+    end for
+    updateComponents()
+end sub
+
 ' Returns all components for the current emoji label.
 function getAllComponents()
     components = []
@@ -308,12 +326,18 @@ end function
 ' Removes all child components to reset the layout group.
 sub resetComponents()
     while m.components.getChildCount() > 0
+        child = m.components.getChild(0)
+        if child.subtype() = "Poster" then child.unobserveField("loadStatus")
         m.components.removeChildIndex(0)
     end while
 end sub
 
 
 sub onDestroy()
+    if m.disposed then return
+    m.disposed = true
+    cancelScroll()
+    if m.scrollStartTimer <> invalid then m.scrollStartTimer.unobserveField("fire")
     if m.timer <> invalid
         m.timer.control = "stop"
         m.timer.unobserveField("fire")
@@ -330,6 +354,8 @@ sub onDestroy()
     m.top.unobserveField("repeatCount")
     m.top.unobserveField("emojiSize")
     m.top.unobserveField("maxWidth")
+    resetComponents()
+    m.emojiRegex = invalid
 end sub
 
 ' function onSizeChange()

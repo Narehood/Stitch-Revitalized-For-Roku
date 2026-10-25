@@ -8,17 +8,21 @@ function getChannelHomeQuery() as object
             "skipPlayToken": false
         }
     })
-    if rsp = invalid
+    if graphQLFieldFailed(rsp, ["channel"])
         m.top.response = invalid
         m.top.control = TaskControl.STOP
         return invalid
     end if
     channel = rsp?.data?.channel
     m.top.response = {
+        streamerId: channel?.id ?? "",
         description: channel?.description ?? "",
         followerCount: channel?.followers?.totalCount ?? 0,
         profileImageUrl: channel?.profileImageUrl,
         isLive: channel?.stream <> invalid,
+        liveTitle: channel?.broadcastSettings?.title ?? "",
+        liveViewersCount: channel?.stream?.viewersCount ?? 0,
+        liveGameDisplayName: channel?.stream?.game?.displayName ?? "",
         videoShelves: channel?.videoShelves?.edges ?? []
     }
     m.top.control = TaskControl.STOP
@@ -28,14 +32,14 @@ end function
 function getChannelShell()
     if m.top.request.params.id = invalid then return invalid
     rsp = TwitchGraphQLRequest({
-        operationName: "ChannelShell",
+        "operationName": "ChannelShell",
         variables: {
             login: m.top.request.params.id
         },
         extensions: {
-            persistedQuery: {
+            "persistedQuery": {
                 version: 1,
-                sha256Hash: "580ab410bcd0c1ad194224957ae2241e5d252b2c5173d8e0cce9d32d5bb14efe"
+                "sha256Hash": "580ab410bcd0c1ad194224957ae2241e5d252b2c5173d8e0cce9d32d5bb14efe"
             }
         }
     })

@@ -1,8 +1,25 @@
-' Changelog entries keyed by version string ("major.minor.build").
-' Add a new entry here with every release.
-' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
+' Changelog entries keyed by the Roku package version.
+' Keep upstream release history and add new changes under their actual version.
 function getChangelog() as object
     return {
+        "3.1.0": [
+            "3.1.0: Modernized interface, playback and chat",
+            "New: Redesigned navigation, stream cards, Settings and player controls",
+            "New: Pinned and Live sidebar sections with individual local removal",
+            "New: Open channel, Pin/Unpin and follow status in player Channel actions",
+            "New: Preferred startup resolutions with lower playable fallback",
+            "New: Chat timing choices and translucent chat in four screen corners",
+            "Fix: Unicode, provider emotes, pinned messages, author badges and mentions",
+            "New: One visible animated BTTV/7TV emote or eligible Twitch subscriber GIF",
+            "Experimental: Optional Twitch watch credit, Hype Trains and pinned-message panels",
+            "Fix: Channel thumbnails, live viewer counts, focus and Back navigation",
+            "Improved: Bounded playback recovery, quality retention and stream cleanup",
+            "Improved: On-device live/recorded audio splitting with checked media windows",
+            "Improved: Settings scroll indicators, current choices and player dismissal hints",
+            "Retained: Support Stitch and the Buy Me a Coffee QR in redesigned Settings",
+            "Maintenance: Updated dependencies and optional proxy security checks",
+            "Lower live latency remains experimental and off by default; delay varies by stream"
+        ],
         "2.9.0": [
             "Improved: Bigger stream tiles, 4 per row, so titles are easier to read from the couch",
             "Fix: Following, Browse and game pages now fill the full width of the screen"
