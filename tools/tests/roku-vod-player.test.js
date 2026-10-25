@@ -65,7 +65,7 @@ async function probeXml(dir, file, probeFile, probe) {
 async function build(dir, marker, capability, mutation) {
     await add(dir, 'manifest', 'title=Offline VOD Player Contract\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/analytics.brs',
-        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', ...dependencies]) await copy(dir, file);
+        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs', ...dependencies]) await copy(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster',
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',
@@ -87,7 +87,7 @@ async function build(dir, marker, capability, mutation) {
         await fs.readFile(path.join(root, 'tools/tests/fixtures/ui-phase2-player/TwitchEngagementTask.xml')));
     await add(dir, 'source/utils/config.brs', await fs.readFile(path.join(sharedFixtures, 'config.brs')));
     await add(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fs.readFile(path.join(sharedFixtures, 'EmojiLabelRegex.brs')));
-    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs']) {
+    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs', 'components/Scenes/VideoPlayer/ChatLayout.brs']) {
         await copy(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), 'actual owner/player handlers must execute unchanged');
     }

@@ -31,7 +31,9 @@ function fetchChatAnimationFile(fs as object, request as object) as dynamic
     info = invalid
     try
         if not chatAnimationPath(request.path) then return invalid
-        directory = request.path.left(request.path.len() - 11)
+        isGif = request.path.right(4) = ".gif"
+        if isGif and ircGifUri(request.uri) = invalid then return invalid
+        directory = chatAnimationDirectory(request.path)
         if m.top.stopRequested then return invalid
         port = createObject("roMessagePort")
         transfer = createObject("roUrlTransfer")
@@ -53,7 +55,13 @@ function fetchChatAnimationFile(fs as object, request as object) as dynamic
                             if GetInterface(size, "ifInt") <> invalid or GetInterface(size, "ifLongInt") <> invalid or GetInterface(size, "ifFloat") <> invalid or GetInterface(size, "ifDouble") <> invalid
                                 if size = expectedBytes and not m.top.stopRequested and clock.totalMilliseconds() < 8000
                                     bytes = createObject("roByteArray")
-                                    if bytes.readFile(request.path, 0, 1048577) then info = chatAdmitWebp(bytes)
+                                    if bytes.readFile(request.path, 0, 1048577)
+                                        if isGif
+                                            info = chatAdmitGif(bytes)
+                                        else
+                                            info = chatAdmitWebp(bytes)
+                                        end if
+                                    end if
                                 end if
                             end if
                         end if
@@ -113,6 +121,9 @@ function chatAnimationContentLength(event as dynamic) as integer
                 if length < 1 or length > 1048576 then return 0
             else if key = "transfer-encoding"
                 return 0
+            else if key = "location"
+                ' No application-level redirect/rewrite of Twitch's supplied URL.
+                return 0
             else if key = "content-encoding"
                 if GetInterface(value, "ifString") = invalid then return 0
                 if lcase(value.trim()) <> "identity" then return 0
@@ -123,14 +134,22 @@ function chatAnimationContentLength(event as dynamic) as integer
 end function
 
 function chatAnimationPath(path as string) as boolean
-    if path.left(18) <> "tmp:/stitch-emote-" or path.right(11) <> "/emote.webp" then return false
-    suffix = path.mid(18, path.len() - 29)
+    if path.left(18) <> "tmp:/stitch-emote-" then return false
+    directory = chatAnimationDirectory(path)
+    if directory = "" then return false
+    suffix = directory.mid(18)
     return suffix <> "" and suffix.instr("/") < 0 and suffix.instr("\") < 0 and suffix.instr("..") < 0
+end function
+
+function chatAnimationDirectory(path as string) as string
+    if path.right(11) = "/emote.webp" then return path.left(path.len() - 11)
+    if path.right(10) = "/emote.gif" then return path.left(path.len() - 10)
+    return ""
 end function
 
 function deleteChatAnimationFile(fs as object, path as string) as boolean
     if not chatAnimationPath(path) then return false
-    directory = path.left(path.len() - 11)
+    directory = chatAnimationDirectory(path)
     ' Finite attempts even for unrecoverable filesystem failures.
     for attempt = 1 to 2
         fs.delete(path)

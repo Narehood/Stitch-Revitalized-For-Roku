@@ -18,6 +18,7 @@
         <field id="engagementStatus" type="assocarray" alwaysNotify="true" />
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
+    <script type="text/brightscript" uri="ChatLayout.brs" />
     <script type="text/brightscript" uri="RokuPlayback.brs" />
     <script type="text/brightscript" uri="LowLatencyPlayback.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/rokuDemuxDescriptor.brs" />

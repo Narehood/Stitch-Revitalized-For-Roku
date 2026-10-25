@@ -73,7 +73,7 @@ function selectRecoveryEntry(main, recoveryOnly) {
 async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, 'manifest', 'title=Roku Player Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/analytics.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs',
+        'source/utils/analytics.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
         'source/utils/rokuDemuxDescriptor.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs',
         'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs']) await copyFile(dir, file);
@@ -120,6 +120,7 @@ async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, snapshotFiles[1], xml);
     await addFile(dir, 'components/PlayerProbe.brs', probe);
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
     for (const file of [snapshotFiles[0], snapshotFiles[2]]) {
         await copyFile(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), `${file} must execute unchanged`);

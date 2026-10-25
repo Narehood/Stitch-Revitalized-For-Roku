@@ -1027,5 +1027,24 @@
         <message><source>Syncing chat with video…</source><translation>Syncing chat with video…</translation></message>
         <message><source>Animate chat emotes</source><translation>Animate chat emotes</translation></message>
         <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</translation></message>
+        <message><source>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</source><translation>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</translation></message>
+        <message><source>Chat layout</source><translation>Chat layout</translation></message>
+        <message><source>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</source><translation>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</translation></message>
+        <message><source>Beside video</source><translation>Beside video</translation></message>
+        <message><source>Over video</source><translation>Over video</translation></message>
+        <message><source>Chat overlay position</source><translation>Chat overlay position</translation></message>
+        <message><source>Choose a corner for chat when Over video is selected.</source><translation>Choose a corner for chat when Over video is selected.</translation></message>
+        <message><source>Top left</source><translation>Top left</translation></message>
+        <message><source>Top right</source><translation>Top right</translation></message>
+        <message><source>Bottom left</source><translation>Bottom left</translation></message>
+        <message><source>Bottom right</source><translation>Bottom right</translation></message>
+        <message><source>Chat overlay background</source><translation>Chat overlay background</translation></message>
+        <message><source>Background opacity over video. Chat text and emotes stay fully visible.</source><translation>Background opacity over video. Chat text and emotes stay fully visible.</translation></message>
+        <message><source>25%</source><translation>25%</translation></message>
+        <message><source>50%</source><translation>50%</translation></message>
+        <message><source>75%</source><translation>75%</translation></message>
+        <message><source>100%</source><translation>100%</translation></message>
+        <message><source>{0} of {1}</source><translation>{0} of {1}</translation></message>
+        <message><source>Press Down or Back to hide controls</source><translation>Press Down or Back to hide controls</translation></message>
     </context>
 </TS>

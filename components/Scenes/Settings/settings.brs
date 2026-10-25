@@ -13,6 +13,9 @@ sub init()
     m.settingDesc = m.top.findNode("settingDesc")
     m.settingValue = m.top.findNode("settingValue")
     m.optionList = m.top.findNode("optionList")
+    m.scrollTrack = m.top.findNode("scrollTrack")
+    m.scrollThumb = m.top.findNode("scrollThumb")
+    m.scrollPosition = m.top.findNode("scrollPosition")
 
     m.keyboardDialog = invalid
     m.keyboardItem = invalid
@@ -165,6 +168,7 @@ end function
 
 sub settingFocused()
     if m.disposed then return
+    updateScrollIndicator()
     item = focusedSetting()
     if item = invalid then return
     m.settingTag.visible = item.experimental = true
@@ -184,6 +188,25 @@ sub settingFocused()
     else if item.type <> "action"
         print "Unknown setting type " + item.type
     end if
+end sub
+
+' Track focus through the list without changing its native scroll or focus.
+sub updateScrollIndicator()
+    count = 0
+    if m.settingsMenu.content <> invalid then count = m.settingsMenu.content.getChildCount()
+    rows = m.settingsMenu.numRows
+    scrollable = rows > 0 and count > rows
+    m.scrollTrack.visible = scrollable
+    m.scrollPosition.visible = scrollable
+    if not scrollable then return
+    focused = m.settingsMenu.itemFocused
+    if focused < 0 then focused = 0
+    if focused >= count then focused = count - 1
+    height = m.scrollTrack.height * rows / count
+    if height < 24 then height = 24
+    m.scrollThumb.height = height
+    m.scrollThumb.translation = [0, (m.scrollTrack.height - height) * focused / (count - 1)]
+    m.scrollPosition.text = Substitute(tr("{0} of {1}"), (focused + 1).toStr(), count.toStr())
 end sub
 
 ' The options are visible with the current choice checked; OK moves focus in.

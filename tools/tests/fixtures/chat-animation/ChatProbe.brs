@@ -47,7 +47,8 @@ function fixtureRead() as object
         failed: m.animationFailed.count(), supported: m.animationSupported,
         enabled: m.animateChatEmotes, descriptors: m.animatedEmotes,
         candidates: candidates.items.count(), probes: m.fixtureProbes, partials: m.animationPartials.count(),
-        blocked: m.animationCleanupBlocked, request: m.animationRequest, panel: m.chatPanel, chatJob: m.chat, emoteJob: m.EmoteJob
+        blocked: m.animationCleanupBlocked, request: m.animationRequest, panel: m.chatPanel, chatJob: m.chat, emoteJob: m.EmoteJob,
+        contentTop: m.chatContentTop, presentation: m.chatPresentationState, statusVisible: m.chatStatus.visible
     }
 end function
 
@@ -113,9 +114,17 @@ function fixtureMessage(text as string, id as string, y as float) as object
     row.addFields({ chatIdentity: { id: id, userId: "viewer", login: "viewer" }, chatAdvance: row.localBoundingRect().height + m.line_gap })
     row.translation = [0, y]
     m.chatPanel.appendChild(row)
+    ' This fixture bypasses renderComment; publish the same first-render status.
+    fixtureDelivered()
     syncChatAnimation()
     return row
 end function
+
+sub fixtureDelivered()
+    if m.chat <> invalid then m.chat.connectionState = "connected"
+    m.hasRenderedComment = true
+    updateChatStatus("connected")
+end sub
 
 sub fixtureMove(row as object, y as float, sync = true as boolean)
     row.translation = [0, y]

@@ -260,11 +260,14 @@ sub playContent(isRecovery = false as boolean)
                 quality_options.push(quality_option.qualityID)
             end for
         end if
-        m.video = m.top.CreateChild("StitchVideo")
+        ' Insert the wrapper beneath the retained chat, including replacements.
+        m.video = CreateObject("roSGNode", "StitchVideo")
+        m.top.insertChild(m.video, 0)
         m.video.qualityOptions = quality_options
         ' StitchVideo will observe its own selectedQuality field
     else
-        m.video = m.top.CreateChild("CustomVideo")
+        m.video = CreateObject("roSGNode", "CustomVideo")
+        m.top.insertChild(m.video, 0)
     end if
 
     httpAgent = CreateObject("roHttpAgent")
@@ -311,8 +314,7 @@ sub playContent(isRecovery = false as boolean)
     m.video.observeField("position", "onPositionChanged")
     m.video.observeField("state", "onVideoStateChange")
     m.video.observeField("duration", "onDurationChanged")
-    ' A wrapper recreated for a quality change, recovery or Try again lays
-    ' out its controls beside chat that is already open.
+    ' A recreated wrapper inherits the current layout while chat stays open.
     if m.chatWindow <> invalid and m.chatWindow.visible then onChatVisibilityChange()
 
     videoBookmarks = get_user_setting("VideoBookmarks", "")
@@ -613,24 +615,7 @@ sub onToggleChat()
 end sub
 
 sub onChatVisibilityChange()
-    if m.chatWindow <> invalid and m.video <> invalid
-        if m.chatWindow.visible
-            ' Example: Chat takes up 320px, video takes remaining width
-            m.chatWindow.translation = [1280 - 320, 0] ' Position chat on the right
-            m.chatWindow.height = 720 ' Full height
-            m.chatWindow.width = 320
-
-            m.video.width = 1280 - 320 ' Video width adjusted
-            m.video.height = 720 ' Video full height
-            m.video.translation = [0, 0] ' Video on the left
-            m.video.chatIsVisible = true
-        else
-            m.video.width = 1280 ' Video full width
-            m.video.height = 720
-            m.video.translation = [0, 0]
-            m.video.chatIsVisible = false
-        end if
-    end if
+    applyChatLayout()
     startTwitchEngagement()
 end sub
 

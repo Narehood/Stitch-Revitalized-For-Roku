@@ -52,6 +52,116 @@ sub main()
     check(m.global.emoteCache.count() = 2, "emoji rendering does not modify the shared provider cache")
     chat.callFunc("fixturePrune", group)
 
+    for each sample in [
+        { text: "@viewer", highlighted: "@viewer" },
+        { text: "(@Viewer_1),", highlighted: "@Viewer_1" },
+        { text: "@one,@two", highlighted: "@one@two" },
+        { text: "@" + string(25, "a"), highlighted: "@" + string(25, "a") },
+        { text: "mail@example.com @@viewer bare@viewer @" + string(26, "a"), highlighted: "" }
+    ]
+        group = chat.callFunc("fixtureBuild", sample.text)
+        check(highlightedText(group) = sample.highlighted, "mention colors honor username boundaries and leave email addresses untouched")
+        check(textOf(group) = sample.text + " ", "mention highlighting preserves punctuation and source text")
+        chat.callFunc("fixturePrune", group)
+    end for
+    chat.width = 150
+    chat.fontSize = 20
+    longMention = "@" + string(25, "W")
+    group = chat.callFunc("fixtureBuild", longMention)
+    check(highlightedText(group) = longMention and group.localBoundingRect().height > 40, "mentions retain their own highlight when wrapping at code-point boundaries")
+    chat.callFunc("fixturePrune", group)
+    chat.width = 275
+    chat.fontSize = 14
+
+    now = createObject("roDateTime").asSeconds()
+    pin = { id: "pin-images", messageId: "pin-images", userId: "1", login: "viewer", senderName: "Viewer", text: "PETPET catJAM @viewer " + heart, sentAt: now, updatedAt: now, observedAt: now, expiresAt: now + 300& }
+    chat.pinnedMessage = pin
+    status = chat.callFunc("fixtureChatStatus", "syncing", false)
+    check(status.pinVisible and status.statusVisible and status.clipTop >= 176 + status.statusHeight + 24, "reconnect/sync status reserves space below the pin instead of painting over retained chat")
+    status = chat.callFunc("fixtureChatStatus", "connected", true)
+    check(not status.statusVisible and status.clipTop = 176, "first rendered message releases status space while retaining the pin header")
+    preview = chat.callFunc("fixturePinPreview")
+    pinImages = posters(preview)
+    check(pinImages.count() = 3, "pinned preview renders BTTV, 7TV and Unicode images")
+    check(highlightedText(preview) = "@viewer", "pinned preview shares mention highlighting")
+    check(chat.callFunc("showPinnedMessage"), "rich pinned message opens")
+    dialog = m.scene.dialog
+    check(dialog <> invalid and chatAssetPosters(dialog) = 3, "full pinned message renders the same provider and Unicode images")
+    if dialog <> invalid
+        check(highlightedText(dialog) = "@viewer", "full pinned message shares mention highlighting")
+    end if
+    chat.pinnedMessage = invalid
+    check(preview.getChildCount() = 0 and m.scene.dialog = invalid, "unpin releases both rich views and closes the dialog")
+    status = chat.callFunc("fixtureChatStatus", "connecting", false)
+    check(status.statusVisible and status.clipTop = status.statusHeight + 24, "reconnecting without a pin also reserves a separate status area")
+    chat.callFunc("fixtureChatStatus", "connected", true)
+    if pinImages.count() > 0
+        failedBefore = chat.callFunc("fixtureState").failed
+        chat.callFunc("fixtureImageStatus", pinImages[0], "failed")
+        check(chat.callFunc("fixtureState").failed = failedBefore, "removed pin image callbacks cannot alter the current failure cache")
+    end if
+
+    gifUri = "https://media4.giphy.com/media/joSNxeswxuc74Juo8X/giphy.gif?cid=fixture&ep=v1_gifs_trending&rid=giphy.gif&ct=g"
+    gifTitle = "[Y A Y Yes GIF by Djemilah Birnie]"
+    gifText = "hello " + gifTitle + " @viewer"
+    gifTags = { gifs: "6-39|joSNxeswxuc74Juo8X|" + gifUri }
+    originalCacheCount = m.global.emoteCache.count()
+    group = chat.callFunc("fixtureGifs", gifText, gifTags, false)
+    check(textOf(group) = gifText + " ", "disabled GIF motion retains the complete original title and surrounding text")
+    check(chat.callFunc("fixtureGifState").keys = 0, "disabled GIF motion does not register download descriptors")
+    chat.callFunc("fixturePrune", group)
+    chat.width = 150
+    group = chat.callFunc("fixtureGifs", gifText, gifTags, true)
+    gifNode = invalid
+    mentionNode = invalid
+    for each node in group.getChildren(-1, 0)
+        if node.hasField("chatGifTitle") then gifNode = node
+        if node.subtype() = "SimpleLabel" and node.text = "@viewer" then mentionNode = node
+    end for
+    check(gifNode <> invalid and gifNode.chatImageUri = gifUri, "GIF occurrence retains the exact supplied URL, including its query")
+    check(group.chatMessageText = gifText and group.chatAttachments.count() = 1, "GIF occurrence preserves original text and attachment offsets")
+    check(textOf(group) = gifText + " ", "pending GIF fallback retains its title without changing surrounding spaces")
+    check(mentionNode <> invalid and gifNode <> invalid and mentionNode.translation[1] >= gifNode.translation[1] + 96, "tall GIF layout reserves its height before wrapping following text")
+    check(m.global.emoteCache.count() = originalCacheCount, "GIF attachment titles never enter the provider word cache")
+    descriptor = chat.callFunc("fixtureGifState").descriptors[gifUri]
+    check(descriptor <> invalid and descriptor.format = "gif", "GIF occurrence supplies a separate format descriptor")
+    chat.callFunc("fixturePrune", group)
+    chat.callFunc("fixtureProviderUpdate", {})
+    check(chat.callFunc("fixtureGifState").descriptors[gifUri] <> invalid, "incremental provider publication preserves current GIF descriptors")
+    check(chat.callFunc("fixtureMissingDescriptor"), "a missing descriptor cannot crash the native failure callback")
+    group = chat.callFunc("fixtureGifs", gifText, {}, false)
+    check(chatAssetPosters(group) = 0, "unannotated GIF titles never trigger media fetching")
+    chat.callFunc("fixturePrune", group)
+
+    pin.id = "pin-late"
+    pin.text = "LatePin"
+    chat.pinnedMessage = pin
+    check(chat.callFunc("showPinnedMessage"), "pin can open before provider loading completes")
+    cache.LatePin = "https://cdn.7tv.app/emote/late-pin/1x_static.webp"
+    chat.callFunc("fixtureCompleteEmotes", cache)
+    check(chatAssetPosters(chat.callFunc("fixturePinPreview")) = 1 and chatAssetPosters(m.scene.dialog) = 1, "provider completion refreshes both open rich pin views")
+    check(chat.callFunc("fixtureGifState").descriptors[gifUri] <> invalid, "provider completion preserves learned GIF attachment descriptors")
+    pinImage = posters(chat.callFunc("fixturePinPreview"))[0]
+    chat.callFunc("fixtureImageStatus", pinImage, "failed")
+    check(textOf(chat.callFunc("fixturePinPreview")) = "LatePin " and chatAssetPosters(chat.callFunc("fixturePinPreview")) = 0, "pinned provider failures retain a readable token")
+    chat.pinnedMessage = invalid
+
+    snapshot = {}
+    for index = 1 to 256
+        id = "fixture" + index.toStr()
+        uri = "https://media.giphy.com/media/" + id + "/giphy.gif"
+        group = chat.callFunc("fixtureGifs", "gif", { gifs: "0-2|" + id + "|" + uri }, true)
+        chat.callFunc("fixturePrune", group)
+        if index <= 128 then snapshot[uri] = { provider: "twitch-gif", uri: uri, format: "gif" }
+    end for
+    chat.callFunc("fixtureProviderUpdate", snapshot)
+    state = chat.callFunc("fixtureGifState")
+    gifCount = 0
+    for each uri in state.descriptors
+        if state.descriptors[uri].format = "gif" then gifCount++
+    end for
+    check(state.keys = 128 and gifCount = 128, "stale provider snapshots cannot resurrect evicted GIFs beyond the descriptor bound")
+
     chat.width = 140
     state = chat.callFunc("fixtureState")
     group = chat.callFunc("fixtureBuild", "ordinary words " + string(70, "x") + face + face + " tail")
@@ -176,6 +286,26 @@ function textOf(node as object) as string
         result += textOf(child)
     end for
     return result
+end function
+
+function highlightedText(node as object) as string
+    if node.subtype() = "SimpleLabel"
+        if colorHex(node.color) = "BF94FF" then return node.text
+        return ""
+    end if
+    result = ""
+    for each child in node.getChildren(-1, 0)
+        result += highlightedText(child)
+    end for
+    return result
+end function
+
+function chatAssetPosters(node as object) as integer
+    count = 0
+    for each poster in posters(node)
+        if poster.uri.instr("cdn.7tv.app/") >= 0 or poster.uri.instr("cdn.betterttv.net/") >= 0 or poster.uri.instr("jdecked/twemoji@") >= 0 then count++
+    end for
+    return count
 end function
 
 function inBounds(group as object, state as object) as boolean

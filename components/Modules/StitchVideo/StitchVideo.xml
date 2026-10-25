@@ -15,6 +15,7 @@
         <field id="back" type="bool" value="false" />
         <field id="toggleChat" type="bool" value="false" />
         <field id="chatIsVisible" type="bool" />
+        <field id="chatOverlayMode" type="bool" value="false" onChange="onChatVisibilityChange" />
         <field id="streamLayoutMode" type="Integer" value="-1" />
         <field id="busySpinner" type="bool" />
         <field id="channelAvatar" type="string" alias="avatar.uri" />
@@ -62,6 +63,9 @@
                 <Rectangle id="scrimFadeFill" width="1280" height="48" color="0x0E0E10D9" />
             </MaskGroup>
             <Rectangle id="scrim" width="1280" height="214" translation="[0,48]" color="0x0E0E10D9" />
+            <Label id="controlsHint" translation="[48,232]" width="1184" height="26" horizAlign="center" color="0xADADB8FF">
+                <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
+            </Label>
 
             <Group id="infoRow" translation="[48,66]">
                 <CirclePoster id="avatar" width="48" height="48" translation="[0,0]" />

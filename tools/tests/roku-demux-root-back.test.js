@@ -102,7 +102,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         for (const file of ['source/constants.brs', 'source/changelog.brs', 'source/utils/misc.brs',
             'source/utils/taskFactory.brs', 'source/utils/lifecycle.brs', 'source/utils/analytics.brs',
             'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs',
-            'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs',
+            'source/utils/sceneFactory.brs', 'source/utils/contentBuilder.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
             'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs', 'source/utils/rokuVodDescriptor.brs',
             'source/utils/rokuVodRuntime.brs', 'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copy(file);
         for (const folder of ['fonts', 'images', 'components/SceneManager/Scene', 'components/SceneManager/Group',
@@ -117,6 +117,7 @@ test('actual Hero focus escape Back preserves Player and manager cleanup ownersh
         await component('components/Scenes/VideoPlayer', 'VideoPlayer', 'PlayerProbe');
         await component('components/Modules/StitchVideo', 'StitchVideo', 'StitchVideoProbe');
         await copy('components/Scenes/VideoPlayer/RokuPlayback.brs');
+        await copy('components/Scenes/VideoPlayer/ChatLayout.brs');
         await copy('components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
         await component('components/Modules/RokuDemuxSession', 'RokuDemuxSession', 'ManagerProbe');
         const worker = 'CreateObject("roSGNode", "RokuDemuxServer")';

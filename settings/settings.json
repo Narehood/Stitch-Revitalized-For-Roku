@@ -65,10 +65,47 @@
     },
     {
         "title": "Show chat when a stream starts",
-        "description": "Opens live chat beside the video. You can show or hide chat while watching. Chat is available for live streams.",
+        "description": "Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.",
         "settingName": "ChatOption",
         "type": "bool",
         "default": "false"
+    },
+    {
+        "title": "Chat layout",
+        "description": "Show chat beside the video or over the full-screen video. Takes effect when chat opens.",
+        "settingName": "chat.layout",
+        "type": "radio",
+        "default": "side",
+        "options": [
+            { "title": "Beside video", "id": "side" },
+            { "title": "Over video", "id": "overlay" }
+        ]
+    },
+    {
+        "title": "Chat overlay position",
+        "description": "Choose a corner for chat when Over video is selected.",
+        "settingName": "chat.overlayPosition",
+        "type": "radio",
+        "default": "bottom-right",
+        "options": [
+            { "title": "Top left", "id": "top-left" },
+            { "title": "Top right", "id": "top-right" },
+            { "title": "Bottom left", "id": "bottom-left" },
+            { "title": "Bottom right", "id": "bottom-right" }
+        ]
+    },
+    {
+        "title": "Chat overlay background",
+        "description": "Background opacity over video. Chat text and emotes stay fully visible.",
+        "settingName": "chat.overlayOpacity",
+        "type": "radio",
+        "default": "0.5",
+        "options": [
+            { "title": "25%", "id": "0.25" },
+            { "title": "50%", "id": "0.5" },
+            { "title": "75%", "id": "0.75" },
+            { "title": "100%", "id": "1" }
+        ]
     },
     {
         "title": "Chat timing",

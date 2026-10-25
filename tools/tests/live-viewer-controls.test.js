@@ -35,7 +35,7 @@ async function copyTree(dir, folder) {
 async function buildPackage(dir, marker) {
     await addFile(dir, 'manifest', 'title=Offline Live Viewer Controls\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/analytics.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs',
+        'source/utils/analytics.brs', 'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/chatAnimationGif.brs',
         'source/utils/twitchAdCountdown.brs', 'source/utils/twitchAdClock.brs',
         'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',

@@ -12,6 +12,8 @@ sub init()
     ' Control overlay elements
     m.controlOverlay = m.top.findNode("controlOverlay")
     m.controlOverlay.visible = false
+    m.controlsHint = m.top.findNode("controlsHint")
+    m.controlsHint.text = tr("Press Down or Back to hide controls")
 
     ' Overlay layout elements (sized to the video area in layoutOverlay)
     m.scrim = m.top.findNode("scrim")
@@ -162,7 +164,7 @@ end sub
 ' The video area is 1280 wide, or 960 when chat is shown beside it. The
 ' scrim, caption, tag and controls stay inside that area's safe margins.
 function videoAreaWidth() as integer
-    if m.top.chatIsVisible = true then return 960
+    if m.top.chatIsVisible = true and m.top.chatOverlayMode <> true then return 960
     return 1280
 end function
 
@@ -170,6 +172,7 @@ sub layoutOverlay()
     if m.adBadge <> invalid then m.adBadge.videoAreaWidth = videoAreaWidth()
     width = videoAreaWidth()
     m.scrim.width = width
+    m.controlsHint.width = width - 96
     m.scrimFadeFill.width = width
     m.scrimFade.maskSize = [width, 48]
     m.latencyTag.translation = [width - 48 - 360, 69]

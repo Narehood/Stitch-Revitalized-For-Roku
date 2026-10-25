@@ -60,6 +60,7 @@ sub testStorageWaiterLifecycle()
     complete(second, replacement)
     second.visible = false
     hidden.visible = true
+    hidden.callFunc("fixtureDelivered")
     check(hidden.callFunc("fixtureRead").storageObserved and hidden.callFunc("fixtureRead").task = invalid, "hidden completed cache retains ownership until acknowledged purge")
     second.callFunc("fixtureHoldTasks", true)
     second.callFunc("onDestroy")
@@ -128,6 +129,7 @@ sub testSharedOwnership()
     check(first.callFunc("fixtureRead").blocked and exists(path), "thread completion alone cannot release an unacknowledged file")
     second.visible = false
     second.visible = true
+    second.callFunc("fixtureDelivered")
     second.callFunc("fixtureStaleAsset", worker)
     second.callFunc("fixtureSync")
     check(second.callFunc("fixtureRead").task = invalid and second.callFunc("fixtureRead").serial = 0, "reopening and stale completion cannot bypass failed shared cleanup")
@@ -165,6 +167,7 @@ sub testSharedOwnership()
     second.callFunc("fixtureSync")
     check(second.callFunc("fixtureRead").task = invalid and second.callFunc("fixtureRead").serial = 0, "completed cache in another Chat reserves the shared byte and entry budget")
     first.visible = true
+    first.callFunc("fixtureDelivered")
     settle(20)
     state = first.callFunc("fixtureRead")
     check(state.serial = 4 and state.native.uri = paths[3] and state.cacheBytes = 4194304, "hide/show reuses the owning Chat's completed cache inside the global reservation")
@@ -181,6 +184,7 @@ sub testSharedOwnership()
     end for
     second.visible = false
     second.visible = true
+    second.callFunc("fixtureDelivered")
     second.callFunc("fixtureStaleAsset", cleanup)
     second.callFunc("fixtureSync")
     check(second.callFunc("fixtureRead").task = invalid and second.callFunc("fixtureRead").serial = 0, "even acknowledged deletion cannot release a still-running global worker")
@@ -269,6 +273,7 @@ sub testOwnership()
     settle(20)
     check(chat.callFunc("fixtureRead").cacheCount = 1 and exists(firstPath), "hiding retains only the completed bounded cache")
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     settle(20)
     check(chat.callFunc("fixtureRead").serial = 2 and chat.callFunc("fixtureRead").native.uri = firstPath, "reopening reuses completed cache without a download")
     chat.callFunc("fixtureStaleMetadata", provider)
@@ -286,20 +291,25 @@ sub testOwnership()
     set_user_setting("chat.animatedEmotes", "false")
     chat.visible = false
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     settle(40)
     check(not chat.callFunc("fixtureRead").enabled and chat.callFunc("fixtureRead").task = invalid, "disabled setting keeps static emotes")
     set_user_setting("chat.animatedEmotes", "true")
     chat.visible = false
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     task = pending(chat)
     ' Rapid toggles retain one producer and its cancellation until it returns.
+    rapidSerial = chat.callFunc("fixtureRead").serial
     task.fixtureHoldAfterResponse = true
     for index = 1 to 6
         chat.visible = false
         chat.visible = true
+        chat.callFunc("fixtureDelivered")
     end for
     settle(80)
-    check(chat.callFunc("fixtureRead").task.isSameNode(task) and task.stopRequested and chat.callFunc("fixtureRead").serial = 4, "rapid toggles cannot spawn hidden producers")
+    rapid = chat.callFunc("fixtureRead")
+    check(rapid.task.isSameNode(task) and task.stopRequested and rapid.serial = rapidSerial, "rapid toggles cannot spawn hidden producers")
     task.fixtureHoldAfterResponse = false
     replacement = pending(chat, task)
     check(replacement.request.path <> task.request.path and not exists(task.request.path), "old directory is removed before allocating a unique replacement")
@@ -329,6 +339,7 @@ sub testCleanupFailure()
     settle(60)
     check(chat.callFunc("fixtureRead").serial = 1 and task.getParent() = invalid, "cleanup failure blocks downloads and leaves no running orphan Task")
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     replacement = pending(chat)
     check(not exists(path) and replacement.request.path <> path and chat.callFunc("fixtureRead").partials = 0, "reopen retries cleanup before a replacement download")
     replacement.fixtureHoldAfterResponse = true
@@ -415,6 +426,7 @@ sub testStaleGeneration()
     check(task.response.info <> invalid, "stale generation fixture holds a fully admitted response")
     chat.visible = false
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     check(chat.callFunc("fixtureRead").generation <> task.request.generation and chat.callFunc("fixtureRead").native = invalid, "new visible generation cannot adopt old Task's published file")
     task.fixtureHoldAfterResponse = false
     replacement = pending(chat, task)
@@ -468,6 +480,7 @@ function newChat(support = "native" as string) as object
     chat.channel_id = "42"
     chat.callFunc("fixtureSupport", support)
     chat.visible = true
+    chat.callFunc("fixtureDelivered")
     settle(20)
     return chat
 end function
@@ -516,7 +529,8 @@ function pending(chat as object, previous = invalid as dynamic) as dynamic
         end if
         pump(20)
     end while
-    fail("timed out waiting for an actual downloading Task")
+    state = chat.callFunc("fixtureRead")
+    fail("timed out waiting for an actual downloading Task; " + FormatJson({ serial: state.serial, candidates: state.candidates, descriptors: state.descriptors.count(), top: state.contentTop, presentation: state.presentation, statusVisible: state.statusVisible }))
     stop
     return invalid
 end function

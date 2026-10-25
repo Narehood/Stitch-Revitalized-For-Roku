@@ -73,6 +73,7 @@ sub collectChatAnimations(node as object, x as float, y as float, candidates as 
         top = 0
         if m.hypePanel.visible then top += 76
         if m.pinPanel.visible then top += 176
+        if m.chatContentTop <> invalid then top = m.chatContentTop
         if x < 0 or y < top or x + poster.width > m.chatPanel.width or y + poster.height > m.chatPanel.height then return
         uri = node.chatImageUri
         if m.animationOwner <> invalid
@@ -149,7 +150,9 @@ sub ensureChatAnimationAsset()
     if m.animationSession = "" then m.animationSession = createObject("roDeviceInfo").getRandomUUID()
     m.animationSerial++
     directory = "tmp:/stitch-emote-" + m.animationSession + "-" + m.animationSerial.toStr()
-    startChatAnimationTask({ uri: descriptor.uri, path: directory + "/emote.webp", generation: m.animationGeneration, paths: [] })
+    extension = ".webp"
+    if descriptor.format = "gif" or ircGifUri(descriptor.uri) <> invalid then extension = ".gif"
+    startChatAnimationTask({ uri: descriptor.uri, path: directory + "/emote" + extension, generation: m.animationGeneration, paths: [] })
 end sub
 
 ' Only visible blocked instances observe the ledger. Scoped cleanup preserves
@@ -201,7 +204,9 @@ sub playChatAnimation(asset as object)
         native.height = poster.height
         native.loadWidth = asset.info.loadWidth
         native.loadHeight = asset.info.loadHeight
-        native.mimeType = "video/webp"
+        ' GIF has no documented MIME hint; the local .gif URI permits autodetection.
+        native.mimeType = ""
+        if asset.path.right(5) = ".webp" then native.mimeType = "video/webp"
         native.uri = asset.path
         if m.animationNative <> invalid
             if native.isSameNode(m.animationNative) then native.control = "loop"
@@ -309,7 +314,16 @@ end sub
 
 sub failChatAnimation()
     if m.animationOwner <> invalid
-        uri = m.animatedEmotes[m.animationOwner.chatImageUri].uri
+        descriptor = m.animatedEmotes[m.animationOwner.chatImageUri]
+        if GetInterface(descriptor, "ifAssociativeArray") = invalid
+            releaseChatAnimation()
+            return
+        end if
+        uri = descriptor.uri
+        if GetInterface(uri, "ifString") = invalid or uri = ""
+            releaseChatAnimation()
+            return
+        end if
         if m.animationFailed.count() >= 256 then m.animationFailed = {}
         m.animationFailed[uri] = true
         releaseChatAnimation()
@@ -391,6 +405,30 @@ sub onAnimatedEmotes(event as object)
     if not event.getRoSGNode().isSameNode(m.EmoteJob) then return
     if m.EmoteJob.channel <> m.top.channel or m.EmoteJob.channel_id <> m.top.channel_id then return
     descriptors = event.getData()
-    if GetInterface(descriptors, "ifAssociativeArray") <> invalid then m.animatedEmotes = descriptors
+    mergeChatAnimations(descriptors)
     syncChatAnimation()
+end sub
+
+' GIF occurrences belong to Chat, never to a provider Task's older snapshot.
+function chatProviderAnimations() as object
+    descriptors = {}
+    for each uri in m.animatedEmotes
+        descriptor = m.animatedEmotes[uri]
+        if isChatProviderAnimation(uri, descriptor) then descriptors[uri] = descriptor
+    end for
+    return descriptors
+end function
+
+function isChatProviderAnimation(uri as string, descriptor as dynamic) as boolean
+    if GetInterface(descriptor, "ifAssociativeArray") = invalid then return false
+    if descriptor.provider = "twitch-gif" or descriptor.format = "gif" then return false
+    return ircGifUri(uri) = invalid
+end function
+
+sub mergeChatAnimations(descriptors as dynamic)
+    if GetInterface(descriptors, "ifAssociativeArray") = invalid then return
+    for each uri in descriptors
+        descriptor = descriptors[uri]
+        if isChatProviderAnimation(uri, descriptor) then m.animatedEmotes[uri] = descriptor
+    end for
 end sub

@@ -164,6 +164,7 @@ async function buildAsset(dir, marker, mutate = source => source) {
         .replace(/\bfs\.stat\(([^)]*)\)/g, 'fixtureStat(fs, $1)');
     await add(dir, 'task.brs', task);
     await add(dir, 'parser.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
+    for (const helper of ['chatAnimationGif', 'ircGifs', 'ircEmotes']) await add(dir, `${helper}.brs`, await fs.readFile(path.join(root, `source/utils/${helper}.brs`)));
     await add(dir, 'main.brs', (await fixture('asset-main.brs')).replace('__PASS_MARKER__', marker));
     await add(dir, 'petpet.webp', corpus.petpet);
     await add(dir, 'oversize.webp', Buffer.alloc(2097152));
@@ -189,7 +190,7 @@ async function buildChat(dir, marker, nativeMutation = '', scenario = 'testChatA
     dir = path.join(dir, 'package');
     await add(dir, 'manifest', 'title=Chat Animation Fixture\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const name of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
-        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircParser.brs', 'source/utils/chatAnimationWebp.brs',
+        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', 'source/utils/ircGifs.brs', 'source/utils/ircParser.brs', 'source/utils/chatAnimationWebp.brs', 'source/utils/chatAnimationGif.brs',
         'components/Modules/EmojiLabel/EmojiLabelRegex.brs', 'components/Modules/EmojiLabel/EmojiLabelUtil.brs']) await copy(dir, name);
     const previous = 'tools/tests/fixtures/ui-phase2-player/';
     for (const name of ['ChatJob.xml', 'EmoteJob.xml', 'PhaseTwoHost.xml']) await add(dir, `components/${name}`, await fs.readFile(path.join(root, previous, name)));

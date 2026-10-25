@@ -1039,5 +1039,24 @@
         <message><source>Syncing chat with video…</source><translation>Sincronizando el chat con el video…</translation></message>
         <message><source>Animate chat emotes</source><translation>Animar emotes del chat</translation></message>
         <message><source>Animate one visible emote at a time on supported Roku devices. Other emotes stay still. Takes effect when chat opens.</source><translation>Anima un emote visible a la vez en dispositivos Roku compatibles. Los demás emotes permanecen estáticos. Se aplica al abrir el chat.</translation></message>
+        <message><source>Opens live chat using your chosen layout. You can show or hide chat while watching. Chat is available for live streams.</source><translation>Abre el chat en vivo con el diseño elegido. Puedes mostrar u ocultar el chat mientras ves un video. El chat está disponible en transmisiones en vivo.</translation></message>
+        <message><source>Chat layout</source><translation>Diseño del chat</translation></message>
+        <message><source>Show chat beside the video or over the full-screen video. Takes effect when chat opens.</source><translation>Muestra el chat junto al video o sobre el video en pantalla completa. Se aplica al abrir el chat.</translation></message>
+        <message><source>Beside video</source><translation>Junto al video</translation></message>
+        <message><source>Over video</source><translation>Sobre el video</translation></message>
+        <message><source>Chat overlay position</source><translation>Posición del chat superpuesto</translation></message>
+        <message><source>Choose a corner for chat when Over video is selected.</source><translation>Elige una esquina para el chat cuando se selecciona Sobre el video.</translation></message>
+        <message><source>Top left</source><translation>Arriba a la izquierda</translation></message>
+        <message><source>Top right</source><translation>Arriba a la derecha</translation></message>
+        <message><source>Bottom left</source><translation>Abajo a la izquierda</translation></message>
+        <message><source>Bottom right</source><translation>Abajo a la derecha</translation></message>
+        <message><source>Chat overlay background</source><translation>Fondo del chat superpuesto</translation></message>
+        <message><source>Background opacity over video. Chat text and emotes stay fully visible.</source><translation>Opacidad del fondo sobre el video. El texto y los emotes del chat permanecen totalmente visibles.</translation></message>
+        <message><source>25%</source><translation>25%</translation></message>
+        <message><source>50%</source><translation>50%</translation></message>
+        <message><source>75%</source><translation>75%</translation></message>
+        <message><source>100%</source><translation>100%</translation></message>
+        <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
+        <message><source>Press Down or Back to hide controls</source><translation>Presiona Abajo o Atrás para ocultar los controles</translation></message>
     </context>
 </TS>

@@ -13,6 +13,8 @@ sub init()
     ' Control overlay elements
     m.controlOverlay = m.top.findNode("controlOverlay")
     m.controlOverlay.visible = false
+    m.controlsHint = m.top.findNode("controlsHint")
+    m.controlsHint.text = tr("Press Down or Back to hide controls")
     m.scrim = m.top.findNode("scrim")
     m.scrimFade = m.top.findNode("scrimFade")
     m.scrimFadeFill = m.top.findNode("scrimFadeFill")
@@ -175,6 +177,7 @@ sub layoutOverlay()
     if m.adBadge <> invalid then m.adBadge.videoAreaWidth = videoAreaWidth()
     width = videoAreaWidth()
     m.scrim.width = width
+    m.controlsHint.width = width - 96
     m.scrimFadeFill.width = width
     m.scrimFade.maskSize = [width, 48]
     barWidth = width - 96
@@ -566,6 +569,7 @@ sub beginSeekPreview()
     m.fadeAwayTimer.control = "stop"
     m.infoRow.visible = false
     m.seekHint.visible = true
+    m.controlsHint.visible = false
     m.progressDot.color = knobColor(true)
     updateCaption()
 end sub
@@ -595,6 +599,7 @@ sub endSeekPreview()
     m.currentPositionUpdated = false
     m.thumbnailPreview.visible = false
     m.seekHint.visible = false
+    m.controlsHint.visible = true
     m.infoRow.visible = true
     m.progressDot.color = knobColor(false)
     updateCaption()

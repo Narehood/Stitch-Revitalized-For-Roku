@@ -15,6 +15,9 @@ sub init()
     m.pinTitle = m.top.findNode("pinTitle")
     m.pinAuthor = m.top.findNode("pinAuthor")
     m.pinText = m.top.findNode("pinText")
+    m.pinRichText = m.top.findNode("pinRichText")
+    m.pinRenderedKey = ""
+    m.gifAnimationKeys = []
     m.pinHint = m.top.findNode("pinHint")
     m.pinTitle.text = tr("Pinned message")
     m.pinHint.text = tr("Press Down to read the full message")
@@ -34,6 +37,7 @@ sub init()
     ' Rendering helpers built once per chat instance, not per message or word.
     m.hexColorRegex = CreateObject("roRegex", "^[A-Fa-f0-9]{6}$", "")
     m.urlRegex = CreateObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
+    m.mentionRegex = CreateObject("roRegex", "(^|[^A-Za-z0-9_@])(@[A-Za-z0-9_]{1,25})(?=$|[^A-Za-z0-9_])", "")
     m.bitsRegex = createObject("roRegex", "^[1-9][0-9]{0,8}$", "")
     m.nameColorCache = {}
     m.emojiRegex = invalid
@@ -75,6 +79,7 @@ sub setSizingParameters()
 end sub
 
 sub setChatPanelSize()
+    m.font_size = m.top.fontSize
     m.chatPanel.width = m.top.width
     m.chatPanel.height = m.top.height
     m.chatBackground.width = m.top.width
@@ -88,9 +93,11 @@ sub setChatPanelSize()
     for each label in [m.pinTitle, m.pinAuthor, m.pinText, m.pinHint]
         label.width = m.top.width - 24
     end for
+    m.pinRichText.clippingRect = [0, 0, m.top.width - 24, 88]
+    m.pinRenderedKey = ""
+    setSizingParameters()
     updateHypeTrain()
     updatePinnedMessage()
-    m.font_size = m.top.fontSize
     m.translation = m.chatPanel.height - m.font_size
     m.lower_bound = m.chatPanel.height - m.font_size
     m.right_bound = m.chatPanel.width - m.font_size
@@ -166,6 +173,11 @@ sub layoutChatHeaders()
         if m.pinPanel.visible then offset += 176
     end if
     if m.chatStatus <> invalid then m.chatStatus.translation = [12, offset + 12]
+    if m.chatStatus <> invalid and m.chatStatus.visible then offset += m.chatStatus.height + 24
+    m.chatContentTop = offset
+    remaining = m.chatPanel.height - offset
+    m.chatPanel.visible = remaining > 0
+    if remaining > 0 then m.chatPanel.clippingRect = [0, offset, m.chatPanel.width, remaining]
     syncChatAnimation()
 end sub
 
@@ -203,6 +215,7 @@ sub updatePinnedMessage()
     layoutChatHeaders()
     if not valid
         closePinnedMessage()
+        clearPinnedPreview()
         if m.pinTimer <> invalid then m.pinTimer.control = "stop"
         return
     end if
@@ -210,6 +223,7 @@ sub updatePinnedMessage()
     if m.pinDialog <> invalid and m.pinDialogKey <> key then closePinnedMessage()
     m.pinAuthor.text = pin.senderName
     m.pinText.text = pin.text
+    renderPinnedPreview(key)
     if m.pinTimer = invalid
         m.pinTimer = createObject("roSGNode", "Timer")
         m.pinTimer.duration = 1
@@ -218,6 +232,22 @@ sub updatePinnedMessage()
         m.pinTimer.observeField("fire", "updatePinnedMessage")
     end if
     if m.pinTimer.control <> "start" then m.pinTimer.control = "start"
+end sub
+
+sub clearPinnedPreview()
+    if m.pinRichText = invalid then return
+    for each child in m.pinRichText.getChildren(-1, 0)
+        releaseChatImages(child)
+        m.pinRichText.removeChild(child)
+    end for
+    m.pinRenderedKey = ""
+end sub
+
+sub renderPinnedPreview(key as string)
+    if m.pinRenderedKey = key or m.font_size = invalid then return
+    clearPinnedPreview()
+    m.pinRichText.appendChild(buildMessage(m.pinText.text, 0, false, m.pinText.width))
+    m.pinRenderedKey = key
 end sub
 
 function pinnedMessageModerated(pin as object) as boolean
@@ -247,16 +277,33 @@ function showPinnedMessage() as boolean
         focus = child
     end for
     m.pinLastFocus = focus
-    dialog = createObject("roSGNode", "StandardMessageDialog")
-    dialog.title = tr("Pinned message")
-    dialog.message = [pin.senderName, pin.text]
-    dialog.buttons = [tr("Continue watching")]
+    dialog = createObject("roSGNode", "StandardDialog")
+    dialog.width = 920
+    title = createObject("roSGNode", "StdDlgTitleArea")
+    title.primaryTitle = tr("Pinned message")
+    dialog.appendChild(title)
+    content = createObject("roSGNode", "StdDlgContentArea")
+    author = createObject("roSGNode", "StdDlgTextItem")
+    author.text = pin.senderName
+    content.appendChild(author)
+    body = createObject("roSGNode", "StdDlgCustomItem")
+    body.id = "pinDialogBody"
+    body.fixedWidthField = 760
+    body.appendChild(buildMessage(pin.text, 0, false, 760))
+    content.appendChild(body)
+    dialog.appendChild(content)
+    buttons = createObject("roSGNode", "StdDlgButtonArea")
+    button = createObject("roSGNode", "StdDlgButton")
+    button.text = tr("Continue watching")
+    buttons.appendChild(button)
+    dialog.appendChild(buttons)
     applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "closePinnedMessage")
     dialog.observeField("wasClosed", "closePinnedMessage")
     m.pinDialog = dialog
     m.pinDialogKey = pin.id + ":" + pin.updatedAt.toStr()
     scene.dialog = dialog
+    buttons.setFocus(true)
     return true
 end function
 
@@ -267,6 +314,7 @@ sub closePinnedMessage()
     m.pinDialogKey = ""
     dialog.unobserveField("buttonSelected")
     dialog.unobserveField("wasClosed")
+    releaseChatImages(dialog)
     scene = m.top.getScene()
     if scene <> invalid and scene.dialog <> invalid
         if scene.dialog.isSameNode(dialog) then scene.dialog = invalid
@@ -279,10 +327,30 @@ sub closePinnedMessage()
 end sub
 
 sub onBackgroundColorChange()
-    if m.chatPanel <> invalid then m.chatPanel.color = m.top.backgroundColor
-    if m.chatBackground <> invalid then m.chatBackground.color = m.top.backgroundColor
-    ' Readable name colors depend on the background.
-    m.nameColorCache = {}
+    opacity = 1.0
+    if m.top.overlayMode
+        opacity = m.top.backgroundOpacity
+        if opacity <> opacity or opacity < 0 or opacity > 1 then opacity = 0.5
+    end if
+    if m.chatPanel <> invalid
+        m.chatPanel.color = m.top.backgroundColor
+        if m.top.overlayMode then m.chatPanel.color = "0x00000000"
+    end if
+    if m.chatBackground <> invalid
+        m.chatBackground.color = m.top.backgroundColor
+        m.chatBackground.opacity = opacity
+    end if
+    alpha = "FF"
+    if m.top.overlayMode then alpha = "00"
+    if m.pinPanel <> invalid then m.pinPanel.color = "0x18181B" + alpha
+    if m.hypePanel <> invalid then m.hypePanel.color = "0x18181B" + alpha
+    divider = m.top.findNode("chatDivider")
+    if divider <> invalid then divider.visible = not m.top.overlayMode
+    ' Opacity/layout changes keep the existing color cache and chat session.
+    if m.nameColorBackground <> m.top.backgroundColor
+        m.nameColorCache = {}
+        m.nameColorBackground = m.top.backgroundColor
+    end if
 end sub
 
 ' Stops the ChatJob (IRC) and EmoteJob tasks and releases their observers.
@@ -301,7 +369,7 @@ sub stopEmoteJob()
     if m.EmoteJob <> invalid
         emoteJob = m.EmoteJob
         m.EmoteJob = invalid
-        if GetInterface(emoteJob.animatedEmotes, "ifAssociativeArray") <> invalid then m.animatedEmotes = emoteJob.animatedEmotes
+        mergeChatAnimations(emoteJob.animatedEmotes)
         if emoteJob.completed and emoteJob.cacheComplete
             m.emoteChannel = emoteJob.channel
             m.emoteChannelId = emoteJob.channel_id
@@ -335,6 +403,7 @@ sub onEnterChannel()
     m.emoteChannel = ""
     m.emoteChannelId = ""
     m.animatedEmotes = {}
+    m.gifAnimationKeys = []
     if m.top.channel = "" then return
     m.global.setField("emoteCache", {})
     if m.top.visible
@@ -416,6 +485,7 @@ sub updateChatStatus(state as string)
     else if state = "syncing"
         m.chatStatus.text = tr("Syncing chat with video…")
     end if
+    layoutChatHeaders()
 end sub
 
 sub onChatTimingChange()
@@ -433,7 +503,7 @@ sub startEmoteJob()
     m.top.appendChild(m.EmoteJob)
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
-    m.EmoteJob.animatedEmotes = m.animatedEmotes
+    m.EmoteJob.animatedEmotes = chatProviderAnimations()
     m.EmoteJob.observeField("animatedEmotes", "onAnimatedEmotes")
     m.EmoteJob.observeField("completed", "onEmotesCompleted")
     m.EmoteJob.control = "run"
@@ -453,7 +523,7 @@ sub onEmotesCompleted(event = invalid as dynamic)
     if not m.EmoteJob.completed then return
     emoteJob = m.EmoteJob
     m.EmoteJob = invalid
-    if GetInterface(emoteJob.animatedEmotes, "ifAssociativeArray") <> invalid then m.animatedEmotes = emoteJob.animatedEmotes
+    mergeChatAnimations(emoteJob.animatedEmotes)
     if emoteJob.cacheComplete
         m.emoteChannel = emoteJob.channel
         m.emoteChannelId = emoteJob.channel_id
@@ -461,6 +531,18 @@ sub onEmotesCompleted(event = invalid as dynamic)
     destroyTask(emoteJob, "completed")
     destroyTask(emoteJob, "animatedEmotes")
     m.top.removeChild(emoteJob)
+    m.pinRenderedKey = ""
+    updatePinnedMessage()
+    if m.pinDialog <> invalid
+        body = m.pinDialog.findNode("pinDialogBody")
+        if body <> invalid
+            for each child in body.getChildren(-1, 0)
+                releaseChatImages(child)
+                body.removeChild(child)
+            end for
+            body.appendChild(buildMessage(m.top.pinnedMessage.text, 0, false, 760))
+        end if
+    end if
     syncChatAnimation()
 end sub
 
@@ -602,7 +684,7 @@ function chatWordParts(word as string, highlighted as boolean, isNotice as boole
     parts = []
     for each segment in emojiTextRuns(word)
         if segment.uri = ""
-            parts.push(chatTextNode(segment.text, highlighted))
+            parts.append(chatPlainTextParts(segment.text, highlighted))
         else if m.failedChatImages.doesExist(segment.uri)
             parts.push(chatTextNode(emojiFallback(segment.text), highlighted))
         else
@@ -612,43 +694,133 @@ function chatWordParts(word as string, highlighted as boolean, isNotice as boole
     return parts
 end function
 
-function buildMessage(message, x_translation, isNotice = false)
+function chatPlainTextParts(text as string, highlighted as boolean) as object
+    if highlighted then return [chatTextNode(text, true)]
+    parts = []
+    for each match in m.mentionRegex.matchAll(text)
+        start = text.instr(match[0]) + match[1].len()
+        if start > 0 then parts.push(chatTextNode(text.left(start)))
+        parts.push(chatTextNode(match[2], true))
+        text = text.mid(start + match[2].len())
+    end for
+    if text <> "" then parts.push(chatTextNode(text))
+    return parts
+end function
+
+function chatMessageUnits(message as string, attachments as dynamic) as object
+    units = []
+    if GetInterface(attachments, "ifArray") = invalid or attachments.count() = 0
+        for each word in message.split(" ")
+            units.push({ text: word, spaceAfter: true, gif: invalid })
+        end for
+        return units
+    end if
+    cursor = 0
+    characters = emojiCharacters(message)
+    for each attachment in attachments
+        if attachment.start > cursor then appendChatTextUnits(units, ircEmoteText(message, cursor, attachment.start - cursor))
+        units.push({ text: attachment.text, spaceAfter: false, gif: attachment })
+        cursor = attachment.start + attachment.length
+    end for
+    if cursor < characters.count() then appendChatTextUnits(units, ircEmoteText(message, cursor, characters.count() - cursor))
+    units.push({ text: "", spaceAfter: true, gif: invalid })
+    return units
+end function
+
+sub appendChatTextUnits(units as object, text as string)
+    words = text.split(" ")
+    for index = 0 to words.count() - 1
+        if words[index] <> "" or index < words.count() - 1 then units.push({ text: words[index], spaceAfter: index < words.count() - 1, gif: invalid })
+    end for
+end sub
+
+function buildChatGif(attachment as object) as object
+    if not m.animateChatEmotes or m.animationSupported = false then return chatTextNode(attachment.text)
+    if not m.animatedEmotes.doesExist(attachment.uri)
+        if m.gifAnimationKeys.count() >= 128
+            old = m.gifAnimationKeys.shift()
+            if m.animationOwner <> invalid and m.animationOwner.chatImageUri = old
+                m.gifAnimationKeys.push(old)
+                old = m.gifAnimationKeys.shift()
+            end if
+            m.animatedEmotes.delete(old)
+        end if
+        m.gifAnimationKeys.push(attachment.uri)
+        m.animatedEmotes[attachment.uri] = { provider: "twitch-gif", uri: attachment.uri, format: "gif" }
+    end if
+    wrapper = createObject("roSGNode", "Group")
+    wrapper.addFields({ chatImageUri: attachment.uri, chatGifTitle: attachment.text })
+    fallback = createObject("roSGNode", "Group")
+    fallback.addFields({ width: 96.0, height: 96.0 })
+    title = createObject("roSGNode", "Label")
+    title.width = 96
+    title.height = 96
+    title.wrap = true
+    title.font = createObject("roSGNode", "Font")
+    title.font.uri = "pkg:/fonts/Archivo-Regular.otf"
+    title.font.size = m.font_size
+    title.text = attachment.text.replace(chr(&h034F), "")
+    fallback.appendChild(title)
+    wrapper.appendChild(fallback)
+    return wrapper
+end function
+
+function buildMessage(message, x_translation, isNotice = false, availableWidth = -1 as float, attachments = invalid as dynamic)
+    if GetInterface(attachments, "ifArray") = invalid then attachments = []
     message_group = createObject("roSGNode", "Group")
-    message_group.addFields({ chatMessageText: message, chatMessageX: x_translation, chatNotice: isNotice })
+    message_group.addFields({ chatMessageText: message, chatMessageX: x_translation, chatNotice: isNotice, chatMessageWidth: availableWidth, chatAttachments: attachments })
     x = x_translation
-    line = 0
-    lineWidth = m.right_bound - m.left_bound
-    for each word in message.split(" ")
+    y = 0
+    lineHeight = m.badge_size
+    left = m.left_bound
+    right = m.right_bound
+    if availableWidth > 0
+        left = 0
+        right = availableWidth
+    end if
+    lineWidth = right - left
+    for each unit in chatMessageUnits(message, attachments)
+        word = unit.text
         highlighted = isNotice or m.urlRegex.isMatch(word)
-        parts = chatWordParts(word, highlighted, isNotice)
+        if unit.gif <> invalid
+            parts = [buildChatGif(unit.gif)]
+        else
+            parts = chatWordParts(word, highlighted, isNotice)
+        end if
         width = 0
         for each part in parts
             width += part.localBoundingRect().width
         end for
         ' Keep words together when possible; long words wrap at whole code points.
-        if width <= lineWidth and x + width > m.right_bound and x > m.left_bound
-            line++
-            x = m.left_bound
+        if width <= lineWidth and x + width > right and x > left
+            y += lineHeight + m.line_gap
+            lineHeight = m.badge_size
+            x = left
         end if
         nodes = []
         for each part in parts
             if part.subtype() = "SimpleLabel" and part.localBoundingRect().width > lineWidth
                 for each char in emojiCharacters(part.text)
-                    nodes.push(chatTextNode(char, highlighted))
+                    character = chatTextNode(char)
+                    character.color = part.color
+                    nodes.push(character)
                 end for
             else
                 nodes.push(part)
             end if
         end for
-        nodes.push(chatTextNode(" ", highlighted))
+        if unit.spaceAfter then nodes.push(chatTextNode(" ", highlighted))
         for each node in nodes
             nodeWidth = node.localBoundingRect().width
-            if x + nodeWidth > m.right_bound and x > m.left_bound
-                line++
-                x = m.left_bound
+            if x + nodeWidth > right and x > left
+                y += lineHeight + m.line_gap
+                lineHeight = m.badge_size
+                x = left
             end if
-            node.translation = [x, line * (m.badge_size + m.line_gap)]
+            node.translation = [x, y]
             message_group.appendChild(node)
+            nodeHeight = node.localBoundingRect().height
+            if nodeHeight > lineHeight then lineHeight = nodeHeight
             x += nodeWidth
         end for
     end for
@@ -674,7 +846,7 @@ sub onChatImageStatus(event as object)
     if parent = invalid then return
     if m.failedChatImages.count() >= 256 then m.failedChatImages = {}
     m.failedChatImages[poster.uri] = true
-    replacement = buildMessage(block.chatMessageText, block.chatMessageX, block.chatNotice)
+    replacement = buildMessage(block.chatMessageText, block.chatMessageX, block.chatNotice, block.chatMessageWidth, block.chatAttachments)
     releaseChatImages(block)
     for index = 0 to parent.getChildCount() - 1
         if parent.getChild(index).isSameNode(block)
@@ -896,7 +1068,9 @@ sub renderComment()
             colon.translation = [x_translation, 0]
             x_translation += colon.localBoundingRect().width + 1
 
-            message_group = buildMessage(message, x_translation)
+            attachments = []
+            if comment.command.command = "PRIVMSG" then attachments = ircGifAttachments(comment.tags, message)
+            message_group = buildMessage(message, x_translation, false, -1, attachments)
             body.appendChild(badge_group)
             body.appendChild(username)
             body.appendChild(colon)
@@ -942,6 +1116,7 @@ sub onDestroy()
         m.pinTimer = invalid
     end if
     m.pinPanel.visible = false
+    clearPinnedPreview()
     m.pinModeration = []
     if m.hypeTimer <> invalid
         m.hypeTimer.control = "stop"
@@ -957,4 +1132,5 @@ sub onDestroy()
     m.failedChatImages = {}
     m.nameColorCache = {}
     m.animatedEmotes = {}
+    m.gifAnimationKeys = []
 end sub
