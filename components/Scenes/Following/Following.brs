@@ -181,6 +181,8 @@ sub handleRecommendedSections()
         ? "[Following] handleRecommendedSections: offline follows parse error: "; e
     end try
     if contentCollection.getChildCount() = 0
+        m.rowlist.content = contentCollection
+        m.rowlist.numRows = 0
         setPageStatus("empty", tr("You're not following anyone yet"), tr("Channels you follow on Twitch appear here. Find something to watch in Browse."), ["browse"])
         return
     end if
@@ -252,6 +254,10 @@ end sub
 
 sub onGetFocus()
     if m.disposed then return
+    if m.top.followRefreshPending and m.top.IsInFocusChain()
+        m.top.followRefreshPending = false
+        loadFollowing()
+    end if
     ' While the status panel offers actions, it holds page focus.
     if not focusStatusIfActive()
         if m.rowlist.focusedChild = invalid

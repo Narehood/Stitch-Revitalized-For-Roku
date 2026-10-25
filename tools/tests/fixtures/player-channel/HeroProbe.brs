@@ -12,6 +12,10 @@ sub fixtureOpenFollowing()
     openPage("Following")
 end sub
 
+sub fixtureAccountChanged()
+    onLoginFinished()
+end sub
+
 sub fixtureSelectContent(content as object, play as boolean)
     m.activeNode.playContent = play
     m.activeNode.contentSelected = content

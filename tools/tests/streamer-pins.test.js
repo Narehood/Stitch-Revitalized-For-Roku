@@ -11,6 +11,42 @@ const { zipFolder } = require('roku-deploy');
 const root = path.resolve(__dirname, '../..');
 const fixtures = path.join(__dirname, 'fixtures/streamer-pins');
 
+test('shared terminal driver preserves distinct presses and holds after delayed dispatch', { timeout: 10000 }, async () => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'stitch-streamer-pins-'));
+    try {
+        const cli = path.join(temp, 'terminal.cjs');
+        await fs.writeFile(cli, `
+const pressed = [];
+let held, release, stalled = false;
+process.stdin.on('keypress', (_, key) => {
+    if (held !== key.name) pressed.push(key.name);
+    held = key.name;
+    clearTimeout(release);
+    release = setTimeout(() => { held = undefined; }, 150);
+    if (!stalled) {
+        stalled = true;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+    }
+    if (key.name === 'return') setTimeout(() => {
+        console.log('PRESSES:' + JSON.stringify(pressed));
+    }, 200);
+});
+console.log('FIXTURE_KEY:down\\nFIXTURE_KEY:down\\nFIXTURE_KEY:down\\nFIXTURE_KEY:right\\nFIXTURE_HOLD:fastforward:300\\nFIXTURE_KEY:ok');
+`);
+        const result = await run(cli, temp, cli);
+        assert.equal(result.timedOut, false, result.output);
+        assert.equal(result.exceeded, false, result.output);
+        assert.equal(result.code, 0, result.output);
+        const presses = result.output.match(/PRESSES:(\[[^\n]+\])/);
+        assert.ok(presses, result.output);
+        assert.deepEqual(JSON.parse(presses[1]), ['down', 'down', 'down', 'right', 'pagedown', 'return']);
+    } finally {
+        assert.equal(path.dirname(path.resolve(temp)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(temp).startsWith('stitch-streamer-pins-'));
+        await fs.rm(temp, { recursive: true, force: true });
+    }
+});
+
 async function write(dir, file, data) {
     const dest = path.join(dir, file);
     await fs.mkdir(path.dirname(dest), { recursive: true });
@@ -43,7 +79,7 @@ async function component(dir, folder, name, probe, replacements = []) {
     await write(dir, `components/${name}-probe.brs`, probe);
 }
 
-async function build(dir, marker, accountChangeOnly = false) {
+async function build(dir, marker, fixtureCase) {
     await write(dir, 'manifest', 'title=Local Streamer Pins Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/config.brs', 'source/utils/recentlyWatched.brs',
         'source/utils/misc.brs', 'source/utils/taskFactory.brs', 'source/utils/contentBuilder.brs',
@@ -59,7 +95,7 @@ async function build(dir, marker, accountChangeOnly = false) {
         await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/EmojiLabelRegex.brs')));
     for (const file of ['scene.brs', 'FixtureScene.xml']) await write(dir, `components/${file}`, await fs.readFile(path.join(fixtures, file)));
     await write(dir, 'source/main.brs', (await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8'))
-        .replaceAll('__PASS_MARKER__', marker).replace('__ACCOUNT_CHANGE_ONLY__', accountChangeOnly ? 'true' : 'false'));
+        .replaceAll('__PASS_MARKER__', marker).replaceAll('__FIXTURE_CASE__', fixtureCase));
     await write(dir, 'components/Settings.xml', (await fs.readFile(path.join(__dirname, 'fixtures/ui-startup-player/PageBoundary.xml'), 'utf8')).replaceAll('__NAME__', 'Settings'));
     await component(dir, 'components/Modules/MenuBar', 'MenuBar', '');
     await tree(dir, 'components/Modules/RecentlyWatchedBar');
@@ -97,11 +133,11 @@ end function
     }).join('\n\n'));
 }
 
-function run(zip, cwd) {
+function run(zip, cwd, cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js')) {
     return new Promise((resolve, reject) => {
         // No --registry: native roRegistry is isolated to this engine process.
         const child = spawn(process.execPath, [path.join(__dirname, 'fixtures/ui-startup-player/key-driver.js'),
-            path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), zip], { cwd, windowsHide: true });
+            cli, zip], { cwd, windowsHide: true });
         let output = '';
         let timedOut = false;
         let exceeded = false;
@@ -118,12 +154,12 @@ function run(zip, cwd) {
     });
 }
 
-async function checkFixture(t, accountChangeOnly = false) {
+async function checkFixture(t, fixtureCase) {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'stitch-streamer-pins-'));
     const marker = `STITCH_PINS_PASS:${randomUUID()}`;
     try {
         const dir = path.join(temp, 'package');
-        await build(dir, marker, accountChangeOnly);
+        await build(dir, marker, fixtureCase);
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
         const result = await run(zip, temp);
@@ -134,7 +170,7 @@ async function checkFixture(t, accountChangeOnly = false) {
         assert.doesNotMatch(result.output, /STITCH_PINS_FAIL:|FIXTURE_DRIVER_ERROR:|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger/i, detail);
         assert.match(result.output, /EXIT_USER_NAV/, detail);
         const summary = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
-        assert.ok(summary && Number(summary[1]) >= (accountChangeOnly ? 25 : 40), detail);
+        assert.ok(summary && Number(summary[1]) >= ({ storage: 27, navigation: 39, offline: 14, account: 39 })[fixtureCase], detail);
         t.diagnostic(`${summary[1]} actual storage/SceneGraph assertions; native registry is process-local; Task/network/unsupported profile views are boundaries; hardware pixels and video are not tested`);
     } finally {
         const resolved = path.resolve(temp);
@@ -144,8 +180,20 @@ async function checkFixture(t, accountChangeOnly = false) {
     }
 }
 
-test('streamer pins execute native registry, merge, limits, Options, focus and first OK/Back', { timeout: 45000 }, checkFixture);
+// Native registry/JSON work and native rendering each get the existing bounded
+// child budget, rather than competing for one deadline on loaded CI hosts.
+test('streamer pins execute native registry, merge, limits and account storage', { timeout: 45000 }, async t => {
+    await checkFixture(t, 'storage');
+});
+
+test('streamer pins execute native Options, focus and first OK/Back', { timeout: 45000 }, async t => {
+    await checkFixture(t, 'navigation');
+});
+
+test('streamer pins execute offline Options, cap feedback and final pin removal', { timeout: 45000 }, async t => {
+    await checkFixture(t, 'offline');
+});
 
 test('streamer pin account changes reject stale Options and refresh after OAuth invalidation', { timeout: 45000 }, async t => {
-    await checkFixture(t, true);
+    await checkFixture(t, 'account');
 });

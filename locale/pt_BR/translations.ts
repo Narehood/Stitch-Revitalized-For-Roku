@@ -1069,5 +1069,15 @@
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Pressione * para fixar na barra lateral (máx. {0})</translation></message>
         <message><source>Press * to unpin from sidebar</source><translation>Pressione * para desafixar da barra lateral</translation></message>
         <message><source>Pin limit reached ({0}). Unpin a channel first.</source><translation>Limite de canais fixados ({0}). Desafixe um primeiro.</translation></message>
+        <message><source>Unfollow</source><translation>Deixar de seguir</translation></message>
+        <message><source>Sign in to follow</source><translation>Entre para seguir</translation></message>
+        <message><source>Check follow status</source><translation>Consultar se você segue</translation></message>
+        <message><source>You can't follow your own channel.</source><translation>Você não pode seguir seu próprio canal.</translation></message>
+        <message><source>Checking follow status…</source><translation>Consultando se você segue…</translation></message>
+        <message><source>Updating follow status…</source><translation>Atualizando se você segue…</translation></message>
+        <message><source>Couldn't confirm follow status. Select again to check, or close this menu and try later.</source><translation>Não foi possível confirmar se você segue este canal. Selecione novamente para consultar, ou feche o menu e tente mais tarde.</translation></message>
+        <message><source>Not following this channel.</source><translation>Você não segue este canal.</translation></message>
+        <message><source>Following this channel.</source><translation>Você segue este canal.</translation></message>
+        <message><source>Select again to refresh this menu.</source><translation>Selecione novamente para atualizar este menu.</translation></message>
     </context>
 </TS>

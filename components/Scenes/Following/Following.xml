@@ -5,6 +5,7 @@
         <field id="doOffline" type="bool" value="false" />
         <!-- Asks heroScene to open a menu page (e.g. "Browse") -->
         <field id="menuRequest" type="string" alwaysNotify="true" />
+        <field id="followRefreshPending" type="boolean" value="false" />
     </interface>
     <script type="text/brightscript" uri="Following.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />

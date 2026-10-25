@@ -298,6 +298,8 @@ function buildNode(name)
     if newNode.hasField("menuRequest") then newNode.observeField("menuRequest", "onMenuRequest")
     if name = "VideoPlayer" then newNode.observeField("channelRequested", "onPlayerChannelRequested")
     if name = "VideoPlayer" then newNode.observeField("channelPinChanged", "onPlayerPinChanged")
+    if name = "VideoPlayer" then newNode.observeField("channelFollowChanged", "onPlayerFollowChanged")
+    if name = "VideoPlayer" then newNode.observeField("channelSignInRequested", "onPlayerSignInRequested")
 
     ' Tree placement
     if name = "GamePage" or name = "ChannelPage" or name = "VideoPlayer"
@@ -329,6 +331,8 @@ sub discardScene(node as dynamic)
     node.unobserveField("contentSelected")
     if node.hasField("channelRequested") then node.unobserveField("channelRequested")
     if node.hasField("channelPinChanged") then node.unobserveField("channelPinChanged")
+    if node.hasField("channelFollowChanged") then node.unobserveField("channelFollowChanged")
+    if node.hasField("channelSignInRequested") then node.unobserveField("channelSignInRequested")
     node.unobserveField("finished")
     if node.hasField("signedOut") then node.unobserveField("signedOut")
     if node.hasField("menuRequest") then node.unobserveField("menuRequest")
@@ -499,6 +503,27 @@ sub onPlayerPinChanged(event as object)
     if m.disposed or m.activeNode = invalid then return
     if not event.getRoSGNode().isSameNode(m.activeNode) then return
     if m.recentBar <> invalid then m.recentBar.callFunc("buildItems")
+end sub
+
+' Defer retained page I/O until Back returns focus; the Player's workers and
+' playback session keep their existing task budget throughout the action.
+sub onPlayerFollowChanged(event as object)
+    if m.disposed or m.activeNode = invalid then return
+    if not event.getRoSGNode().IsSameNode(m.activeNode) then return
+    if not m.activeNode.IsSubtype("VideoPlayer") then return
+    for each page in m.footprints
+        if page.IsSubtype("Following") then page.followRefreshPending = true
+    end for
+end sub
+
+sub onPlayerSignInRequested(event as object)
+    if m.disposed or m.activeNode = invalid then return
+    player = event.getRoSGNode()
+    if not player.IsSameNode(m.activeNode) or not player.IsSubtype("VideoPlayer") then return
+    if player.state <> "done" or not player.channelSignInRequested then return
+    ' The Player publishes only after its normal Video/worker exit barrier.
+    m.menu.focusItem = "LoginPage"
+    openPage("LoginPage")
 end sub
 
 ' A finished Player is replaced, never retained as a playable footprint.

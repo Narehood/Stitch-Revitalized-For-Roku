@@ -16,6 +16,8 @@ const startup = path.join(__dirname, 'fixtures/ui-startup-player');
 const owner = path.join(__dirname, 'fixtures/roku-demux-root-back');
 const prefix = 'stitch-player-channel-';
 const tracked = ['components/heroScene.brs', 'components/Scenes/VideoPlayer/VideoPlayer.brs',
+    'components/Scenes/Following/Following.brs',
+    'components/Scenes/VideoPlayer/ChannelFollow.brs',
     'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Modules/StitchVideo/StitchVideo.brs',
     'components/Modules/CustomVideo/CustomVideo.brs', 'components/Scenes/ChannelPage/ChannelPage.brs',
     'components/Modules/RokuDemuxSession/RokuDemuxSession.brs'];
@@ -60,6 +62,7 @@ async function build(dir, marker) {
     for (const name of ['StitchVideo', 'CustomVideo']) await probe(`components/Modules/${name}`, name, 'WrapperProbe');
     await probe('components/Modules/Chat', 'Chat', 'ChatProbe');
     await probe('components/Scenes/ChannelPage', 'ChannelPage', 'ChannelProbe');
+    await probe('components/Scenes/Following', 'Following', 'FollowingProbe');
     await probe('components/Modules/RokuDemuxSession', 'RokuDemuxSession', 'ManagerProbe', owner);
     // Actual ownership manager; only the native socket/media worker is inert.
     const managerFile = 'components/Modules/RokuDemuxSession/RokuDemuxSession.brs';
@@ -94,7 +97,7 @@ async function build(dir, marker) {
         .replaceAll(/fontSize="\d+"/g, '').replaceAll(/fontUri="[^"]+"/g, ''));
     await add('components/CardBoundary.xml', await fs.readFile(path.join(startup, 'CardBoundary.xml')));
     const followingXml = 'components/Scenes/Following/Following.xml';
-    await add(followingXml, (await fs.readFile(path.join(root, followingXml), 'utf8')).replace('itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'));
+    await add(followingXml, (await fs.readFile(path.join(dir, followingXml), 'utf8')).replace('itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'));
     const statusXml = 'components/Modules/StatusPanel/StatusPanel.xml';
     await add(statusXml, (await fs.readFile(path.join(root, statusXml), 'utf8'))
         .replace('<Font role="textFont" uri="pkg:/fonts/Archivo-Bold.otf" size="20" />', '')

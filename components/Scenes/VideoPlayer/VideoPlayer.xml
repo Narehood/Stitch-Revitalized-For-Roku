@@ -5,6 +5,8 @@
         <function name="requestBack" />
         <field id="channelRequested" type="node" />
         <field id="channelPinChanged" type="boolean" alwaysNotify="true" />
+        <field id="channelFollowChanged" type="boolean" alwaysNotify="true" />
+        <field id="channelSignInRequested" type="boolean" alwaysNotify="true" />
         <field id="contentRequested" type="Node" onChange="handleContent" />
         <field id="contentStore" type="assocarray" />
         <field id="metadata" type="array" />
@@ -20,6 +22,7 @@
         <field id="engagementStatus" type="assocarray" alwaysNotify="true" />
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
+    <script type="text/brightscript" uri="ChannelFollow.brs" />
     <script type="text/brightscript" uri="ChatLayout.brs" />
     <script type="text/brightscript" uri="RokuPlayback.brs" />
     <script type="text/brightscript" uri="LowLatencyPlayback.brs" />

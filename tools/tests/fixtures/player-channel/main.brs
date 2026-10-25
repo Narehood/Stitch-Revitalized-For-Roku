@@ -112,6 +112,7 @@ sub main()
     testPlayerPins()
     testPinDuringSeek()
     testSupersededDialog()
+    testPlayerFollows()
 
     ' Local LIVE and completed VOD use their actual production manager paths.
     for each kind in ["LIVE", "VOD"]
@@ -126,6 +127,7 @@ sub main()
         video = player.CallFunc("fixturePlayer").video
         if video = invalid then throw "local wrapper did not attach"
         video.state = "playing"
+        testLocalFollow(player, video, manager, worker, kind)
         openActions(video, kind)
         pinFromDialog()
         check(RW_IsPinned("canned") and manager.busy and not worker.stopRequested and video.control = "play", "local pin preserves the active worker and attached playing Video")
@@ -189,6 +191,220 @@ sub main()
         print "CHANNEL_FAIL_SUMMARY: "; m.failures
     end if
 end sub
+
+' The StandardMessageDialog selection is the explicit simulator boundary.
+' Wrapper navigation is still driven by remote keys; these tests do not claim
+' native hardware dialog focus or authenticated Twitch mutation validation.
+sub testPlayerFollows()
+    set_setting("active_user", "alice")
+    set_user_setting("access_token", "canned-token")
+    set_user_setting("login", "alice")
+    m.scene.CallFunc("fixtureAccountChanged")
+    m.prior = hero().active
+    originalFollowingTask = m.prior.CallFunc("fixtureFollowingTask")
+    originalFollowingTask.response = populatedFollowing("canned")
+    rows = m.prior.FindNode("homeRowList")
+    check(rows.visible and rows.numRows = 1 and rows.content.GetChild(0).GetChild(0).streamerLogin = "canned", "retained Following starts with an actual populated channel row")
+    player = openPlayer(channelRequest("LIVE"))
+    before = player.CallFunc("fixturePlayer")
+    video = before.video
+    chatJob = before.chat.CallFunc("fixtureChat").job
+    player.CallFunc("fixtureFollowDebts")
+    contentTasks = m.global.fixtureContentTasks
+    openActions(video, "LIVE")
+    dialog = m.scene.dialog
+    status = player.CallFunc("fixturePlayer").followTask
+    timer = player.CallFunc("fixturePlayer").followTimer
+    check(dialog.buttons[0] = "Open channel" and dialog.buttons[1] = "Pin streamer" and dialog.buttons[2] = "Check follow status" and dialog.buttons[3] = "Cancel", "signed-in unknown status leaves stable Open Pin Check Cancel identities")
+    check(status.functionName = "getPlayerFollowState" and status.request.params.id = "987654" and status.request.params.login = "canned" and status.control = "run", "status Task uses broadcaster identity separately from recording identity")
+    dialog.buttonSelected = 2
+    check(player.CallFunc("fixturePlayer").followTask.IsSameNode(status), "selection during unknown status neither duplicates a query nor starts a mutation")
+    status.response = followState(false)
+    check(status.control = "stop" and status.followStopRequested and timer.control = "stop" and player.CallFunc("fixturePlayer").followTask = invalid, "completed status destroys Task and stops its timeout")
+    check(m.scene.dialog.IsSameNode(dialog) and dialog.buttons[2] = "Check follow status" and video.control = "play", "asynchronous state cannot relabel or replace the focused dialog button")
+    dialog.buttonSelected = 2
+    ready = m.scene.dialog
+    check(not ready.IsSameNode(dialog) and ready.buttons[2] = "Follow" and player.CallFunc("fixturePlayer").followTask = invalid, "explicit refresh creates a Follow menu using verified state without another read")
+    player.CallFunc("fixtureDeliverClosed", dialog)
+    dialog.buttonSelected = 2
+    check(m.scene.dialog.IsSameNode(ready) and player.CallFunc("fixturePlayer").followTask = invalid, "stale closed dialog events cannot close or act on the refreshed dialog")
+    ready.buttonSelected = 2
+    write = player.CallFunc("fixturePlayer").followTask
+    check(write.functionName = "setPlayerFollowState" and write.request.params.following and write.request.params.viewerId = "101" and write.request.params.id = "987654", "explicit Follow starts one owned write with verified viewer and broadcaster")
+    ready.buttonSelected = 2
+    check(player.CallFunc("fixturePlayer").followTask.IsSameNode(write), "repeated Follow selection cannot start a second mutation")
+    check(not m.prior.followRefreshPending and m.prior.CallFunc("fixtureFollowingTask").IsSameNode(originalFollowingTask), "in-flight mutation leaves retained Following and task budget untouched")
+    write.response = followState(true)
+    check(m.prior.followRefreshPending and m.prior.CallFunc("fixtureFollowingTask").IsSameNode(originalFollowingTask), "verified mutation defers retained Following reload until focus returns")
+    check(ready.buttons[2] = "Follow" and m.scene.dialog.IsSameNode(ready), "mutation completion preserves immutable button identity until explicit refresh")
+    ready.buttonSelected = 2
+    check(m.scene.dialog.buttons[2] = "Unfollow", "explicit refresh displays Unfollow only after verified mutation success")
+    m.scene.dialog.buttonSelected = 2
+    write = player.CallFunc("fixturePlayer").followTask
+    check(not write.request.params.following and write.functionName = "setPlayerFollowState", "current Unfollow selection requests only unfollow")
+    write.response = followState(false)
+    m.scene.dialog.buttonSelected = 2
+    check(m.scene.dialog.buttons[2] = "Follow", "verified unfollow refreshes back to Follow")
+    m.scene.dialog.buttonSelected = 2
+    write = player.CallFunc("fixturePlayer").followTask
+    write.response = invalid
+    check(player.CallFunc("fixturePlayer").followCache = invalid and m.scene.dialog.message[1].Instr("Couldn't confirm") >= 0, "write failure becomes unknown with readable error rather than optimistic state")
+    m.scene.dialog.buttonSelected = 2
+    retry = player.CallFunc("fixturePlayer").followTask
+    check(retry.functionName = "getPlayerFollowState", "retry after failure is read-only and cannot repeat a mutation")
+    player.CallFunc("fixtureExpireFollow", player.CallFunc("fixturePlayer").followTimer)
+    check(retry.control = "stop" and player.CallFunc("fixturePlayer").followTask = invalid and player.CallFunc("fixturePlayer").followTimer = invalid, "timeout stops and destroys the worker and timer")
+    retry.response = followState(true)
+    player.CallFunc("fixtureDeliverFollow", retry)
+    check(player.CallFunc("fixturePlayer").followCache = invalid, "late timed-out response cannot apply state")
+    m.scene.dialog.buttonSelected = 2
+    current = player.CallFunc("fixturePlayer").followTask
+    player.CallFunc("fixtureDeliverFollow", retry)
+    check(player.CallFunc("fixturePlayer").followTask.IsSameNode(current) and current.control = "run", "old response event cannot cancel a newer request generation")
+    current.response = invalid
+    m.scene.dialog.buttonSelected = 3
+    after = player.CallFunc("fixturePlayer")
+    check(after.video.IsSameNode(video) and video.control = "play" and video.IsInFocusChain() and after.chat.IsSameNode(before.chat) and after.chat.CallFunc("fixtureChat").job.IsSameNode(chatJob), "follow unfollow failure and timeout preserve Video chat transport and restored focus")
+    check(after.engagement.IsSameNode(before.engagement) and after.relay = before.relay and after.sessionId = before.sessionId and after.recovery = 1 and after.reconnect = 2 and after.charges = 3, "follow menu preserves engagement session and recovery debt budgets")
+    check(m.global.fixtureContentTasks = contentTasks and not video.QualityChangeRequestFlag and video.selectedQuality = "Automatic", "follow state work never reloads playback or changes quality")
+    player.CallFunc("requestBack")
+    settle(40)
+    check(hero().active.IsSameNode(m.prior) and not m.prior.followRefreshPending and not m.prior.CallFunc("fixtureFollowingTask").IsSameNode(originalFollowingTask), "Back refreshes the retained Following page once without retaining a Player")
+    refreshed = m.prior.CallFunc("fixtureFollowingTask")
+    refreshed.response = { liveFollows: [], offlineFollows: [] }
+    pageStatus = m.prior.FindNode("status")
+    check(rows.numRows = 0 and rows.content.GetChildCount() = 0, "valid empty dirty refresh removes every retained channel row")
+    check(pageStatus.state = "empty" and pageStatus.visible and pageStatus.actions.Count() = 1 and pageStatus.actions[0] = "Go to Browse" and pageStatus.IsInFocusChain(), "empty refresh keeps its Browse action and status focus without stale channels")
+
+    m.scene.FindNode("MenuBar").SetFocus(true)
+    m.prior.followRefreshPending = true
+    m.prior.SetFocus(true)
+    retry = m.prior.CallFunc("fixtureFollowingTask")
+    check(not retry.IsSameNode(refreshed) and not m.prior.followRefreshPending and pageStatus.state = "loading", "dirty focus from the empty page starts one fresh Following request")
+    retry.response = invalid
+    check(pageStatus.state = "error" and pageStatus.actions[0] = "Try again" and pageStatus.IsInFocusChain() and rows.numRows = 0 and rows.content.GetChildCount() = 0, "failed refresh retains truthful error and retry focus without resurrecting old rows")
+    pageStatus.actionSelected = 0
+    recovered = m.prior.CallFunc("fixtureFollowingTask")
+    check(not recovered.IsSameNode(retry) and pageStatus.state = "loading", "actual status retry loads Following again after the empty refresh error")
+    recovered.response = populatedFollowing("recovered")
+    check(rows.visible and rows.numRows = 1 and rows.content.GetChildCount() = 1 and rows.content.GetChild(0).GetChild(0).streamerLogin = "recovered", "nonempty recovery restores only the newly returned channel row")
+    check(pageStatus.state = "hidden" and not pageStatus.visible and rows.IsInFocusChain(), "nonempty recovery hides the status panel and restores row focus")
+
+    for each scenario in ["cancel", "account", "signout", "token", "stream", "wrapper", "generation", "superseded", "destroy"]
+        player = openPlayer(channelRequest("CLIP"))
+        video = player.CallFunc("fixturePlayer").video
+        openActions(video, "CLIP")
+        dialog = m.scene.dialog
+        status = player.CallFunc("fixturePlayer").followTask
+        if scenario = "cancel"
+            dialog.buttonSelected = 3
+        else if scenario = "account"
+            set_setting("active_user", "bob")
+        else if scenario = "signout"
+            set_setting("active_user", "$default$")
+        else if scenario = "token"
+            set_user_setting("access_token", "changed-token")
+        else if scenario = "stream"
+            player.contentRequested = channelRequest("LIVE")
+        else if scenario = "wrapper"
+            player.CallFunc("fixtureReplaceWrapper")
+        else if scenario = "generation"
+            request = status.request
+            request.generation++
+            status.request = request
+        else if scenario = "superseded"
+            replacement = CreateObject("roSGNode", "StandardMessageDialog")
+            replacement.buttons = ["Continue"]
+            m.scene.dialog = replacement
+        else
+            player.CallFunc("onDestroy")
+        end if
+        status.response = followState(true)
+        player.CallFunc("fixtureDeliverFollow", status)
+        if scenario <> "generation" then dialog.buttonSelected = 2
+        check(player.CallFunc("fixturePlayer").followCache = invalid and player.CallFunc("fixturePlayer").followTask = invalid and status.control = "stop", scenario + " rejects late status actions and destroys old worker")
+        if scenario = "superseded" then check(m.scene.dialog.IsSameNode(replacement), "superseded follow response leaves the replacement dialog and its focus alone")
+        if scenario = "account" or scenario = "signout" then set_setting("active_user", "alice")
+        if scenario = "token" then set_user_setting("access_token", "canned-token")
+        m.scene.dialog = invalid
+        player.CallFunc("fixtureCloseActions")
+        player.CallFunc("requestBack")
+        if scenario = "destroy" then player.backPressed = true
+        settle(40)
+    end for
+
+    request = channelRequest("VOD")
+    request.streamerId = ""
+    request.streamerLogin = " canned "
+    player = openPlayer(request)
+    video = player.CallFunc("fixturePlayer").video
+    openActions(video, "VOD")
+    status = player.CallFunc("fixturePlayer").followTask
+    check(status.request.params.id = "" and status.request.params.login = "canned", "missing broadcaster id asks one bounded login lookup without VOD id or clip slug")
+    status.response = followState(false)
+    m.scene.dialog.buttonSelected = 2
+    m.scene.dialog.buttonSelected = 2
+    write = player.CallFunc("fixturePlayer").followTask
+    check(write.request.params.id = "987654" and write.request.params.id <> request.contentId, "resolved broadcaster id alone is used in follow writes")
+    m.scene.dialog.buttonSelected = 3
+    write.response = followState(true)
+    player.CallFunc("fixtureDeliverFollow", write)
+    check(write.control = "stop" and write.followStopRequested and player.CallFunc("fixturePlayer").followCache = invalid, "closing a pending mutation cancels its worker and suppresses late success")
+    player.CallFunc("requestBack")
+    settle(40)
+
+    request = channelRequest("CLIP")
+    request.streamerLogin = "alice"
+    player = openPlayer(request)
+    video = player.CallFunc("fixturePlayer").video
+    openActions(video, "CLIP")
+    check(m.scene.dialog.buttons[2] = "Your channel" and player.CallFunc("fixturePlayer").followTask = invalid, "own channel offers a clear inert self state without a request")
+    m.scene.dialog.buttonSelected = 2
+    check(player.CallFunc("fixturePlayer").followTask = invalid and video.control = "play", "self selection cannot write or interrupt playback")
+    m.scene.dialog.buttonSelected = 3
+    player.CallFunc("requestBack")
+    settle(40)
+
+    set_setting("active_user", "$default$")
+    set_user_setting("access_token", "")
+    m.scene.CallFunc("fixtureAccountChanged")
+    m.prior = hero().active
+    player = openPlayer(channelRequest("LIVE"))
+    video = player.CallFunc("fixturePlayer").video
+    openActions(video, "LIVE")
+    check(m.scene.dialog.buttons[2] = "Sign in to follow" and player.CallFunc("fixturePlayer").followTask = invalid and video.control = "play", "anonymous viewers can keep watching with Open Pin and clear optional sign-in")
+    m.scene.dialog.buttonSelected = 2
+    settle(40)
+    check(hero().active.id = "LoginPage" and hero().players = 0 and player.CallFunc("fixturePlayer").disposed, "explicit sign-in leaves through normal Player cleanup into existing account navigation")
+    m.scene.CallFunc("fixtureOpenFollowing")
+    m.prior = hero().active
+end sub
+
+function populatedFollowing(login as string) as object
+    return { liveFollows: [{ contentType: "LIVE", contentId: "123456789", streamerId: "987654", streamerLogin: login, streamerDisplayName: login, title: "Canned live channel", viewersCount: 1234 }], offlineFollows: [] }
+end function
+
+sub testLocalFollow(player as object, video as object, manager as object, worker as object, kind as string)
+    set_setting("active_user", "alice")
+    set_user_setting("access_token", "canned-token")
+    player.CallFunc("fixtureFollowDebts")
+    id = manager.CallFunc("fixtureManager").currentId
+    openActions(video, kind)
+    player.CallFunc("fixturePlayer").followTask.response = followState(false)
+    m.scene.dialog.buttonSelected = 2
+    m.scene.dialog.buttonSelected = 2
+    player.CallFunc("fixturePlayer").followTask.response = followState(true)
+    m.scene.dialog.buttonSelected = 3
+    after = player.CallFunc("fixturePlayer")
+    check(manager.busy and manager.CallFunc("fixtureManager").worker.IsSameNode(worker) and not worker.stopRequested and manager.CallFunc("fixtureManager").currentId = id, "local follow preserves the live or VOD worker and session ownership")
+    check(video.control = "play" and video.state = "playing" and after.recovery = 1 and after.reconnect = 2 and after.charges = 3, "local follow retains Video playback and recovery debt without bypassing later cleanup")
+    set_setting("active_user", "$default$")
+    set_user_setting("access_token", "")
+end sub
+
+function followState(following as boolean) as object
+    return { account: "alice", login: "canned", id: "987654", viewerId: "101", following: following, isSelf: false }
+end function
 
 sub testSupersededDialog()
     player = openPlayer(channelRequest("VOD"))
@@ -336,6 +552,7 @@ function openPlayer(request as object, local = false as boolean) as object
     m.scene.CallFunc("fixtureSelectContent", request, true)
     player = hero().active
     check(player.id = "VideoPlayer", "actual content selection opens one player")
+    if get_setting("active_user", "$default$") <> "$default$" then player.FindNode("bookmarksTask").response = {}
     task = player.CallFunc("fixturePlayer").task
     node = CreateObject("roSGNode", "TwitchContentNode")
     fields = request.GetFields()
@@ -431,7 +648,32 @@ function hero() as object
 end function
 
 sub press(key as string)
+    if key = "back"
+        active = hero().active
+        dialog = m.scene.dialog
+        video = invalid
+        preview = false
+        if active.id = "VideoPlayer"
+            video = active.CallFunc("fixturePlayer").video
+            if video <> invalid then preview = video.CallFunc("fixtureOverlay").preview
+        end if
+    end if
     print "FIXTURE_KEY:" + key
+    if key <> "back" then return
+    ' A fixed settle can expire before a loaded CI worker dispatches Back.
+    ' Wait for its actual dialog, seek or navigation result; assertions below
+    ' still verify playback, focus and the full stack after that result.
+    elapsed = CreateObject("roTimespan")
+    while elapsed.TotalMilliseconds() < 3000
+        if dialog <> invalid
+            if m.scene.dialog = invalid then return
+        else if preview
+            if not video.CallFunc("fixtureOverlay").preview then return
+        else
+            if not hero().active.IsSameNode(active) then return
+        end if
+        ignored = Wait(10, m.port)
+    end while
 end sub
 
 sub settle(duration as integer)

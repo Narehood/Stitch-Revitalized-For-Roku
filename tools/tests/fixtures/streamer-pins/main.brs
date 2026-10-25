@@ -9,11 +9,14 @@ sub main()
     scene = screen.createScene("FixtureScene")
     m.scene = scene
     screen.show()
-    if __ACCOUNT_CHANGE_ONLY__
+    if "__FIXTURE_CASE__" = "account"
         testAccountChanges(scene)
-    else
+    else if "__FIXTURE_CASE__" = "storage"
         testStorage()
+    else if "__FIXTURE_CASE__" = "navigation"
         testRailAndPage(scene)
+    else
+        testOfflinePage(scene)
     end if
     scene.callFunc("fixtureCleanup")
     screen.close()
@@ -247,6 +250,13 @@ sub testRailAndPage(scene as object)
     check(scene.callFunc("fixtureRead").active.id = "PriorPage" and scene.callFunc("fixtureRead").depth = 0 and page.callFunc("fixtureRead").disposed, "one native Back restores the prior page and disposes the ChannelPage")
     state = rail.callFunc("fixtureRead")
     check(not state.items[state.index].findNode("pinBadge").visible, "hero back routing refreshes the visible rail immediately after a profile pin change")
+end sub
+
+sub testOfflinePage(scene as object)
+    RW_Add(entry("channel_9", 109))
+    scene.callFunc("fixtureReady")
+    rail = scene.callFunc("fixtureRead").rail
+    oldTask = rail.callFunc("fixtureRead").task
     ' Reopen an offline channel: the profile action remains available with no rows.
     press("left")
     press("ok")

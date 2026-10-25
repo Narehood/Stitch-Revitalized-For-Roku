@@ -2,6 +2,7 @@ sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
     closeChannelActions(false)
+    m.channelFollowCache = invalid
     stopTwitchEngagement()
     if m.rokuSession = invalid then initRokuPlayback()
     stopPlaybackForDialog()
@@ -238,6 +239,7 @@ sub playContent(isRecovery = false as boolean)
 
     ' Clean up existing video node and its observers
     closeChannelActions(false)
+    m.channelFollowCache = invalid
     if m.video <> invalid
         m.video.unobserveField("channelActionsRequested")
         m.video.unobserveField("toggleChat")
@@ -489,6 +491,11 @@ end function
 sub onChannelActionsRequested(event as object)
     if m.disposed or m.isExiting or m.rokuExitPending or m.pendingChannel <> invalid or m.video = invalid then return
     if not event.getRoSGNode().isSameNode(m.video) or not m.video.channelActionsRequested then return
+    showPlayerChannelActions()
+end sub
+
+sub showPlayerChannelActions()
+    if m.disposed or m.isExiting or m.rokuExitPending or m.video = invalid then return
     if m.channelActionsDialog <> invalid then return
     content = playerChannelContent()
     if content = invalid then return
@@ -497,16 +504,25 @@ sub onChannelActionsRequested(event as object)
     m.channelActionsContent = content
     m.channelActionsAccount = RW_Section()
     m.channelActionsPinned = RW_IsPinned(content.streamerLogin)
+    m.channelActionsOwner = playerChannelOwner(content)
+    follow = playerFollowMenu()
+    m.channelActionIds = ["open", "pin", follow.id, "cancel"]
+    m.channelActionsFollowState = follow.state
+    m.channelActionsFollowComplete = false
     pinLabel = tr("Pin streamer")
     name = content.streamerDisplayName
     if m.channelActionsPinned
         pinLabel = tr("Unpin streamer")
         name += " · " + tr("PINNED")
     end if
+    m.channelActionsName = name
     dialog = CreateObject("roSGNode", "StandardMessageDialog")
     dialog.title = tr("Channel actions")
     dialog.message = [name]
-    dialog.buttons = [tr("Open channel"), pinLabel, tr("Cancel")]
+    ' StandardDialog.buttonFocused is read-only. Freeze button identities and
+    ' labels for this modal's lifetime; only an explicit refresh creates a new
+    ' dialog, using native initial focus on Open channel (index 0).
+    dialog.buttons = [tr("Open channel"), pinLabel, follow.label, tr("Cancel")]
     applyDialogPalette(dialog)
     dialog.observeField("buttonSelected", "onChannelActionSelected")
     dialog.observeField("wasClosed", "onChannelActionsClosed")
@@ -514,6 +530,7 @@ sub onChannelActionsRequested(event as object)
     m.video.callFunc("setChannelActionsOpen", true)
     scene.dialog = dialog
     dialog.SetFocus(true)
+    if follow.id = "status" then startChannelFollow(false)
 end sub
 
 sub onChannelActionSelected(event as object)
@@ -523,37 +540,59 @@ sub onChannelActionSelected(event as object)
     if scene = invalid then return
     if scene.dialog = invalid then return
     if not scene.dialog.IsSameNode(m.channelActionsDialog) then return
-    selected = m.channelActionsDialog.buttonSelected
+    if not playerChannelOwnerCurrent(m.channelActionsOwner)
+        closeChannelActions()
+        return
+    end if
+    selected = event.getData()
+    if selected < 0 or selected >= m.channelActionIds.Count() then return
+    action = m.channelActionIds[selected]
+    if action = "follow" or action = "unfollow" or action = "status"
+        handleChannelFollowAction(action)
+        return
+    else if action = "self"
+        setChannelFollowMessage(tr("You can't follow your own channel."))
+        return
+    end if
     content = m.channelActionsContent
     account = m.channelActionsAccount
     pinned = m.channelActionsPinned
     closeChannelActions()
     ' An old dialog must never write into a newly selected account.
     if account <> RW_Section() or content = invalid then return
-    if selected = 0
+    if action = "open"
         m.pendingChannel = content
         m.allowBreak = true
         m.PlayVideo = destroyTask(m.PlayVideo, "response")
         exitPlayer()
-    else if selected = 1
+    else if action = "pin"
         result = RW_SetPinned({ login: content.streamerLogin, id: content.streamerId, displayName: content.streamerDisplayName, iconUrl: content.streamerProfileImageUrl }, not pinned)
         if result = "pinned" or result = "unpinned"
             m.top.channelPinChanged = true
         else if result = "limit"
             showTemporaryMessage(Substitute(tr("Pin limit reached ({0}). Unpin a channel first."), RW_MaxItems().ToStr()))
         end if
+    else if action = "signin"
+        m.pendingChannelSignIn = true
+        m.allowBreak = true
+        exitPlayer()
     end if
 end sub
 
-sub onChannelActionsClosed()
+sub onChannelActionsClosed(event as object)
+    if m.channelActionsDialog = invalid then return
+    if not event.getRoSGNode().IsSameNode(m.channelActionsDialog) then return
     closeChannelActions()
 end sub
 
 sub closeChannelActions(restoreFocus = true as boolean)
+    cancelChannelFollow()
     dialog = m.channelActionsDialog
     if dialog = invalid then return
     m.channelActionsDialog = invalid
     m.channelActionsContent = invalid
+    m.channelActionsOwner = invalid
+    m.channelActionsFollowState = invalid
     dialog.unobserveField("buttonSelected")
     dialog.unobserveField("wasClosed")
     scene = m.top.GetScene()
@@ -580,6 +619,9 @@ sub finishPlayerExit()
         content = m.pendingChannel
         m.pendingChannel = invalid
         m.top.channelRequested = content
+    else if m.pendingChannelSignIn = true
+        m.pendingChannelSignIn = false
+        m.top.channelSignInRequested = true
     else
         m.top.backPressed = true
     end if
@@ -1726,6 +1768,8 @@ sub onDestroy()
     if m.disposed then return
     m.disposed = true
     m.pendingChannel = invalid
+    m.pendingChannelSignIn = false
+    m.channelFollowCache = invalid
     stopTwitchEngagement()
     m.isExiting = true
     cancelBookmarkWait()

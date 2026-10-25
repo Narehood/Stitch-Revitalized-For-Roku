@@ -1059,5 +1059,15 @@
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Press * to pin to sidebar ({0} max)</translation></message>
         <message><source>Press * to unpin from sidebar</source><translation>Press * to unpin from sidebar</translation></message>
         <message><source>Pin limit reached ({0}). Unpin a channel first.</source><translation>Pin limit reached ({0}). Unpin a channel first.</translation></message>
+        <message><source>Unfollow</source><translation>Unfollow</translation></message>
+        <message><source>Sign in to follow</source><translation>Sign in to follow</translation></message>
+        <message><source>Check follow status</source><translation>Check follow status</translation></message>
+        <message><source>You can't follow your own channel.</source><translation>You can't follow your own channel.</translation></message>
+        <message><source>Checking follow status…</source><translation>Checking follow status…</translation></message>
+        <message><source>Updating follow status…</source><translation>Updating follow status…</translation></message>
+        <message><source>Couldn't confirm follow status. Select again to check, or close this menu and try later.</source><translation>Couldn't confirm follow status. Select again to check, or close this menu and try later.</translation></message>
+        <message><source>Not following this channel.</source><translation>Not following this channel.</translation></message>
+        <message><source>Following this channel.</source><translation>Following this channel.</translation></message>
+        <message><source>Select again to refresh this menu.</source><translation>Select again to refresh this menu.</translation></message>
     </context>
 </TS>

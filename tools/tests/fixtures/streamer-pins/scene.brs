@@ -38,9 +38,11 @@ end sub
 sub fixtureCleanup()
     teardownAllScenes()
     m.validateOauthToken = destroyTask(m.validateOauthToken, "response")
-    m.recentBar.unobserveField("contentSelected")
-    m.recentBar.unobserveField("hasItems")
-    m.recentBar.callFunc("onDestroy")
+    if m.recentBar <> invalid
+        m.recentBar.unobserveField("contentSelected")
+        m.recentBar.unobserveField("hasItems")
+        m.recentBar.callFunc("onDestroy")
+    end if
     disposeNodeTree(m.menu)
 end sub
 
