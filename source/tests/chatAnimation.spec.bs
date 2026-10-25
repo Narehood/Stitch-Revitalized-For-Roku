@@ -11,7 +11,7 @@ namespace tests
             m.assertNotInvalid(info)
             if info = invalid then return
             m.assertEqual(info.frames, 2)
-            m.assertEqual(info.durationMs, 120)
+            m.assertTrue(info.durationMs = 120)
             m.assertEqual(info.loadWidth, 1)
             m.assertEqual(info.loadHeight, 1)
             bytes[4] = &hff
