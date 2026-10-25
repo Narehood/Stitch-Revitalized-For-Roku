@@ -20,7 +20,7 @@ This checkout incorporates work from [jeremy-albinet's maintained fork](https://
 - **Live details:** channel pages restore missing live thumbnails, live player controls show a viewer-count snapshot, and the recent-channel focus ring is centered around its avatar.
 - **Settings:** choice lists open on the saved value, and a saved **Audio Splitter Off** preference is honored. New installations retain the existing On default.
 - **Optional audio service:** the channel verifies selected-master support before starting service playback and distinguishes connection failures from required upgrades. CloudFront hosts retain URL, DNS and redirect checks. Mixed MPEG-TS ads inside separated CMAF remain unsupported; native TS playback is preserved.
-- **Proxy container:** version 0.3.1 pins an updated Debian 13/Python base, refreshes CA certificates and verifies the patched Debian package and active trust store during image build and container CI. The checks reject emSign ECC Root CA - G3 and AAA Certificate Services; other emSign roots remain accepted.
+- **Proxy container:** version 0.3.2 pins an updated Debian 13/Python base, refreshes CA certificates and verifies the patched Debian package and active trust store during image build and container CI. The checks reject emSign ECC Root CA - G3 and AAA Certificate Services; other emSign roots remain accepted.
 - **Account requests and diagnostics:** credentials are read once per request, startup diagnostics are delivered when opted in, and successful identification is deduplicated within the session.
 
 ### Also included from 3.0.6
