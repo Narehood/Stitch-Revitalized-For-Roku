@@ -254,7 +254,12 @@ end sub
 
 sub onGetFocus()
     if m.disposed then return
-    if m.top.followRefreshPending and m.top.IsInFocusChain()
+    ' focusedChild also notifies when a retained page loses focus.
+    if not m.top.IsInFocusChain()
+        updateRowListFocusFeedback()
+        return
+    end if
+    if m.top.followRefreshPending
         m.top.followRefreshPending = false
         loadFollowing()
     end if
@@ -275,7 +280,7 @@ end sub
 sub updateRowListFocusFeedback()
     if m.rowlist = invalid then return
     hasFocus = false
-    if m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
+    if m.top.IsInFocusChain() and m.top.focusedChild <> invalid and m.top.focusedChild.id = "homeRowList"
         hasFocus = true
     end if
     m.rowlist.drawFocusFeedback = hasFocus

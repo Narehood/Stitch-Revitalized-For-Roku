@@ -2,6 +2,7 @@
     <interface>
         <function name="fixtureStart" />
         <function name="fixtureRead" />
+        <function name="fixtureFollowing" />
     </interface>
     <script uri="scene.brs" />
     <script uri="HeroActual.brs" />

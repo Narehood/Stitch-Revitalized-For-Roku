@@ -45,7 +45,7 @@ async function addComponent(dir, folder, name, probe, replacements = []) {
     await addFile(dir, `components/${name}Fixture.brs`, probe);
 }
 
-async function buildPackage(dir, marker) {
+async function buildPackage(dir, marker, mainFile = 'main.brs') {
     await addFile(dir, 'manifest', 'title=ChannelPage Navigation Regression\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/taskFactory.brs',
         'source/utils/contentBuilder.brs', 'source/utils/sceneFactory.brs', 'source/utils/lifecycle.brs',
@@ -66,13 +66,28 @@ async function buildPackage(dir, marker) {
     for (const file of ['scene.brs', 'FixtureScene.xml']) {
         await addFile(dir, `components/${file}`, await fs.readFile(path.join(fixtures, file)));
     }
-    await addFile(dir, 'source/main.brs', (await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8')).replaceAll('__PASS_MARKER__', marker));
+    let main = await fs.readFile(path.join(fixtures, mainFile), 'utf8');
+    if (mainFile !== 'main.brs') {
+        const navigation = await fs.readFile(path.join(fixtures, 'main.brs'), 'utf8');
+        const helpers = navigation.indexOf('function fixtureResponse()');
+        assert.ok(helpers > 0, 'shared fixture response and assertion helpers are present');
+        main += `\n${navigation.slice(helpers)}`;
+    }
+    await addFile(dir, 'source/main.brs', main.replaceAll('__PASS_MARKER__', marker));
 
     await addComponent(dir, 'components/Scenes/ChannelPage', 'ChannelPage', `function fixtureRead() as object
     return { task: m.GetContentTask, rowlist: m.rowlist }
 end function
 `, [['<SimpleLabel', '<Label'], ['<InfoPane', '<InfoBoundary'], ['fontSize="32"', ''], ['fontSize="20"', ''],
         ['fontUri="pkg:/fonts/Archivo-Bold.otf"', ''], ['fontUri="pkg:/fonts/Archivo-Regular.otf"', '']]);
+    await addComponent(dir, 'components/Scenes/Following', 'Following', `function fixtureRead() as object
+    return { task: m.GetContentTask, rowlist: m.rowlist, status: m.status }
+end function
+
+sub fixtureDeliverFocusChange()
+    onGetFocus()
+end sub
+`);
     // The generated thumbnail uses a local image; production URL behavior has
     // separate assertions in ui-behavior. No network requests are needed here.
     const channelPath = 'components/Scenes/ChannelPage/ChannelPage.brs';
@@ -151,6 +166,56 @@ test('Recents opens one ChannelPage with an owned LIVE card, first OK and one Ba
         const resolved = path.resolve(temp);
         assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
         assert.ok(path.basename(resolved).startsWith('stitch-channel-navigation-'));
+        await fs.rm(resolved, { recursive: true, force: true });
+    }
+});
+
+test('retained Following focus callbacks and late responses preserve profile input and deferred refresh', { timeout: 60000 }, async t => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'stitch-following-focus-'));
+    const marker = `STITCH_FOLLOWING_FOCUS_PASS:${randomUUID()}`;
+    const followingPath = 'components/Scenes/Following/Following.brs';
+    const source = await fs.readFile(path.join(root, followingPath), 'utf8');
+    try {
+        const packageDir = path.join(temp, 'package');
+        await buildPackage(packageDir, marker, 'retained-following.brs');
+        const zip = path.join(temp, 'fixture.zip');
+        await zipFolder(packageDir, zip);
+        const result = await runPackage(zip, temp);
+        const failure = result.output.slice(-18000);
+        assert.equal(result.timedOut, false, failure);
+        assert.equal(result.exceeded, false, failure);
+        assert.equal(result.code, 0, failure);
+        assert.doesNotMatch(result.output, /STITCH_CHANNEL_NAV_FAIL:|FIXTURE_DRIVER_ERROR:|EXIT_BRIGHTSCRIPT_CRASH|BRIGHTSCRIPT:\s*ERROR:|failed to set up component|runtime error|BrightScript Debugger/i, failure);
+        assert.match(result.output, /EXIT_USER_NAV/, failure);
+        const summaries = [...result.output.matchAll(new RegExp(`${marker}:\\s*(\\d+) assertions`, 'g'))];
+        assert.equal(summaries.length, 1, failure);
+        assert.equal((result.output.match(/FOLLOWING_FOCUS_CASE:/g) || []).length, 9, failure);
+        assert.ok(Number(summaries[0][1]) >= 128, failure);
+        t.diagnostic(`${summaries[0][1]} actual Following/ChannelPage/StatusPanel/Hero assertions across anonymous and signed-in mock responses; explicit native focus-loss callback ordering`);
+
+        // Restore the pre-fix callback in the temporary package only. This
+        // must reproduce lost profile OK and Back through the real input path.
+        const guard = /    if not m\.top\.IsInFocusChain\(\)\r?\n        updateRowListFocusFeedback\(\)\r?\n        return\r?\n    end if\r?\n/;
+        assert.match(source, guard);
+        await addFile(packageDir, followingPath, source.replace(guard, ''));
+        const negativeZip = path.join(temp, 'no-focus-guard.zip');
+        await zipFolder(packageDir, negativeZip);
+        const negative = await runPackage(negativeZip, temp);
+        const detail = negative.output.slice(-18000);
+        assert.equal(negative.timedOut, false, detail);
+        assert.equal(negative.exceeded, false, detail);
+        assert.equal(negative.code, 0, detail);
+        assert.doesNotMatch(negative.output, /EXIT_BRIGHTSCRIPT_CRASH|BRIGHTSCRIPT:\s*ERROR:|runtime error|BrightScript Debugger/i, detail);
+        assert.match(negative.output, /STITCH_CHANNEL_NAV_FAIL:retained Following focus-loss callback cannot reclaim input/, detail);
+        assert.match(negative.output, /STITCH_CHANNEL_NAV_FAIL:first real OK on the loaded profile selects its playable LIVE card/, detail);
+        assert.match(negative.output, /STITCH_CHANNEL_NAV_FAIL:one real Back returns input from profile to retained Following/, detail);
+        assert.ok(!negative.output.includes(marker), detail);
+        assert.equal(await fs.readFile(path.join(root, followingPath), 'utf8'), source, 'negative control never changes production Following');
+        t.diagnostic('pre-fix negative control loses visible profile focus, first LIVE OK and one Back; removing only the ownership guard reproduces the failure');
+    } finally {
+        const resolved = path.resolve(temp);
+        assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(resolved).startsWith('stitch-following-focus-'));
         await fs.rm(resolved, { recursive: true, force: true });
     }
 });

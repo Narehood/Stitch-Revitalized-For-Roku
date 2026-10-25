@@ -27,6 +27,14 @@ function fixtureRead() as object
     return { active: m.activeNode, depth: m.footprints.count(), request: m.recentBar.contentSelected, pages: pages }
 end function
 
+function fixtureFollowing(signedIn as boolean) as object
+    teardownAllScenes()
+    m.global.fixtureSigned = signedIn
+    m.activeNode = buildNode("Following")
+    m.activeNode.setFocus(true)
+    return m.activeNode
+end function
+
 ' Playback and unrelated menu actions are output boundaries.
 sub onContentSelected()
 end sub
