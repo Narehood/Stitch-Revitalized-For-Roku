@@ -2,13 +2,20 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.0.6](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.6)** adds richer live chat notices and optional watch credit, Hype Train banners and pinned messages. The three network features are experimental and off by default. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.8 so it updates correctly after the earlier release and alpha builds.
+**[3.0.7](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.0.7)** reconciles community fixes for playback, Settings and the optional audio service while retaining the redesigned interface. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.0.9 so it updates correctly after the earlier release and alpha builds.
 
-**[Download the 3.0.6 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.6/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.0.7 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.0.7/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.0.6
+## What's new in 3.0.7
+
+- **Live playback:** backward timeline corrections reset stall tracking while recovery limits still require sustained forward progress.
+- **Settings:** choice lists open on the saved value, and a saved **Audio Splitter Off** preference is honored. New installations retain the existing On default.
+- **Optional audio service:** the channel verifies selected-master support before starting service playback and distinguishes connection failures from required upgrades. CloudFront hosts retain URL, DNS and redirect checks. Mixed MPEG-TS ads inside separated CMAF remain unsupported; native TS playback is preserved.
+- **Account requests and diagnostics:** credentials are read once per request, startup diagnostics are delivered when opted in, and successful identification is deduplicated within the session.
+
+### Also included from 3.0.6
 
 - **Live chat events:** subscription/resubscription, gifted-sub and raid notices now appear with Twitch's system text and optional viewer message. Bits and Channel Points reward messages show their context while preserving text, emotes and moderation.
 - **Twitch watch credit:** an opt-in experiment reports actual signed-in live viewing. Pauses, stalls and seeks add no watch time. Pokémon reward progress advanced in a bounded Roku test; other campaigns, watch streaks, Channel Points and annual recap credit remain unverified.

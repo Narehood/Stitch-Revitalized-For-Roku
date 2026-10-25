@@ -3,6 +3,14 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.0.9": [
+            "3.0.7 release (Roku package version 3.0.9)",
+            "Fix: Backward live timeline changes no longer trigger a false stall",
+            "Fix: Settings opens on the saved choice and honors Audio Splitter Off",
+            "Improved: Clear connection and upgrade messages for the optional audio service",
+            "Fix: Sign-out request safety and optional diagnostics startup delivery",
+            "Retains the redesigned interface and experimental feature defaults"
+        ],
         "3.0.8": [
             "3.0.6 release (Roku package version 3.0.8)",
             "New: Subscription, gift, raid, Bits and reward notices in live chat",
