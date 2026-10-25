@@ -131,6 +131,49 @@ function playbackQualityLabel(variant as object) as string
     return label
 end function
 
+' Metadata is decoder-filtered and bitrate-sorted; manual choices can still need a service.
+function playbackPreferredQualityIndex(metadata as object, preference as dynamic) as integer
+    if GetInterface(metadata, "ifArray") = invalid then return 0
+    if metadata.Count() = 0 then return 0
+    if GetInterface(preference, "ifString") = invalid then return 0
+    if preference = "highest"
+        if metadata.Count() > 1 then return 1
+        return 0
+    end if
+    if preference = "lowest" then return metadata.Count() - 1
+    heights = { "2160p": 2160, "1440p": 1440, "1080p": 1080, "720p": 720, "480p": 480, "360p": 360, "160p": 160 }
+    if not heights.DoesExist(preference) then return 0
+    target = heights[preference]
+    labelPattern = CreateObject("roRegex", "^[1-9][0-9]{1,3}p", "")
+    selected = -1
+    selectedHeight = 0
+    lowest = -1
+    lowestHeight = 10000
+    for index = 0 to metadata.Count() - 1
+        entry = metadata[index]
+        if GetInterface(entry, "ifAssociativeArray") = invalid then continue for
+        if entry.isTransmux = true and entry.isProxied <> true
+            if entry.playbackTransport <> "roku-demux" or entry.localPlaybackDescriptor = invalid then continue for
+        end if
+        label = entry.QualityID
+        if GetInterface(label, "ifString") = invalid then continue for
+        if not labelPattern.IsMatch(label) then continue for
+        height = CInt(Val(label))
+        if height < lowestHeight
+            lowest = index
+            lowestHeight = height
+        end if
+        if height <= target and height > selectedHeight
+            selected = index
+            selectedHeight = height
+        end if
+    end for
+    if selected >= 0 then return selected
+    if lowest >= 0 then return lowest
+    ' A master-only audio relationship has no safe concrete rendition to select.
+    return 0
+end function
+
 function buildProxyM3u8Url(proxyUrl as string, streamUrl as string, hints as dynamic) as string
     url = proxyUrl + "/m3u8?u=" + streamUrl.EncodeUriComponent()
     if hints = invalid then return url

@@ -5,6 +5,12 @@ function getChangelog() as object
     return {
         "3.0.9": [
             "3.0.7 release (Roku package version 3.0.9)",
+            "New: Save a preferred startup resolution with a lower-quality fallback",
+            "New: Choose chat timing: Match video or Live",
+            "Fix: Chat shows when it is waiting or syncing, and stays stopped while hidden",
+            "Fix: Unicode emoji and BTTV/7TV images, including recent-channel emotes",
+            "Fix: Lower live latency refreshes advancing short segments more frequently",
+            "Fix: Stale playlists cannot rewind the Roku-only media window",
             "Fix: Backward live timeline changes no longer trigger a false stall",
             "Fix: Settings opens on the saved choice and honors Audio Splitter Off",
             "Improved: Clear connection and upgrade messages for the optional audio service",

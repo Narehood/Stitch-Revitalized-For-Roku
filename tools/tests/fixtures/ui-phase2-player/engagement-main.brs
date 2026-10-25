@@ -1,6 +1,6 @@
 sub main()
     fixtureBegin()
-    m.global.addFields({ fixtureRegistry: { ChatOption: "false", ChatFontSize: "16" }, fixtureContentTasks: 0, emoteCache: {} })
+    m.global.addFields({ fixtureRegistry: { ChatFontSize: "16" }, fixtureContentTasks: 0, emoteCache: {} })
     m.scene = m.screen.createScene("PhaseTwoHost")
     m.screen.show()
 
@@ -9,7 +9,33 @@ sub main()
     contentTask(player).response = playable("720p60")
     video = waitVideo(player, invalid)
     check(player.callFunc("fixtureEngagement").worker = invalid, "default settings create no engagement worker")
+    chat = player.callFunc("fixtureEngagement").chat
+    check(not chat.forceLive and not chat.visible and countChatWorkers(chat) = 0, "missing chat preferences default to Sync and hidden with no chat or emote job")
     closePlayer(player)
+
+    for each timing in ["live", "sync"]
+        set_user_setting("chat.timing", timing)
+        showOnStartup = timing = "sync"
+        if showOnStartup
+            set_user_setting("ChatOption", "true")
+        else
+            set_user_setting("ChatOption", "false")
+        end if
+        player = openPlayer("LIVE")
+        contentTask(player).response = playable("720p60")
+        video = waitVideo(player, invalid)
+        chat = player.callFunc("fixtureEngagement").chat
+        check(chat.forceLive = (timing = "live") and chat.visible = showOnStartup, "actual player honors saved timing and show-on-startup true/false: " + timing)
+        if not showOnStartup then check(countChatWorkers(chat) = 0, "saved false creates no hidden chat or emote job")
+        chat.visible = true
+        settle(50)
+        check(countChatWorkers(chat) = 2, "opening chat starts only one transport and one emote loader: " + timing)
+        for each job in chat.getChildren(-1, 0)
+            if job.subtype() = "ChatJob" then check(job.forceLive = (timing = "live"), "new transport receives the selected timing: " + timing)
+        end for
+        closePlayer(player)
+    end for
+    set_user_setting("ChatOption", "false")
 
     set_user_setting("playback.watchCredit", "true")
     set_setting("active_user", "$default$")
@@ -185,3 +211,11 @@ sub main()
     closePlayer(player)
     fixtureEnd()
 end sub
+
+function countChatWorkers(chat as object) as integer
+    count = 0
+    for each child in chat.getChildren(-1, 0)
+        if child.subtype() = "ChatJob" or child.subtype() = "EmoteJob" then count++
+    end for
+    return count
+end function

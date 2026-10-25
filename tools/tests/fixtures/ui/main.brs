@@ -9,6 +9,7 @@ sub main()
     fixtureGlobal = screen.getGlobalNode()
     testFollowing(scene, fixtureGlobal)
     testRetainedSelection(scene, fixtureGlobal)
+    testChannelBroadcasterId(scene)
     testLateAccountResponse(scene, fixtureGlobal)
     testBrowse(scene)
     testDetailPages(scene)
@@ -22,6 +23,66 @@ sub main()
     else
         print "STITCH_UI_FAIL:"; m.failures; " failures; "; m.assertions; " assertions"
     end if
+end sub
+
+sub testChannelBroadcasterId(scene as object)
+    for each kind in ["LIVE", "USER", "VOD", "CLIP"]
+        page = addPage(scene, "ChannelPage")
+        content = createObject("roSGNode", "TwitchContentNode")
+        setTwitchContentFields(content, cardFields(kind, "recent-channel"))
+        page.contentRequested = content
+        check(content.streamerId = "", kind + " navigation starts without a broadcaster ID")
+        s = inspect(page)
+        response = channelIdResponse()
+        response.streamerId = "71092938"
+        s.task.response = response
+        check(content.streamerId = "71092938" and content.contentType = kind, kind + " channel metadata supplies broadcaster ID without changing navigation type")
+        check(inspect(page).rowlist.content.getChildCount() = 3, kind + " channel metadata builds live, VOD and clip rows")
+        checkChannelRowIds(page, "71092938", kind + " navigation")
+        live = inspect(page).rowlist.content.getChild(0).getChild(0)
+        check(live.isSameNode(content) = (kind = "LIVE"), kind + " launch retains LIVE requests and builds a fresh LIVE card for other content types")
+        disposePage(scene, page)
+    end for
+
+    page = addPage(scene, "ChannelPage")
+    content = createObject("roSGNode", "TwitchContentNode")
+    setTwitchContentFields(content, cardFields("LIVE", "known-channel"))
+    content.streamerId = "existing-id"
+    page.contentRequested = content
+    s = inspect(page)
+    for each unavailable in [{}, { streamerId: "" }, { streamerId: invalid }, { streamerId: 71092938 }, { streamerId: true }, { streamerId: {} }, { streamerId: [] }]
+        response = channelIdResponse()
+        response.append(unavailable)
+        s.task.response = response
+        check(content.streamerId = "existing-id", "missing, empty or malformed broadcaster ID preserves the existing request ID")
+        checkChannelRowIds(page, "existing-id", "unavailable response ID")
+    end for
+    s.task.response = invalid
+    check(content.streamerId = "existing-id" and inspect(page).status.state = "error", "failed channel response preserves the existing ID and failure status contract")
+    disposePage(scene, page)
+end sub
+
+function channelIdResponse() as object
+    return {
+        isLive: true,
+        description: "",
+        followerCount: 2,
+        liveTitle: "Current live stream",
+        videoShelves: [
+            { node: { title: "Recent videos", items: [{ id: "vod-1", vodTitle: "Recording", vodViewCount: 4, vodCreatedAt: "2026-10-01T00:00:00Z" }] } },
+            { node: { title: "Clips", items: [{ id: "clip-1", slug: "fixture-clip", title: "Clip", viewCount: 3, createdAt: "2026-10-01T00:00:00Z" }] } }
+        ]
+    }
+end function
+
+sub checkChannelRowIds(page as object, expectedId as string, context as string)
+    rowIndex = 0
+    for each kind in ["LIVE", "VOD", "CLIP"]
+        page.callFunc("fixtureSelect", rowIndex)
+        selected = page.contentSelected
+        check(page.playContent and selected.contentType = kind and selected.streamerId = expectedId, context + " emits " + kind + " with the broadcaster ID")
+        rowIndex += 1
+    end for
 end sub
 
 sub testRetainedSelection(scene as object, fixtureGlobal as object)

@@ -15,6 +15,7 @@ function getChannelHomeQuery() as object
     end if
     channel = rsp?.data?.channel
     m.top.response = {
+        streamerId: channel?.id ?? "",
         description: channel?.description ?? "",
         followerCount: channel?.followers?.totalCount ?? 0,
         profileImageUrl: channel?.profileImageUrl,

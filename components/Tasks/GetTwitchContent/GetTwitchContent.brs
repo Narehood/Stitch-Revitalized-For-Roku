@@ -256,9 +256,7 @@ sub loadHlsContent(request as object)
         metadata.Unshift(automatic)
     end if
     preference = get_user_setting("playback.video.quality", "auto")
-    index = 0
-    if preference = "highest" and metadata.Count() > 1 then index = 1
-    if preference = "lowest" then index = metadata.Count() - 1
+    index = playbackPreferredQualityIndex(metadata, preference)
     content = playbackRequestContent(request)
     content.SetFields(metadata[index])
     content.live = request.contentType = "LIVE"

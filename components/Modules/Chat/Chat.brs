@@ -24,14 +24,20 @@ sub init()
     m.pinSuppressedMessageId = ""
     m.maskgroup = m.top.findNode("maskGroup")
     m.chat = invalid
+    m.hasRenderedComment = false
+    m.chatPresentationState = ""
     m.moderationSeq = 0
     m.EmoteJob = invalid
     m.emoteChannel = ""
+    m.emoteChannelId = ""
     ' Rendering helpers built once per chat instance, not per message or word.
     m.hexColorRegex = CreateObject("roRegex", "^[A-Fa-f0-9]{6}$", "")
     m.urlRegex = CreateObject("roRegex", "https?:\/\/[a-zA-Z0-9\.]+", "i")
     m.bitsRegex = createObject("roRegex", "^[1-9][0-9]{0,8}$", "")
     m.nameColorCache = {}
+    m.emojiRegex = invalid
+    m.emojiRegexFailed = false
+    m.failedChatImages = {}
     m.linkColor = "0xBF94FFFF"
     if m.global?.constants?.ui?.color?.link <> invalid then m.linkColor = m.global.constants.ui.color.link
     m.top.observeField("visible", "onInvisible")
@@ -51,7 +57,7 @@ sub updatePanelTranslation()
     m.maskGroup.maskSize = [(m.chatpanel.width * m.global.constants.maskScaleFactor), (m.chatPanel.height * m.global.constants.maskScaleFactor)]
     m.maskGroup.maskOffset = [0, 0]
     for each chatmessage in m.chatPanel.getChildren(-1, 0)
-        m.chatPanel.removeChild(chatmessage)
+        removeChatMessage(chatmessage)
     end for
 end sub
 
@@ -94,8 +100,9 @@ sub onInvisible()
     if m.disposed then return
     if m.top.visible
         startChatJob()
+        startEmoteJob()
     else
-        stopChatJob()
+        stopJobs()
     end if
     updateHypeTrain()
     updatePinnedMessage()
@@ -283,9 +290,19 @@ end sub
 ' nextCommentObj callback is suppressed before the task thread halts.
 sub stopJobs()
     stopChatJob()
+    stopEmoteJob()
+end sub
+
+sub stopEmoteJob()
     if m.EmoteJob <> invalid
         emoteJob = m.EmoteJob
-        m.EmoteJob = destroyTask(m.EmoteJob, "state")
+        m.EmoteJob = invalid
+        if emoteJob.completed and emoteJob.cacheComplete
+            m.emoteChannel = emoteJob.channel
+            m.emoteChannelId = emoteJob.channel_id
+        end if
+        emoteJob.stopRequested = true
+        destroyTask(emoteJob, "completed")
         m.top.removeChild(emoteJob)
     end if
 end sub
@@ -304,10 +321,12 @@ sub onEnterChannel()
     m.pinSuppressedMessageId = ""
     stopJobs()
     for each message in m.chatPanel.getChildren(-1, 0)
-        m.chatPanel.removeChild(message)
+        removeChatMessage(message)
     end for
+    m.failedChatImages = {}
     m.translation = m.lower_bound - m.line_height
     m.emoteChannel = ""
+    m.emoteChannelId = ""
     if m.top.channel = "" then return
     m.global.setField("emoteCache", {})
     if m.top.visible then startChatJob()
@@ -315,16 +334,18 @@ sub onEnterChannel()
 end sub
 
 sub startChatJob()
-    if m.disposed then return
+    if m.disposed or not m.top.visible then return
     if m.chat <> invalid or m.top.channel = "" then return
     m.chat = createObject("roSGNode", "ChatJob")
     m.top.appendChild(m.chat)
     m.moderationSeq = 0
+    m.hasRenderedComment = false
     m.chat.forceLive = m.top.forceLive
     m.chat.delaySeconds = m.top.delaySeconds
     m.chat.observeField("nextCommentObj", "onNewCommentObj")
     m.chat.observeField("moderation", "onModeration")
     m.chat.observeField("connectionState", "onConnectionStateChange")
+    m.chat.observeField("deliveryState", "onDeliveryStateChange")
     m.chat.channel = m.top.channel
     updateChatStatus("connecting")
     m.chat.control = "run"
@@ -332,25 +353,46 @@ end sub
 
 sub stopChatJob()
     if m.chat <> invalid
-        m.chat.stopRequested = true
-        destroyTask(m.chat, "nextCommentObj")
-        destroyTask(m.chat, "moderation")
-        m.top.removeChild(m.chat)
-        m.chat = destroyTask(m.chat, "connectionState")
+        chat = m.chat
+        m.chat = invalid
+        chat.stopRequested = true
+        destroyTask(chat, "nextCommentObj")
+        destroyTask(chat, "moderation")
+        destroyTask(chat, "connectionState")
+        destroyTask(chat, "deliveryState")
+        m.top.removeChild(chat)
     end if
-    m.top.connectionState = "stopped"
+    if m.top.connectionState <> "stopped" then m.top.connectionState = "stopped"
     updateChatStatus("stopped")
 end sub
 
-sub onConnectionStateChange()
-    if m.chat <> invalid
-        m.top.connectionState = m.chat.connectionState
-        updateChatStatus(m.chat.connectionState)
-    end if
+function currentChatEvent(event as dynamic) as boolean
+    if m.disposed or not m.top.visible or m.chat = invalid then return false
+    if event <> invalid then return event.getRoSGNode().isSameNode(m.chat)
+    return true
+end function
+
+sub onConnectionStateChange(event = invalid as dynamic)
+    if not currentChatEvent(event) then return
+    state = m.chat.connectionState
+    if state = "connecting" or state = "reconnecting" then m.hasRenderedComment = false
+    if m.top.connectionState <> state then m.top.connectionState = state
+    updateChatStatus(state)
+end sub
+
+sub onDeliveryStateChange(event = invalid as dynamic)
+    if not currentChatEvent(event) then return
+    updateChatStatus(m.chat.connectionState)
 end sub
 
 sub updateChatStatus(state as string)
     if m.chatStatus = invalid then return
+    if state = "connected" and not m.hasRenderedComment
+        state = "waiting"
+        if m.chat <> invalid and m.chat.deliveryState = "syncing" then state = "syncing"
+    end if
+    if m.chatPresentationState = state then return
+    m.chatPresentationState = state
     m.chatStatus.visible = state <> "connected" and state <> "stopped"
     if state = "connecting"
         m.chatStatus.text = tr("Connecting to chat…")
@@ -358,6 +400,10 @@ sub updateChatStatus(state as string)
         m.chatStatus.text = tr("Chat disconnected. Reconnecting…")
     else if state = "unavailable"
         m.chatStatus.text = tr("Chat is unavailable. Close and reopen chat to retry.")
+    else if state = "waiting"
+        m.chatStatus.text = tr("Waiting for new messages…")
+    else if state = "syncing"
+        m.chatStatus.text = tr("Syncing chat with video…")
     end if
 end sub
 
@@ -369,14 +415,37 @@ sub onChatTimingChange()
 end sub
 
 sub startEmoteJob()
-    if m.disposed then return
-    if m.emoteChannel = m.top.channel then return
+    if m.disposed or not m.top.visible or m.top.channel = "" then return
+    if m.EmoteJob <> invalid then return
+    if m.emoteChannel = m.top.channel and m.emoteChannelId = m.top.channel_id then return
     m.EmoteJob = createObject("roSGNode", "EmoteJob")
     m.top.appendChild(m.EmoteJob)
-    m.emoteChannel = m.top.channel
     m.EmoteJob.channel_id = m.top.channel_id
     m.EmoteJob.channel = m.top.channel
+    m.EmoteJob.observeField("completed", "onEmotesCompleted")
     m.EmoteJob.control = "run"
+end sub
+
+sub onEmoteChannelIdChange()
+    if m.disposed then return
+    stopEmoteJob()
+    startEmoteJob()
+end sub
+
+sub onEmotesCompleted(event = invalid as dynamic)
+    if m.disposed or not m.top.visible or m.EmoteJob = invalid then return
+    if event <> invalid
+        if not event.getRoSGNode().isSameNode(m.EmoteJob) then return
+    end if
+    if not m.EmoteJob.completed then return
+    emoteJob = m.EmoteJob
+    m.EmoteJob = invalid
+    if emoteJob.cacheComplete
+        m.emoteChannel = emoteJob.channel
+        m.emoteChannelId = emoteJob.channel_id
+    end if
+    destroyTask(emoteJob, "completed")
+    m.top.removeChild(emoteJob)
 end sub
 
 function extractMessage(section) as object
@@ -415,8 +484,10 @@ function buildBadges(badges)
     return group
 end function
 
-function buildEmote(posterUri)
+function buildEmote(posterUri, fallbackText = "[emoji]" as string)
     poster = createObject("roSGNode", "Poster")
+    poster.addFields({ chatFallbackText: fallbackText })
+    poster.observeField("loadStatus", "onChatImageStatus")
     poster.uri = posterUri
     poster.visible = true
     bounding_rect = poster.localBoundingRect()
@@ -476,7 +547,9 @@ end function
 
 function wordOrImage(word, isUrl = false, isNotice = false)
     if not isNotice and m.global.emoteCache.DoesExist(word)
-        return buildEmote(m.global.emoteCache[word])
+        uri = m.global.emoteCache[word]
+        if not m.failedChatImages.doesExist(uri) then return buildEmote(uri, word)
+        return chatTextNode(word + " ", isUrl)
     else
         message_text = createObject("roSGNode", "SimpleLabel")
         message_text.fontSize = m.font_size
@@ -490,77 +563,168 @@ function wordOrImage(word, isUrl = false, isNotice = false)
     end if
 end function
 
+function chatTextNode(text as string, highlighted = false as boolean) as object
+    node = createObject("roSGNode", "SimpleLabel")
+    node.fontSize = m.font_size
+    node.fontUri = "pkg:/fonts/Archivo-Regular.otf"
+    node.text = text
+    if highlighted then node.color = m.linkColor
+    return node
+end function
+
+function chatWordParts(word as string, highlighted as boolean, isNotice as boolean) as object
+    ' Provider names are matched as whole words, before any Unicode splitting.
+    if not isNotice and m.global.emoteCache.doesExist(word)
+        uri = m.global.emoteCache[word]
+        if m.failedChatImages.doesExist(uri) then return [chatTextNode(word, highlighted)]
+        return [buildEmote(uri, word)]
+    end if
+    parts = []
+    for each segment in emojiTextRuns(word)
+        if segment.uri = ""
+            parts.push(chatTextNode(segment.text, highlighted))
+        else if m.failedChatImages.doesExist(segment.uri)
+            parts.push(chatTextNode(emojiFallback(segment.text), highlighted))
+        else
+            parts.push(buildEmote(segment.uri, emojiFallback(segment.text)))
+        end if
+    end for
+    return parts
+end function
+
 function buildMessage(message, x_translation, isNotice = false)
     message_group = createObject("roSGNode", "Group")
-    words = message.Split(" ")
-    line_available_space = m.right_bound - x_translation
-    current_line = 0
-    for each word in words
-        if asc(word.right(1)) = 917504
-            word = word.mid(0, (word.len() - 1))
-            ? "Found invalid character"
+    message_group.addFields({ chatMessageText: message, chatMessageX: x_translation, chatNotice: isNotice })
+    x = x_translation
+    line = 0
+    lineWidth = m.right_bound - m.left_bound
+    for each word in message.split(" ")
+        highlighted = isNotice or m.urlRegex.isMatch(word)
+        parts = chatWordParts(word, highlighted, isNotice)
+        width = 0
+        for each part in parts
+            width += part.localBoundingRect().width
+        end for
+        ' Keep words together when possible; long words wrap at whole code points.
+        if width <= lineWidth and x + width > m.right_bound and x > m.left_bound
+            line++
+            x = m.left_bound
         end if
-        ' Make room for emotes just in case
-        isUrl = m.urlRegex.IsMatch(word)
-
-        block = wordOrImage(word, isUrl, isNotice)
-        block_width = block.localBoundingRect().width
-        if block_width > m.right_bound
-            ? "break it up!"
-            block = createObject("roSGNode", "Group")
-            charTranslation = 0
-            charLine = 0
-            charLineAvailableSpace = m.right_bound - x_translation
-            for each char in word.split("")
-                charNode = createObject("roSGNode", "SimpleLabel")
-                charNode.fontSize = m.font_size
-                charNode.fontUri = "pkg:/fonts/Archivo-Regular.otf"
-                charNode.visible = true
-                charNode.text = char
-                if isUrl or isNotice
-                    charNode.color = m.linkColor
-                end if
-                charWidth = charNode.localBoundingRect().width
-                if (charLineAvailableSpace - charWidth) < 0
-                    charLine++
-                    charLineAvailableSpace = m.right_bound - m.left_bound
-                    charTranslation = 0 - x_translation + m.left_bound
-                end if
-                charNode.translation = [(charTranslation), (charLine * (m.badge_size + m.line_gap))]
-                charLineAvailableSpace -= charWidth
-                charTranslation += charWidth
-                block.appendChild(charNode)
-            end for
-            block_width = block.localBoundingRect().width
-        else if line_available_space - block_width <= 0
-            current_line++
-            line_available_space = m.right_bound - m.left_bound
-        end if
-        block.translation = [(m.right_bound - line_available_space), (current_line * (m.badge_size + m.line_gap))]
-        if block_width = 0
-            block_width = m.badge_size
-        end if
-        line_available_space -= block_width
-        message_group.appendChild(block)
+        nodes = []
+        for each part in parts
+            if part.subtype() = "SimpleLabel" and part.localBoundingRect().width > lineWidth
+                for each char in emojiCharacters(part.text)
+                    nodes.push(chatTextNode(char, highlighted))
+                end for
+            else
+                nodes.push(part)
+            end if
+        end for
+        nodes.push(chatTextNode(" ", highlighted))
+        for each node in nodes
+            nodeWidth = node.localBoundingRect().width
+            if x + nodeWidth > m.right_bound and x > m.left_bound
+                line++
+                x = m.left_bound
+            end if
+            node.translation = [x, line * (m.badge_size + m.line_gap)]
+            message_group.appendChild(node)
+            x += nodeWidth
+        end for
     end for
     return message_group
 end function
 
-sub onNewCommentObj()
-    if m.chat = invalid then return
-    m.chat.readyForNextComment = false
+' Image decoding can fail even after HTTP 200. Rebuild only this text block
+' with supported text, then account for any changed row height.
+sub onChatImageStatus(event as object)
+    poster = event.getRoSGNode()
+    status = event.getData()
+    if status <> "ready" and status <> "failed" then return
+    poster.unobserveField("loadStatus")
+    if m.disposed or status = "ready" then return
+    if poster.getScene() = invalid then return
+    block = poster.getParent()
+    while block <> invalid
+        if block.hasField("chatMessageText") then exit while
+        block = block.getParent()
+    end while
+    if block = invalid then return
+    parent = block.getParent()
+    if parent = invalid then return
+    if m.failedChatImages.count() >= 256 then m.failedChatImages = {}
+    m.failedChatImages[poster.uri] = true
+    replacement = buildMessage(block.chatMessageText, block.chatMessageX, block.chatNotice)
+    releaseChatImages(block)
+    for index = 0 to parent.getChildCount() - 1
+        if parent.getChild(index).isSameNode(block)
+            parent.replaceChild(replacement, index)
+            exit for
+        end if
+    end for
+    row = parent
+    while row <> invalid
+        if row.hasField("chatIdentity") then exit while
+        row = row.getParent()
+    end while
+    if row = invalid then return
+    if row.getChildCount() = 2
+        body = row.getChild(1)
+        body.translation = [0, row.getChild(0).localBoundingRect().height + m.line_gap]
+    end if
+    advance = row.localBoundingRect().height + m.line_gap
+    delta = advance - row.chatAdvance
+    row.chatAdvance = advance
+    found = false
+    rows = m.chatPanel.getChildren(-1, 0)
+    for each item in rows
+        if found then item.translation = [item.translation[0], item.translation[1] + delta]
+        if item.isSameNode(row) then found = true
+    end for
+    m.translation += delta
+    if rows.count() > 0
+        last = rows[rows.count() - 1]
+        overflow = last.translation[1] + last.chatAdvance - m.lower_bound
+        if overflow > 0
+            for each item in rows
+                item.translation = [item.translation[0], item.translation[1] - overflow]
+                if item.translation[1] + item.localBoundingRect().height < 0 then removeChatMessage(item)
+            end for
+            m.translation -= overflow
+        end if
+    end if
+end sub
+
+sub releaseChatImages(node as object)
+    if node.subtype() = "Poster" and node.hasField("chatFallbackText") then node.unobserveField("loadStatus")
+    for each child in node.getChildren(-1, 0)
+        releaseChatImages(child)
+    end for
+end sub
+
+sub removeChatMessage(message as object)
+    releaseChatImages(message)
+    m.chatPanel.removeChild(message)
+end sub
+
+sub onNewCommentObj(event = invalid as dynamic)
+    if not currentChatEvent(event) then return
+    chat = m.chat
+    chat.readyForNextComment = false
     try
         renderComment()
     catch e
         ' A malformed message or unavailable font must not stall every subsequent message.
     end try
-    if m.chat <> invalid then m.chat.readyForNextComment = true
+    if currentChatEvent(event)
+        if chat.isSameNode(m.chat) then chat.readyForNextComment = true
+    end if
 end sub
 
 ' Moderation applies to displayed messages at once, independent of the stream
 ' delay. A gap before the published window cannot be resolved, so it clears all.
-sub onModeration()
-    if m.chat = invalid then return
+sub onModeration(event = invalid as dynamic)
+    if not currentChatEvent(event) then return
     update = m.chat.moderation
     if update = invalid or update.events = invalid then return
     events = update.events
@@ -581,7 +745,7 @@ sub removeModerated(event as object)
     updatePinnedMessage()
     if event.kind = "room"
         for each message in m.chatPanel.getChildren(-1, 0)
-            m.chatPanel.removeChild(message)
+            removeChatMessage(message)
         end for
         m.translation = m.lower_bound - m.line_height
         return
@@ -592,7 +756,7 @@ sub removeModerated(event as object)
         message = children[index]
         if moderationMatches(message.chatIdentity, event)
             shift += message.chatAdvance
-            m.chatPanel.removeChild(message)
+            removeChatMessage(message)
         else if shift > 0
             message.translation = [message.translation[0], message.translation[1] + shift]
         end if
@@ -655,8 +819,8 @@ sub renderComment()
         ' Preserve original character offsets until Twitch emote ranges have been consumed.
         for each emoticon in emote_set.Items()
             e_start = emoticon.value.starts[0]
-            emote_word = Mid(message, (e_start + 1), emoticon.value.length)
-            if not m.global.emoteCache.DoesExist(emote_word) and m.global.emoteCache.count() < 10000
+            emote_word = ircEmoteText(message, e_start, emoticon.value.length)
+            if emote_word <> "" and not m.global.emoteCache.DoesExist(emote_word) and m.global.emoteCache.count() < 10000
                 emoteCache = m.global.emoteCache
                 if not emoteCache.DoesExist(emote_word)
                     emoteCache[emote_word] = "https://static-cdn.jtvnw.net/emoticons/v2/" + emoticon.key + "/static/light/1.0"
@@ -714,7 +878,7 @@ sub renderComment()
         group.translation = [m.left_bound, m.translation]
         m.chatPanel.appendChild(group)
         if m.chatPanel.getChildCount() > 160
-            m.chatPanel.removeChild(m.chatPanel.getChild(0))
+            removeChatMessage(m.chatPanel.getChild(0))
         end if
         y_translation = group.localBoundingRect().height + m.line_gap
         identity = comment.identity
@@ -724,7 +888,7 @@ sub renderComment()
         if m.translation + y_translation > m.chatPanel.height
             for each chatmessage in m.chatPanel.getChildren(-1, 0)
                 if (chatmessage.translation[1] + chatmessage.localBoundingRect().height) < 0 ' Wait until it's off the screen to remove it.
-                    m.chatPanel.removeChild(chatmessage)
+                    removeChatMessage(chatmessage)
                 else
                     chatmessage.translation = [chatmessage.translation[0], (chatmessage.translation[1] - y_translation)]
                 end if
@@ -732,6 +896,8 @@ sub renderComment()
         else
             m.translation += (y_translation)
         end if
+        m.hasRenderedComment = true
+        updateChatStatus(m.chat.connectionState)
     end if
 end sub
 
@@ -756,5 +922,8 @@ sub onDestroy()
     m.hypePanel.visible = false
     m.top.unobserveField("visible")
     stopJobs()
+    releaseChatImages(m.chatPanel)
+    m.emojiRegex = invalid
+    m.failedChatImages = {}
     m.nameColorCache = {}
 end sub

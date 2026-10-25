@@ -3,6 +3,7 @@ sub init()
 end sub
 
 sub publishEmoteCache(fetched as object)
+    if m.top.stopRequested then return
     ' Merge after fetching so IRC emotes learned during the HTTP wait are retained.
     cache = m.global.emoteCache
     if cache = invalid then cache = {}
@@ -31,6 +32,7 @@ sub getGlobalTwitchEmotes()
             method: "GET"
         })
         response_string = decodeJsonResponse(req.send())
+        if response_string?.data = invalid then m.fetchFailed = true
 
         if response_string?.data <> invalid
             for each emote in response_string.data
@@ -39,6 +41,7 @@ sub getGlobalTwitchEmotes()
             end for
         end if
     catch e
+        m.fetchFailed = true
         ? "Error grabbing channelttv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -66,6 +69,7 @@ sub getChannelTwitchEmotes(channel_id)
             method: "GET"
         })
         response_string = decodeJsonResponse(req.send())
+        if response_string?.data = invalid then m.fetchFailed = true
 
         if response_string?.data <> invalid
             for each emote in response_string.data
@@ -74,6 +78,7 @@ sub getChannelTwitchEmotes(channel_id)
             end for
         end if
     catch e
+        m.fetchFailed = true
         ? "Error grabbing channelttv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -116,7 +121,10 @@ sub getTwitchBadges()
             }
         })
         rsp = decodeJsonResponse(req.send())
-        if rsp?.data?.badges = invalid then return
+        if rsp?.data?.badges = invalid
+            m.fetchFailed = true
+            return
+        end if
         for each badge in rsp.data.badges
             identifier = badge.setID + "/" + badge.version
             badgelist[identifier] = badge.image2x
@@ -130,8 +138,10 @@ sub getTwitchBadges()
             end if
         end if
     catch e
+        m.fetchFailed = true
         ? "Error grabbing twitch badges"
     end try
+    if m.top.stopRequested then return
     if m.global.twitchBadges = invalid
         m.global.addFields({ twitchBadges: badgelist })
     else
@@ -150,6 +160,7 @@ function invokerest(link as string) as object
         method: "GET"
     })
     response_string = decodeJsonResponse(req.send())
+    if response_string = invalid then m.fetchFailed = true
     ' ? "responseString: "; response_string
     return response_string
 end function
@@ -168,6 +179,7 @@ sub getChannel7tvEmotes(channel_id)
             end if
         end if
     catch e
+        m.fetchFailed = true
         ? "Error grabbing 7tv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -183,6 +195,7 @@ sub getGlobal7tvEmotes()
             if uri <> invalid then emoteCache[emote.name] = uri
         end for
     catch e
+        m.fetchFailed = true
         ? "Error grabbing global7tv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -198,6 +211,7 @@ sub getGlobalTTVEmotes()
             emoteCache[emote.code] = uri
         end for
     catch e
+        m.fetchFailed = true
         ? "Error grabbing globalttv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -212,6 +226,7 @@ sub getChannelTTVFrankerEmotes(channel_id)
             if emote?.images?["1x"] <> invalid then emoteCache[emote.code] = ircImageUrl(emote.images["1x"])
         end for
     catch e
+        m.fetchFailed = true
         ? "Error grabbing channelttvfranker badges"
     end try
     publishEmoteCache(emoteCache)
@@ -234,6 +249,7 @@ sub getChannelTTVEmotes(channel_id)
             end for
         end if
     catch e
+        m.fetchFailed = true
         ? "Error grabbing channelttv badges"
     end try
     publishEmoteCache(emoteCache)
@@ -241,19 +257,31 @@ end sub
 
 sub main()
     ' ? "[EmoteJob] - getAllEmotes"
+    if m.top.stopRequested then return
+    m.fetchFailed = false
     channel_id = m.top.channel_id
     getChannelTwitchEmotes(channel_id)
+    if m.top.stopRequested then return
     getTwitchBadges()
+    if m.top.stopRequested then return
     getGlobalTwitchEmotes()
+    if m.top.stopRequested then return
     if get_user_setting("BetterTTVEmote", "true") = "true"
         getGlobalTTVEmotes()
-        getChannelTTVEmotes(channel_id)
+        if m.top.stopRequested then return
+        if channel_id <> "" then getChannelTTVEmotes(channel_id)
+        if m.top.stopRequested then return
     end if
-    if get_user_setting("FFZEmote", "true") = "true"
+    if channel_id <> "" and get_user_setting("FFZEmote", "true") = "true"
         getChannelTTVFrankerEmotes(channel_id)
+        if m.top.stopRequested then return
     end if
     if get_user_setting("7tvEmote", "true") = "true"
         getGlobal7tvEmotes()
-        getChannel7tvEmotes(channel_id)
+        if m.top.stopRequested then return
+        if channel_id <> "" then getChannel7tvEmotes(channel_id)
+        if m.top.stopRequested then return
     end if
+    m.top.cacheComplete = not m.fetchFailed and channel_id <> ""
+    m.top.completed = true
 end sub

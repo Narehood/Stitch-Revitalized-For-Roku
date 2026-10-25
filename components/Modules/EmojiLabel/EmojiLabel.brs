@@ -124,7 +124,11 @@ sub updateComponents()
 
         ' Check if we need to use ellipsis for this label
         ' checkBoundingWidth()
-        boundingWidth = m.components.boundingRect().width
+        boundingWidth = totalWidth
+        try
+            boundingWidth = m.components.boundingRect().width
+        catch e
+        end try
         if width = 0 or boundingWidth > width
             width = boundingWidth
         end if
@@ -237,20 +241,6 @@ end sub
 '     return text
 ' end function
 
-' Returns this label's compiled emoji pattern, compiling it on first use. A
-' pattern the firmware cannot compile is not retried; text then stays plain.
-function emojiPattern() as dynamic
-    if m.emojiRegex = invalid and not m.emojiRegexFailed
-        try
-            m.emojiRegex = CreateObject("roRegex", regex(), "m")
-        catch e
-            m.emojiRegex = invalid
-        end try
-        if m.emojiRegex = invalid then m.emojiRegexFailed = true
-    end if
-    return m.emojiRegex
-end function
-
 ' Updates the entire label components with new text.
 sub setText()
     cancelScroll()
@@ -258,40 +248,13 @@ sub setText()
 
     resetComponents()
     if labelText <> ""
-        ' Check for emojis in this text
-        matches = []
-        pattern = emojiPattern()
-        if pattern <> invalid
-            try
-                matches = pattern.matchAll(labelText)
-            catch e
-                matches = []
-            end try
-        end if
-
-        for each match in matches
-            matchText = match[0]
-            ' Create the label representing all text before this match,
-            ' if there is any
-            loc = labelText.instr(matchText)
-            if loc > 0
-                leftText = labelText.left(loc)
-                m.components.appendChild(createLabel(leftText))
+        for each segment in emojiTextRuns(labelText)
+            if segment.uri = ""
+                m.components.appendChild(createLabel(segment.text))
+            else
+                m.components.appendChild(createPoster(segment.uri, emojiFallback(segment.text)))
             end if
-
-            ' Get the URI for this emoji and create the poster
-            pointURI = emojiPointName(matchText)
-            m.components.appendChild(createPoster(pointURI))
-
-            ' Update the remaining text. Set to be text after this emoji.
-            labelText = labelText.mid(loc + matchText.len())
         end for
-
-        ' If we have text at the end after the last emoji match, create
-        ' a label for that text.
-        if labelText <> ""
-            m.components.appendChild(createLabel(labelText))
-        end if
     end if
 
     ' Update the components.
@@ -313,8 +276,10 @@ function createLabel(withText as string)
 end function
 
 ' Create a new poster to show an emoji with.
-function createPoster(uri as string)
+function createPoster(uri as string, fallback as string)
     poster = CreateObject("roSGNode", "Poster")
+    poster.addFields({ emojiFallbackText: fallback })
+    poster.observeField("loadStatus", "onEmojiImageStatus")
     poster.uri = uri
 
     ' Use emoji size first if set
@@ -330,6 +295,24 @@ function createPoster(uri as string)
     return poster
 end function
 
+sub onEmojiImageStatus(event as object)
+    poster = event.getRoSGNode()
+    status = event.getData()
+    if status <> "ready" and status <> "failed" then return
+    poster.unobserveField("loadStatus")
+    if m.disposed or status = "ready" then return
+    parent = poster.getParent()
+    if parent = invalid then return
+    label = createLabel(poster.emojiFallbackText)
+    for index = 0 to parent.getChildCount() - 1
+        if parent.getChild(index).isSameNode(poster)
+            parent.replaceChild(label, index)
+            exit for
+        end if
+    end for
+    updateComponents()
+end sub
+
 ' Returns all components for the current emoji label.
 function getAllComponents()
     components = []
@@ -343,6 +326,8 @@ end function
 ' Removes all child components to reset the layout group.
 sub resetComponents()
     while m.components.getChildCount() > 0
+        child = m.components.getChild(0)
+        if child.subtype() = "Poster" then child.unobserveField("loadStatus")
         m.components.removeChildIndex(0)
     end while
 end sub
@@ -369,6 +354,7 @@ sub onDestroy()
     m.top.unobserveField("repeatCount")
     m.top.unobserveField("emojiSize")
     m.top.unobserveField("maxWidth")
+    resetComponents()
     m.emojiRegex = invalid
 end sub
 

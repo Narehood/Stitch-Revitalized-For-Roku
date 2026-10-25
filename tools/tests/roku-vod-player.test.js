@@ -65,7 +65,7 @@ async function probeXml(dir, file, probeFile, probe) {
 async function build(dir, marker, capability, mutation) {
     await add(dir, 'manifest', 'title=Offline VOD Player Contract\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
     for (const file of ['source/constants.brs', 'source/utils/misc.brs', 'source/utils/analytics.brs',
-        'source/utils/uiContrast.brs', ...dependencies]) await copy(dir, file);
+        'source/utils/uiContrast.brs', 'source/utils/ircEmotes.brs', ...dependencies]) await copy(dir, file);
     for (const folder of ['fonts', 'images', 'components/Modules/CirclePoster',
         'components/SceneManager/Group', 'components/Modules/TwitchContentNode',
         'components/Modules/VideoErrorHandler', 'components/Modules/StitchVideo',

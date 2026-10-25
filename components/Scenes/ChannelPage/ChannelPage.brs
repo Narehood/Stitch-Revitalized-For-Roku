@@ -75,6 +75,9 @@ sub updateChannelInfo()
         setPageStatus("error", tr("Couldn't load this channel"), tr("Check your internet connection and try again."), ["retry", "back"])
         return
     end if
+    if GetInterface(rsp.streamerId, "ifString") <> invalid
+        if rsp.streamerId <> "" then m.top.contentRequested.streamerId = rsp.streamerId
+    end if
     m.description.infoText = rsp.description
     m.followers.text = numberToText(rsp.followerCount) + " " + tr("followers")
     if rsp.profileImageUrl <> invalid

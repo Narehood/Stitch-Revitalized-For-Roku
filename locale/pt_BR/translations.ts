@@ -1028,5 +1028,12 @@
             <source>Play supported combined audio and video streams on this Roku without another computer. Changes take effect when opening a stream.</source>
             <translation>Reproduza transmissões compatíveis com áudio e vídeo combinados neste Roku sem outro computador. As alterações entram em vigor ao abrir uma transmissão.</translation>
         </message>
+        <message><source>Choose the startup quality. A preferred resolution falls back to the nearest lower option, or the lowest available if none is lower. You can still change quality while watching.</source><translation>Escolha a qualidade inicial. Se a resolução preferida não estiver disponível, será usada a opção inferior mais próxima, ou a menor disponível se não houver uma inferior. Você ainda pode mudar a qualidade durante a reprodução.</translation></message>
+        <message><source>Chat timing</source><translation>Sincronização do chat</translation></message>
+        <message><source>Match video delays messages to follow the stream. Live shows new messages as they arrive and may reveal reactions before the video. Takes effect when chat opens.</source><translation>Sincronizar com o vídeo atrasa as mensagens para acompanhar a transmissão. Ao vivo mostra as mensagens assim que chegam e pode mostrar reações antes do vídeo. A alteração vale ao abrir o chat.</translation></message>
+        <message><source>Match video</source><translation>Sincronizar com o vídeo</translation></message>
+        <message><source>Live (no added delay)</source><translation>Ao vivo (sem atraso adicional)</translation></message>
+        <message><source>Waiting for new messages…</source><translation>Aguardando novas mensagens…</translation></message>
+        <message><source>Syncing chat with video…</source><translation>Sincronizando o chat com o vídeo…</translation></message>
     </context>
 </TS>

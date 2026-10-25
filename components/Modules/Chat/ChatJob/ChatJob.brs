@@ -136,6 +136,7 @@ sub runChatConnection(transport as object)
     lastActivity = createObject("roTimespan")
     lastDelivery = createObject("roTimespan")
     welcomed = false
+    updateDeliveryState("waiting")
     while not m.top.stopRequested
         event = wait(100, m.port)
         chunk = ""
@@ -172,7 +173,7 @@ sub runChatConnection(transport as object)
                     return
                 else if command = "001" or command = "ROOMSTATE"
                     welcomed = true
-                    m.top.connectionState = "connected"
+                    if m.top.connectionState <> "connected" then m.top.connectionState = "connected"
                 else if command = "NOTICE"
                     if message.parameters.instr("authentication failed") >= 0 or message.parameters.instr("Improperly formatted auth") >= 0
                         m.anonymousOnly = true
@@ -195,7 +196,8 @@ sub runChatConnection(transport as object)
         if not welcomed and m.connectionLifetime.totalMilliseconds() > 15000 then return
         ' Allow keepalive delivery jitter while retaining finite dead-connection recovery.
         if lastActivity.totalMilliseconds() > 360000 then return
-        if m.top.readyForNextComment and queue.count() > 0 and lastDelivery.totalMilliseconds() >= 100
+        deliveryState = "waiting"
+        if queue.count() > 0
             oldest = queue[0]
             delay = ircBoundedDelay(m.top.delaySeconds, m.top.forceLive)
             age = oldest.receivedAt.totalMilliseconds() / 1000.0
@@ -206,7 +208,9 @@ sub runChatConnection(transport as object)
                 ' Ignore implausible server/device clock differences; receipt age is bounded.
                 if serverAge >= 0 and serverAge <= 120 then age = serverAge
             end if
-            if age >= delay
+            if age < delay then deliveryState = "syncing"
+            updateDeliveryState(deliveryState)
+            if m.top.readyForNextComment and lastDelivery.totalMilliseconds() >= 100 and age >= delay
                 nextComment = queue.shift()
                 lastDelivery.mark()
                 ' The renderer checks moderation newer than this stamp while the comment is in flight.
@@ -214,8 +218,14 @@ sub runChatConnection(transport as object)
                 m.top.readyForNextComment = false
                 m.top.nextCommentObj = nextComment.comment
             end if
+        else
+            updateDeliveryState(deliveryState)
         end if
     end while
+end sub
+
+sub updateDeliveryState(state as string)
+    if m.top.deliveryState <> state then m.top.deliveryState = state
 end sub
 
 ' Moderation bypasses the stream delay and the comment handshake. The bounded

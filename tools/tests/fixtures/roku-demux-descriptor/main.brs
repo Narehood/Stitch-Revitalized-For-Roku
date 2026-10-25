@@ -157,6 +157,7 @@ sub main()
     host = screen.CreateScene("DescriptorHost")
     screen.Show()
     descriptorHelperCases()
+    preferredQualityCases()
     top = "https://use14.playlist.ttvnw.net/canned/top.m3u8?token=source%2B&sig=signature%2526"
     mid = "https://use14.playlist.ttvnw.net/canned/mid.m3u8?token=source%2B&sig=signature%2526"
     low = "https://use14.playlist.ttvnw.net/canned/low.m3u8?token=source%2B&sig=signature%2526"
@@ -184,6 +185,20 @@ sub main()
     descriptorRun(host, ladder, bodies, true, "", "lowest")
     descriptorLocal(host, "480p", low)
     descriptorAssert(host.response.QualityID = "480p", "lowest preference retained")
+    for each choice in [
+        { preference: "1080p", expected: "1080p60", url: top },
+        { preference: "720p", expected: "720p60", url: mid },
+        { preference: "480p", expected: "480p", url: low },
+        { preference: "360p", expected: "480p", url: low },
+        { preference: "1440p", expected: "1080p60", url: top },
+        { preference: "unknown", expected: "Automatic", url: mid }
+    ]
+        descriptorRun(host, ladder, bodies, true, "", choice.preference)
+        underlying = choice.expected
+        if underlying = "Automatic" then underlying = "720p60"
+        descriptorLocal(host, underlying, choice.url)
+        descriptorAssert(host.response.QualityID = choice.expected and host.metadata.Count() = 4, "preferred resolution selects a complete existing contract without removing choices")
+    end for
     descriptorRun(host, "#EXTM3U" + Chr(10) + descriptorVariant("muxed-top", "8042999", "1920x1080", top), bodies, true)
     descriptorLocal(host, "1080p60", top)
     descriptorAssert(host.response.QualityID = "Automatic" and host.metadata.Count() = 2, "no lower offered quality uses actual best eligible")
@@ -258,10 +273,16 @@ sub main()
     descriptorRun(host, hevc + descriptorVariant("muxed-low", "1327200", "852x480", low), bodies, true)
     descriptorLocal(host, "480p60", low)
     descriptorAssert(host.metadata.Count() = 3, "ineligible HEVC manual choice retained in all-combined ladder")
+    descriptorRun(host, hevc + descriptorVariant("muxed-low", "1327200", "852x480", low), bodies, true, "", "1080p")
+    descriptorLocal(host, "480p60", low)
+    descriptorAssert(host.response.QualityID = "480p60" and host.metadata.Count() = 3, "preferred resolution falls back past a decoder-supported entry without usable transport")
     rejected = ladder.Replace("muxed-top", "reject-decoder")
     descriptorRun(host, rejected, bodies, true)
     descriptorLocal(host, "720p60", mid)
     descriptorAssert(host.metadata.Count() = 3 and host.fixtureProbes = 2, "decoder rejection stays before probe and descriptor")
+    descriptorRun(host, rejected, bodies, true, "", "1080p")
+    descriptorLocal(host, "720p60", mid)
+    descriptorAssert(host.response.QualityID = "720p60" and host.metadata.Count() = 3, "preferred resolution never restores a decoder-rejected higher rendition")
     grouped = "#EXTM3U" + Chr(10) + "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=" + Chr(34) + "audio" + Chr(34) + ",NAME=Audio,URI=" + Chr(34) + "audio.m3u8" + Chr(34) + Chr(10) + descriptorVariant("grouped", "3322199", "1280x720", mid, "avc1.4D401F,mp4a.40.2", "60.000", "AUDIO=" + Chr(34) + "audio" + Chr(34))
     descriptorRun(host, grouped, bodies, true)
     descriptorLegacy(host, "direct")
@@ -296,4 +317,21 @@ sub main()
     if "__NEGATIVE_CONTROL__" = "yes" then descriptorAssert(false, "deliberate negative control")
     screen.Close()
     if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions, "; m.cases; " cases"
+end sub
+
+sub preferredQualityCases()
+    metadata = [{ QualityID: "Automatic" }, { QualityID: "720p60" }, { QualityID: "1080p HEVC" }, { QualityID: "1080p60 (Source)" }, { QualityID: "480p" }, { QualityID: "360p" }]
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "1080p") = 2, "preferred resolution outranks bitrate order and retains the first equal-height entry")
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "1440p") = 2 and playbackPreferredQualityIndex(metadata, "2160p") = 2, "unavailable higher preference selects nearest lower resolution")
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "720p") = 1 and playbackPreferredQualityIndex(metadata, "480p") = 4, "exact lower resolution preferences select their own rendition")
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "160p") = 5, "only higher offers use the lowest concrete resolution")
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "auto") = 0 and playbackPreferredQualityIndex(metadata, "invalid") = 0 and playbackPreferredQualityIndex(metadata, invalid) = 0, "automatic unknown and missing preferences retain Automatic")
+    descriptorAssert(playbackPreferredQualityIndex(metadata, "highest") = 1 and playbackPreferredQualityIndex(metadata, "lowest") = 5, "existing highest and lowest preferences are unchanged")
+    descriptorAssert(playbackPreferredQualityIndex([{ QualityID: "Automatic" }], "1080p") = 0, "master-only external audio stays on the complete master")
+    serviceOnly = { QualityID: "1080p60 HEVC", isTransmux: true, isProxied: false, playbackTransport: "direct", localPlaybackDescriptor: invalid }
+    descriptorAssert(playbackPreferredQualityIndex([{ QualityID: "Automatic" }, serviceOnly], "1080p") = 0, "unavailable transports retain the existing Automatic fallback")
+    serviceOnly.isProxied = true
+    serviceOnly.playbackTransport = "python"
+    descriptorAssert(playbackPreferredQualityIndex([{ QualityID: "Automatic" }, serviceOnly], "1080p") = 1, "a configured service remains eligible for the preferred resolution")
+    descriptorAssert(playbackPreferredQualityIndex([{ QualityID: "Automatic" }, { QualityID: "1080invalid" }, { QualityID: "720p60" }], "1080p") = 2, "malformed labels do not win a resolution preference")
 end sub

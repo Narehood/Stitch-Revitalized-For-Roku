@@ -19,7 +19,7 @@ sub main()
     getGlobalAA().readyAt = 99
     transport = openChatTransport()
     check(transport = invalid, "connection deadline rejects never-writable sockets")
-    check(getGlobalAA().socketCloses = 1 and getGlobalAA().waits < 9, "deadline closes socket once with bounded waits")
+    check(getGlobalAA().socketCloses = 1 and getGlobalAA().waits = 80, "deadline closes socket once after eight seconds")
 
     resetBoundary()
     getGlobalAA().hardError = true
@@ -55,7 +55,97 @@ sub main()
     __SEND_TESTS__
     __JOB_TESTS__
     __MODERATION_TESTS__
+    __EMOTE_TESTS__
     if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions"
+end sub
+
+' The production emote sequence executes; each provider's HTTP work is inert.
+sub runEmoteTests()
+    for canceledAt = 1 to 8
+        resetEmoteBoundary()
+        getGlobalAA().cancelProviderAt = canceledAt
+        runEmoteJob()
+        check(getGlobalAA().providerCalls.count() = canceledAt, "canceled emote loading starts no subsequent provider")
+        check(not m.top.completed and not m.top.cacheComplete, "canceled emote loading never publishes completion")
+    end for
+    resetEmoteBoundary()
+    m.top.stopRequested = true
+    runEmoteJob()
+    check(getGlobalAA().providerCalls.count() = 0 and not m.top.completed, "an already canceled emote task starts no provider")
+
+    resetEmoteBoundary()
+    runEmoteJob()
+    check(getGlobalAA().providerCalls.count() = 8 and m.top.completed and m.top.cacheComplete, "all enabled emote providers finish before successful cache completion")
+    resetEmoteBoundary()
+    getGlobalAA().failProviderAt = 5
+    runEmoteJob()
+    check(m.top.completed and not m.top.cacheComplete and getGlobalAA().providerCalls.count() = 8, "partial provider failure finishes without a success cache marker")
+    resetEmoteBoundary()
+    m.top.channel_id = ""
+    runEmoteJob()
+    check(m.top.completed and not m.top.cacheComplete and getGlobalAA().providerCalls.count() = 4, "missing channel ID permits global providers but skips malformed channel requests and success marker")
+
+    resetEmoteBoundary()
+    m.top.stopRequested = true
+    publishEmoteCache({ New: "https://cdn.example/new.png" })
+    check(getGlobalAA().cachePublications = 0, "canceled emote task cannot publish late cache updates")
+    m.top.stopRequested = false
+    publishEmoteCache({ New: "https://cdn.example/new.png" })
+    cache = getGlobalAA().publishedCache
+    check(getGlobalAA().cachePublications = 1 and cache.IRC = "https://cdn.example/irc.png" and cache.New = "https://cdn.example/new.png", "completed fetch publication keeps emotes learned from IRC")
+end sub
+
+sub resetEmoteBoundary()
+    resetBoundary()
+    m.top.channel_id = "42"
+    m.top.completed = false
+    m.top.cacheComplete = false
+    m.global = { emoteCache: { IRC: "https://cdn.example/irc.png" }, setField: fixturePublishCache }
+    state = getGlobalAA()
+    state.providerCalls = []
+    state.cancelProviderAt = 0
+    state.failProviderAt = 0
+    state.cachePublications = 0
+    state.publishedCache = invalid
+end sub
+
+sub fixturePublishCache(field as string, cache as object)
+    getGlobalAA().cachePublications++
+    getGlobalAA().publishedCache = cache
+end sub
+
+sub fixtureProvider(name as string)
+    state = getGlobalAA()
+    calls = state.providerCalls
+    calls.push(name)
+    state.providerCalls = calls
+    if calls.count() = state.cancelProviderAt then m.top.stopRequested = true
+    if calls.count() = state.failProviderAt then m.fetchFailed = true
+end sub
+
+sub getChannelTwitchEmotes(channelId as string)
+    if channelId <> "" then fixtureProvider("channelTwitch")
+end sub
+sub getTwitchBadges()
+    fixtureProvider("badges")
+end sub
+sub getGlobalTwitchEmotes()
+    fixtureProvider("globalTwitch")
+end sub
+sub getGlobalTTVEmotes()
+    fixtureProvider("globalTTV")
+end sub
+sub getChannelTTVEmotes(channelId as string)
+    fixtureProvider("channelTTV")
+end sub
+sub getChannelTTVFrankerEmotes(channelId as string)
+    fixtureProvider("FFZ")
+end sub
+sub getGlobal7tvEmotes()
+    fixtureProvider("global7TV")
+end sub
+sub getChannel7tvEmotes(channelId as string)
+    fixtureProvider("channel7TV")
 end sub
 
 sub runConnectionTests()
@@ -89,10 +179,9 @@ sub runConnectionTests()
     resetBoundary()
     state = getGlobalAA()
     state.readMode = "script"
-    state.clockStep = 10
     state.liveAt = 8
     state.stopAt = 60
-    m.top.delaySeconds = 60
+    m.top.delaySeconds = 60.0
     state.script = [
         ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
         privmsg("before", "101", "alice", "hello")
@@ -109,7 +198,104 @@ sub runConnectionTests()
         check(delivered[1].parameters = "" and delivered[1].tags.system_msg = "Bob gifted 5 subs!", "system-only gift reaches the renderer")
         check(delivered[2].parameters = "Kappa thanks!" and delivered[2].tags.emotes["25"][0].startPosition = 0, "resub delivery preserves user text and emote offsets")
     end if
+    runTimingTests()
 end sub
+
+' Each timespan has its own origin; time advances only at wait/sleep boundaries.
+' Both server timestamps and receipt-only messages must survive the full delay.
+sub runTimingTests()
+    resetBoundary()
+    first = fixtureCreateObject("roTimespan")
+    getGlobalAA().clock = 400
+    second = fixtureCreateObject("roTimespan")
+    check(first.totalMilliseconds() = 400 and first.totalMilliseconds() = 400, "reading a clock never advances it")
+    getGlobalAA().clock = 700
+    second.mark()
+    check(first.totalMilliseconds() = 700 and second.totalMilliseconds() = 0, "marking one clock leaves every other clock unchanged")
+
+    for each live in [false, true]
+        resetBoundary()
+        state = getGlobalAA()
+        state.readMode = "script"
+        state.stopAt = 145
+        m.top.delaySeconds = 13.0
+        m.top.forceLive = live
+        m.top.readyForNextComment = true
+        state.script = [
+            ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+            "@tmi-sent-ts=1700000000000;display-name=alice;id=timestamp :alice!alice@host PRIVMSG #canned :timed" + chr(13) + chr(10) + ":bob!bob@host PRIVMSG #canned :receipt only" + chr(13) + chr(10)
+        ]
+        runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+        check(state.delivered.count() = 2, "both timestamp and tagless messages eventually deliver")
+        if state.deliveredAt.count() = 2
+            if live
+                check(state.deliveredAt[0] = 200 and state.deliveredAt[1] = 300, "Live delivers timestamp and tagless messages immediately at bounded cadence")
+                check(not sawDeliveryState("syncing"), "Live never adds a video sync hold")
+            else
+                check(state.deliveredAt[0] = 13000 and state.deliveredAt[1] = 13200, "Sync holds server-timed and tagless messages for thirteen real seconds")
+                check(sawDeliveryState("syncing") and state.liveAt = 0 and not m.top.forceLive, "Sync proof never switches forceLive to release messages")
+            end if
+        end if
+        if state.delivered.count() = 2 then check(state.delivered[1].identity.login = "bob", "receipt-only delivery preserves tagless identity")
+    end for
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 145
+    m.top.delaySeconds = 13.0
+    m.top.readyForNextComment = true
+    state.script = [
+        ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+        privmsg("deleted", "101", "alice", "held")
+        "@target-msg-id=deleted :tmi.twitch.tv CLEARMSG #canned :held" + chr(13) + chr(10)
+    ]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.delivered.count() = 0 and publishedSeq() = 1, "deletion during the real Sync hold prevents delivery")
+    check(sawDeliveryState("syncing") and m.top.deliveryState = "waiting", "removing the last held message returns the producer to waiting")
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 405
+    state.readyAtWait = 150
+    m.top.delaySeconds = 13.0
+    burst = ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
+    for index = 1 to 260
+        burst += privmsg("m" + index.toStr(), "101", "alice", "held")
+    end for
+    state.script = [burst]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.delivered.count() = 250, "backpressure retains only the bounded oldest 250 pending messages")
+    if state.delivered.count() = 250
+        check(state.delivered[0].identity.id = "m1" and state.delivered[249].identity.id = "m250", "busy Sync delivery preserves the oldest messages instead of perpetually replacing them")
+        check(state.deliveredAt[0] = 15000 and state.deliveredAt[249] = 39900, "renderer backpressure releases at ten messages per second without erasing receipt age")
+    end if
+    check(not m.top.forceLive, "backpressure fixture stays in Sync mode throughout")
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 4000
+    state.script = [":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)]
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.clock = 360200 and state.delivered.count() = 0, "quiet welcomed chat waits six minutes after last activity before recovery")
+    check(m.top.deliveryState = "waiting" and not sawDeliveryState("syncing"), "quiet chat waits for future messages without an invented sync countdown")
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 4000
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.clock = 15100, "missing IRC welcome expires after fifteen seconds independent of other clocks")
+end sub
+
+function sawDeliveryState(value as string) as boolean
+    for each state in getGlobalAA().stateHistory
+        if state = value then return true
+    end for
+    return false
+end function
 
 sub runSendTests()
     resetBoundary()
@@ -128,7 +314,6 @@ sub runSendTests()
     check(getGlobalAA().registryReads = 2, "secure authenticated login reads only its account settings")
 
     resetBoundary()
-    getGlobalAA().clockStep = 10
     getGlobalAA().writeLimit = 4
     socket = fixtureCreateObject("roStreamSocket")
     sent = sendChatLine({ socket: socket, secure: false }, "PONG :fixture")
@@ -136,18 +321,16 @@ sub runSendTests()
     check(getGlobalAA().sentText = "PONG :fixture" + chr(13) + chr(10), "TCP partial writes preserve every byte and final CRLF")
 
     resetBoundary()
-    getGlobalAA().clockStep = 10
     getGlobalAA().sendHardError = true
     socket = fixtureCreateObject("roStreamSocket")
     check(not sendChatLine({ socket: socket, secure: false }, "JOIN #canned"), "TCP send hard error fails immediately")
     check(getGlobalAA().sendCalls = 1 and getGlobalAA().sleeps = 0, "TCP hard error never sleeps until the deadline")
 
     resetBoundary()
-    getGlobalAA().clockStep = 100
     getGlobalAA().readyAt = 99
     socket = fixtureCreateObject("roStreamSocket")
     check(not sendChatLine({ socket: socket, secure: false }, "PONG :fixture"), "TCP stalled send expires")
-    check(getGlobalAA().sendCalls = 0 and getGlobalAA().sleeps > 0 and getGlobalAA().sleeps < 10, "TCP stalled send remains finite")
+    check(getGlobalAA().sendCalls = 0 and getGlobalAA().sleeps = 100 and getGlobalAA().clock = 1000, "TCP stalled send expires after one second")
 
     resetBoundary()
     m.top.stopRequested = true
@@ -156,7 +339,6 @@ sub runSendTests()
     check(getGlobalAA().sendCalls = 0, "stopped TCP send never writes")
 
     resetBoundary()
-    getGlobalAA().clockStep = 10
     socket = fixtureCreateObject("roStreamSocket")
     check(loginToChat({ socket: socket, secure: false }), "plaintext login preserves anonymous read-only access")
     check(getGlobalAA().registryReads = 0, "plaintext login never reads account credentials")
@@ -164,7 +346,6 @@ sub runSendTests()
     check(getGlobalAA().sentText.instr("oauth:") < 0 and getGlobalAA().sentText.instr("FixtureSentinelA1") < 0, "plaintext login never writes an OAuth token")
 
     resetBoundary()
-    getGlobalAA().clockStep = 10
     socket = fixtureCreateObject("roStreamSocket")
     check(not sendChatLine({ socket: socket, secure: false }, "PONG :fixture" + chr(13) + chr(10) + "JOIN #other"), "IRC line injection fails before sending")
     check(getGlobalAA().sendCalls = 0, "rejected IRC line injection writes no bytes")
@@ -172,6 +353,7 @@ end sub
 
 sub runJobTests()
     resetBoundary()
+    getGlobalAA().stopAt = 10000
     getGlobalAA().webSocketAvailable = true
     getGlobalAA().webSocketOpened = true
     runChatJob()
@@ -206,10 +388,9 @@ sub runModerationTests()
     resetBoundary()
     state = getGlobalAA()
     state.readMode = "script"
-    state.clockStep = 10
     state.liveAt = 8
     state.stopAt = 60
-    m.top.delaySeconds = 60
+    m.top.delaySeconds = 60.0
     state.script = [
         ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
         privmsg("a1", "101", "alice", "first") + privmsg("b2", "202", "bob", "spam") + privmsg("c3", "303", "carol", "keep")
@@ -233,10 +414,9 @@ sub runModerationTests()
     resetBoundary()
     state = getGlobalAA()
     state.readMode = "script"
-    state.clockStep = 10
     state.liveAt = 5
     state.stopAt = 30
-    m.top.delaySeconds = 60
+    m.top.delaySeconds = 60.0
     state.script = [
         ":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)
         privmsg("a1", "101", "alice", "first") + privmsg("b2", "202", "bob", "second") + "@room-id=1 :tmi.twitch.tv CLEARCHAT #canned" + chr(13) + chr(10) + privmsg("g7", "505", "erin", "after clear")
@@ -276,12 +456,18 @@ end function
 
 ' Stands in for Chat.onNewCommentObj: records each delivery and acknowledges it.
 sub scriptedRenderer(state as object)
+    history = state.stateHistory
+    if history.count() = 0 or history[history.count() - 1] <> m.top.deliveryState then history.push(m.top.deliveryState)
+    state.stateHistory = history
     if state.waits < state.liveAt and m.top.moderation <> invalid then state.publishedBeforeLive = m.top.moderation.seq
     if m.top.nextCommentObj <> invalid
         if state.waits < state.liveAt then state.deliveredBeforeLive++
         delivered = state.delivered
         delivered.push(m.top.nextCommentObj)
         state.delivered = delivered
+        times = state.deliveredAt
+        times.push(state.clock - 100)
+        state.deliveredAt = times
         m.top.nextCommentObj = invalid
         m.top.readyForNextComment = true
     end if
@@ -289,6 +475,7 @@ sub scriptedRenderer(state as object)
         m.top.forceLive = true
         m.top.readyForNextComment = true
     end if
+    if state.readyAtWait > 0 and state.waits >= state.readyAtWait then m.top.readyForNextComment = true
     if state.waits >= state.stopAt then m.top.stopRequested = true
 end sub
 
@@ -332,7 +519,6 @@ sub resetBoundary()
     state.webSocketAvailable = false
     state.webSocketOpened = false
     state.clock = 0
-    state.clockStep = 1000
     state.waits = 0
     state.readyAt = 0
     state.stopAt = 99
@@ -357,6 +543,10 @@ sub resetBoundary()
     state.delivered = []
     state.deliveredBeforeLive = 0
     state.publishedBeforeLive = 0
+    state.deliveredAt = []
+    state.stateHistory = []
+    state.readyAtWait = 0
+    state.wallBase = 1700000000
 end sub
 
 function fixtureCreateObject(name as string) as dynamic
@@ -395,7 +585,9 @@ function fixtureCreateObject(name as string) as dynamic
     else if name = "roSocketAddress"
         return { setAddress: noop }
     else if name = "roTimespan"
-        return { totalMilliseconds: elapsed, mark: markClock }
+        return { startedAt: state.clock, totalMilliseconds: elapsed, mark: markClock }
+    else if name = "roDateTime"
+        return { asSeconds: wallSeconds }
     else if name = "roByteArray" or name = "roMessagePort"
         return createObject(name)
     end if
@@ -405,6 +597,7 @@ end function
 
 sub fixtureSleep(milliseconds as integer)
     getGlobalAA().sleeps++
+    getGlobalAA().clock += milliseconds
 end sub
 
 function sendData(data as dynamic, first as integer, length = -1 as integer) as dynamic
@@ -435,6 +628,7 @@ end function
 function fixtureWait(milliseconds as integer, port as dynamic) as dynamic
     state = getGlobalAA()
     state.waits++
+    state.clock += milliseconds
     if state.readMode = "script"
         scriptedRenderer(state)
         return invalid
@@ -509,14 +703,16 @@ sub closeWebSocket()
 end sub
 
 function elapsed() as integer
-    state = getGlobalAA()
-    state.clock += state.clockStep
-    return state.clock
+    return getGlobalAA().clock - m.startedAt
 end function
 
 sub markClock()
-    getGlobalAA().clock = 0
+    m.startedAt = getGlobalAA().clock
 end sub
+
+function wallSeconds() as integer
+    return getGlobalAA().wallBase + int(getGlobalAA().clock / 1000)
+end function
 
 function openWebSocket(timeout as integer) as boolean
     return getGlobalAA().webSocketOpened

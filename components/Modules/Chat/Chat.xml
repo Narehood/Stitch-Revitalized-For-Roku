@@ -6,7 +6,7 @@
         <field id="supportsDisposal" type="boolean" value="true" />
         <field id="backgroundColor" type="string" value="0x0E0E10FF" onChange="onBackgroundColorChange" />
         <field id="channel" type="string" onChange="onEnterChannel" alwaysNotify="true" />
-        <field id="channel_id" type="string" />
+        <field id="channel_id" type="string" onChange="onEmoteChannelIdChange" />
         <field id="focusable" type="Boolean" value="true" />
         <field id="control" type="bool" onChange="onVideoChange" value="false" alwaysNotify="true" />
         <field id="doneFocus" type="Boolean" value="false" />
@@ -31,6 +31,9 @@
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/uiContrast.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/misc.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/ircEmotes.brs" />
+    <script type="text/brightscript" uri="pkg:/components/Modules/EmojiLabel/EmojiLabelRegex.brs" />
+    <script type="text/brightscript" uri="pkg:/components/Modules/EmojiLabel/EmojiLabelUtil.brs" />
     <children>
         <MaskGroup
             id="MaskGroup" maskUri="pkg:/images/white-square-mask.png" visible="true">

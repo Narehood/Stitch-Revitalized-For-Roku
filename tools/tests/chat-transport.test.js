@@ -24,8 +24,8 @@ function extractTransport(source) {
 }
 
 function extractConnection(source) {
-    const matches = [...source.matchAll(/^sub (?:runChatConnection\(transport as object\)|publishModeration\(queue as object, event as object\))\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
-    assert.equal(matches.length, 2, 'expected complete production connection and moderation functions');
+    const matches = [...source.matchAll(/^sub (?:runChatConnection\(transport as object\)|publishModeration\(queue as object, event as object\)|updateDeliveryState\(state as string\))\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
+    assert.equal(matches.length, 3, 'expected complete production connection, moderation and delivery state functions');
     for (const match of matches) assert.equal([...match[0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
     return matches.map(match => match[0]).join('\n');
 }
@@ -44,11 +44,11 @@ function extractJob(source) {
     return matches[0][0].replace(/^sub main\(\)/, 'sub runChatJob()');
 }
 
-async function runFixture(body, connection = '', sendLogin = '', job = '', moderation = false) {
+async function runFixture(body, connection = '', sendLogin = '', job = '', moderation = false, emote = '') {
     // The interpreter has no native TCP/WebSocket implementation. Replace only
     // object creation and waiting with explicit, deterministic OS boundaries.
     // All production connection/send/login decisions, deadlines and cleanup execute.
-    const combined = [body, connection, sendLogin, job].join('\n');
+    const combined = [body, connection, sendLogin, job, emote].join('\n');
     assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, 4 + (connection ? 5 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
     assert.equal([...combined.matchAll(/\bwait\(/gi)].length, 1 + (connection ? 1 : 0) + (job ? 1 : 0));
     const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(')
@@ -58,14 +58,16 @@ async function runFixture(body, connection = '', sendLogin = '', job = '', moder
         .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '')
         .replace('__SEND_TESTS__', sendLogin ? 'runSendTests()' : '')
         .replace('__JOB_TESTS__', job ? 'runJobTests()' : '')
-        .replace('__MODERATION_TESTS__', moderation ? 'runModerationTests()' : '');
+        .replace('__MODERATION_TESTS__', moderation ? 'runModerationTests()' : '')
+        .replace('__EMOTE_TESTS__', emote ? 'runEmoteTests()' : '');
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     try {
         await fs.writeFile(path.join(dir, 'transport.brs'), bounded);
         await fs.writeFile(path.join(dir, 'main.brs'), main);
         await fs.copyFile(path.join(root, 'source/utils/ircParser.brs'), path.join(dir, 'ircParser.brs'));
+        await fs.copyFile(path.join(root, 'source/utils/ircEmotes.brs'), path.join(dir, 'ircEmotes.brs'));
         return await new Promise((resolve, reject) => {
-            const child = spawn(process.execPath, [cli, '--no-sg', '--root', dir, 'transport.brs', 'ircParser.brs', 'main.brs'],
+            const child = spawn(process.execPath, [cli, '--no-sg', '--root', dir, 'transport.brs', 'ircParser.brs', 'ircEmotes.brs', 'main.brs'],
                 { cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
             let output = '', bytes = 0, excessive = false, timedOut = false, startup;
             const timeout = setTimeout(() => { timedOut = true; child.kill(); }, 15000);
@@ -134,6 +136,16 @@ test('the old empty-buffer disconnect rejects the pending-read case', async () =
     assert.throws(() => acceptResult(result));
 });
 
+test('bypassing the Sync hold is rejected with independent elapsed and server clocks', async () => {
+    const source = await fs.readFile(production, 'utf8');
+    const connection = extractConnection(source);
+    const gate = 'delay = ircBoundedDelay(m.top.delaySeconds, m.top.forceLive)';
+    assert.equal(connection.split(gate).length - 1, 1);
+    const result = await runFixture(extractTransport(source), connection.replace(gate, 'delay = 0'));
+    assert.match(result.output, /STITCH_CHAT_TRANSPORT_FAIL: Sync holds server-timed and tagless messages for thirteen real seconds/);
+    assert.throws(() => acceptResult(result));
+});
+
 test('actual send and login reject invalid sends, preserve complete TCP writes and never read plaintext credentials', async t => {
     const source = await fs.readFile(production, 'utf8');
     const count = acceptResult(await runFixture(extractTransport(source), extractConnection(source), extractSendLogin(source), extractJob(source)));
@@ -157,6 +169,16 @@ test('actual connection removes deleted and purged queued messages before delaye
     const count = acceptResult(result);
     assert.doesNotMatch(result.output, /FixtureDeletedText|after timeout/, 'moderation and chat text must not be logged');
     t.diagnostic(`${count} transport/parser assertions; scripted IRC lines on the canned socket, the wait boundary acknowledges deliveries`);
+});
+
+test('actual emote lifecycle stops between providers, suppresses canceled publication and keeps partial caches retryable', async t => {
+    const source = await fs.readFile(path.join(root, 'components/Modules/Chat/EmoteJob/EmoteJob.brs'), 'utf8');
+    const matches = [...source.matchAll(/^sub (?:main\(\)|publishEmoteCache\(fetched as object\))\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
+    assert.equal(matches.length, 2, 'expected complete production emote main and publisher');
+    const emote = matches.map(match => match[0]).join('\n').replace(/^sub main\(\)/m, 'sub runEmoteJob()');
+    const body = extractTransport(await fs.readFile(production, 'utf8'));
+    const count = acceptResult(await runFixture(body, '', '', '', false, emote));
+    t.diagnostic(`${count} transport/emote lifecycle assertions; provider fetch functions are explicit offline boundaries`);
 });
 
 for (const [name, gate, replacement, expected] of [

@@ -8,7 +8,7 @@
     },
     {
         "title": "Video quality",
-        "description": "The quality a stream starts at. You can change it while watching with the Quality button.",
+        "description": "Choose the startup quality. A preferred resolution falls back to the nearest lower option, or the lowest available if none is lower. You can still change quality while watching.",
         "settingName": "playback.video.quality",
         "type": "radio",
         "default": "auto",
@@ -24,6 +24,34 @@
             {
                 "title": "Lowest (uses less data)",
                 "id": "lowest"
+            },
+            {
+                "title": "2160p",
+                "id": "2160p"
+            },
+            {
+                "title": "1440p",
+                "id": "1440p"
+            },
+            {
+                "title": "1080p",
+                "id": "1080p"
+            },
+            {
+                "title": "720p",
+                "id": "720p"
+            },
+            {
+                "title": "480p",
+                "id": "480p"
+            },
+            {
+                "title": "360p",
+                "id": "360p"
+            },
+            {
+                "title": "160p",
+                "id": "160p"
             }
         ]
     },
@@ -41,6 +69,23 @@
         "settingName": "ChatOption",
         "type": "bool",
         "default": "false"
+    },
+    {
+        "title": "Chat timing",
+        "description": "Match video delays messages to follow the stream. Live shows new messages as they arrive and may reveal reactions before the video. Takes effect when chat opens.",
+        "settingName": "chat.timing",
+        "type": "radio",
+        "default": "sync",
+        "options": [
+            {
+                "title": "Match video",
+                "id": "sync"
+            },
+            {
+                "title": "Live (no added delay)",
+                "id": "live"
+            }
+        ]
     },
     {
         "title": "Twitch watch credit",

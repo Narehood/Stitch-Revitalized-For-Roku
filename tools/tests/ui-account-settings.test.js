@@ -230,7 +230,7 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before.filter(setting => setting.settingName !== 'support');
     assert.equal(retained.length, 12);
-    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin'];
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing'];
     assert.equal(after.length, retained.length + additions.length);
     assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.has('support'), false, 'donation action is removed');
@@ -239,7 +239,13 @@ test('Settings preserves retained storage contracts and excludes the removed don
         assert.ok(current, setting.settingName);
         assert.equal(current.type, setting.type, setting.settingName);
         assert.equal(current.action, setting.action, setting.settingName);
-        assert.deepEqual(current.options?.map(option => option.id), setting.optionIds, setting.settingName);
+        const optionIds = current.options?.map(option => option.id);
+        if (setting.settingName === 'playback.video.quality') {
+            assert.deepEqual(optionIds.slice(0, setting.optionIds.length), setting.optionIds, 'legacy quality IDs retain their order');
+            assert.deepEqual(optionIds.slice(setting.optionIds.length), ['2160p', '1440p', '1080p', '720p', '480p', '360p', '160p']);
+        } else {
+            assert.deepEqual(optionIds, setting.optionIds, setting.settingName);
+        }
         assert.equal(current.default, setting.settingName === 'ChatFontSize' ? '16' : setting.default, setting.settingName);
     }
     assert.equal(map.get('analytics.enabled').default, 'false');
@@ -247,7 +253,10 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(map.get('playback.lowLatency').experimental, true);
     assert.equal(map.get('proxy.builtin').type, 'bool');
     assert.equal(map.get('proxy.builtin').default, 'true');
-    for (const key of additions.filter(key => key !== 'proxy.builtin')) {
+    assert.equal(map.get('chat.timing').type, 'radio');
+    assert.equal(map.get('chat.timing').default, 'sync');
+    assert.deepEqual(map.get('chat.timing').options.map(option => option.id), ['sync', 'live']);
+    for (const key of additions.filter(key => key !== 'proxy.builtin' && key !== 'chat.timing')) {
         assert.equal(map.get(key).type, 'bool', key);
         assert.equal(map.get(key).default, 'false', key);
         assert.equal(map.get(key).experimental, true, key);

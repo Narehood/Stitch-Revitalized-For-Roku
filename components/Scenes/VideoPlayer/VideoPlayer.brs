@@ -115,9 +115,10 @@ end sub
 sub initChat()
     if not m.top.chatStarted
         m.top.chatStarted = true
+        m.chatWindow.forceLive = get_user_setting("chat.timing", "sync") = "live"
         m.chatWindow.channel_id = m.top.contentRequested.streamerId
         m.chatWindow.channel = m.top.contentRequested.streamerLogin
-        if get_user_setting("ChatOption", "true") = "true"
+        if get_user_setting("ChatOption", "false") = "true"
             m.chatWindow.visible = true
             m.video.chatIsVisible = m.chatWindow.visible
         else

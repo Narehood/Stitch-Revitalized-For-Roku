@@ -3,7 +3,7 @@
 ' this substitute returns an ASCII pattern and counts compilations per label
 ' instance. A requested failure throws, standing in for firmware that cannot
 ' compile the pattern (Roku returns invalid). EmojiLabel.brs runs unchanged.
-function regex() as string
+function emojiRegexSource() as string
     if m.fixtureBuilds = invalid then m.fixtureBuilds = 0
     m.fixtureBuilds += 1
     if m.fixtureFail <> invalid and m.fixtureFail then throw "fixture pattern unavailable"
