@@ -23,6 +23,7 @@ function newPF(opted = true as boolean, transitions = true as boolean, nowMs = 0
     if transitions then options.sourceTransitions = true
     state = nativeLiveCreate("https://cdn.example.invalid/live.m3u8", nowMs, 0, invalid, true, 16777216&, options)
     state.pollFromRequest = opted
+    state.windowUs = 6000000&
     state.adClockEnabled = false
     return state
 end function
@@ -108,7 +109,7 @@ sub closePF(state as object)
         nativeLiveRetire(state, id)
     end for
     checkPF(nativeLiveClose(state), "actual helper close releases input assets and source")
-    checkPF(not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt") and not state.DoesExist("playlistRequestPending"), "close releases bounded private snapshot and request timing")
+    checkPF(not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt") and not state.DoesExist("playlistRequestPending") and not state.DoesExist("playlistLastTail"), "close releases bounded private snapshot tail and request timing")
 end sub
 
 sub wiringPF()
@@ -165,11 +166,12 @@ sub floorsPF()
     changed = playlistPF(10, 3, 4)
     completePF(state, changed, 10400&)
     nativeLiveAdvance(state, 10500&)
-    checkPF(state.nextPoll = 14000&, "changed source target uses its full new target")
-    startPF(state, 14000&)
-    completePF(state, changed, 14400&)
-    nativeLiveAdvance(state, 14500&)
-    checkPF(state.nextPoll = 16000& and state.lastPublicationProgress = 5000&, "unchanged source uses half new source target")
+    ' A changed target header does not advance completed media after startup.
+    checkPF(state.nextPoll = 12000&, "header-only target change uses half new declared target")
+    startPF(state, 12000&)
+    completePF(state, changed, 12400&)
+    nativeLiveAdvance(state, 12500&)
+    checkPF(state.nextPoll = 14000& and state.lastPublicationProgress = 5000&, "unchanged source uses half new source target")
     closePF(state)
     for each target in [1, 2, 8]
         state = newPF()
@@ -188,7 +190,7 @@ sub floorsPF()
         state = newPF()
         startPF(state, 1000&)
         completePF(state, playlistPF(10, 3, target), 1400&)
-        checkPF(not state.pollFromRequest and not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt"), "long source target disables optimization and releases snapshot")
+        checkPF(not state.pollFromRequest and not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt") and not state.DoesExist("playlistLastTail"), "long source target disables optimization and releases snapshot and tail")
         drainPF(state, 5000&)
         checkPF(state.nextPoll = 5000& + target * 500& and state.deadline = 45000&, "long source target retains original schedule and health bounds")
         if target = 30
@@ -202,6 +204,118 @@ sub floorsPF()
         end if
         closePF(state)
     end for
+end sub
+
+sub tailCadencePF()
+    casePF("advancing-media-tail-header-unchanged-stale-and-recovery")
+    state = newPF()
+    startPF(state, 0&)
+    completePF(state, playlistPF(), 100&)
+    drainPF(state, 500&)
+    checkPF(state.playlistLastTail = 12&, "startup records completed source tail before steady cadence")
+    forward = playlistPF(10, 4)
+    startPF(state, 6000&)
+    identity = state.op.identity
+    transfers = state.transfers
+    status = nativeLiveTick(state, invalid, 6050&)
+    checkPF(status.transferActive and state.op.identity = identity and state.transfers = transfers, "pending playlist has exactly one Fetch transfer")
+    completePF(state, forward, 6100&)
+    checkPF(state.nextPoll = 8002& and state.playlistLastTail = 13&, "advancing short tail schedules its duration from dispatch")
+    drainPF(state, 6500&)
+    current = nativeLivePublication(state)
+    checkPF(current.targetDuration = 2 and current.durationUs = 6006000& and current.sourceOffsetUs = 0& and state.nextPoll = 8002&, "short cadence preserves exact full-segment publication and source target distinction")
+    checkPF(nlIntent(state, 8001&) = invalid, "short tail cadence suppresses early source reload")
+    header = forward + "#EXT-X-TWITCH-ELAPSED-SECS:123.5" + Chr(10)
+    startPF(state, 8002&)
+    completePF(state, header, 8102&)
+    nativeLiveAdvance(state, 8202&)
+    checkPF(state.nextPoll = 11002& and state.playlistLastTail = 13&, "header-only change uses half declared target without media advance")
+    checkPF(state.lastUpstreamProgress = 8102& and state.lastPublicationProgress = 6500& and state.segmentPairCount = 4 and FormatJson(nativeLivePublication(state)) = FormatJson(current), "header-only response cannot fabricate publication progress")
+    startPF(state, 11002&)
+    completePF(state, header, 11102&)
+    nativeLiveAdvance(state, 11202&)
+    checkPF(state.nextPoll = 14002&, "unchanged short profile uses half declared source target")
+    beforeWindow = FormatJson(state.window)
+    beforeBytes = state.cacheBytes
+    startPF(state, 14002&)
+    completePF(state, playlistPF(), 14102&)
+    checkPF(state.phase = "ready" and state.nextPoll = 17002& and state.playlistLastTail = 13&, "stale response keeps maximum tail and half declared target")
+    checkPF(FormatJson(state.window) = beforeWindow and FormatJson(nativeLivePublication(state)) = FormatJson(current) and state.cacheBytes = beforeBytes and state.segmentPairCount = 4 and state.lastUpstreamProgress = 11102& and state.lastPublicationProgress = 6500&, "stale response preserves publication cache and both progress deadlines")
+    startPF(state, 17002&)
+    completePF(state, forward, 17102&)
+    nativeLiveAdvance(state, 17202&)
+    checkPF(state.nextPoll = 20002& and state.playlistLastTail = 13& and state.latest = current.generation, "return to maximum tail after stale response is not new media")
+    startPF(state, 20002&)
+    completePF(state, playlistPF(10, 5), 20102&)
+    checkPF(state.nextPoll = 22004& and state.playlistLastTail = 14&, "forward recovery resumes short cadence only past maximum tail")
+    drainPF(state, 20502&)
+    checkPF(state.latest = current.generation + 1& and state.segmentPairCount = 5 and state.initPairCount = 2 and state.publishedLast = 14& and state.nextPoll = 22004&, "forward recovery publishes exactly one complete media pair")
+    closePF(state)
+end sub
+
+sub cadenceBoundsPF()
+    casePF("short-fragment-profile-duration-clamps-and-legacy-manual-calls")
+    for each profile in ["six", "eight", "long-window", "missing-window", "delay", "no-transitions", "default"]
+        state = newPF(profile <> "default", profile <> "no-transitions")
+        startPF(state, 0&)
+        completePF(state, playlistPF(), 100&)
+        drainPF(state, 500&)
+        if profile = "eight" then state.windowUs = 8000000&
+        if profile = "long-window" then state.windowUs = 14000000&
+        if profile = "missing-window" then state.Delete("windowUs")
+        if profile = "delay" then state.delayUs = 2002000&
+        stamp = state.nextPoll
+        startPF(state, stamp)
+        count = 4
+        if profile = "delay" then count = 5
+        completePF(state, playlistPF(10, count, 6, profile = "no-transitions"), stamp + 100&)
+        if profile = "six" or profile = "eight"
+            checkPF(state.nextPoll = stamp + 2002&, "explicit six to eight second source-transition profile uses short cadence")
+        else if profile = "default"
+            drainPF(state, stamp + 500&)
+            checkPF(state.nextPoll = stamp + 3500& and not state.DoesExist("playlistLastTail"), "default polling keeps publication-relative half target without tail state")
+        else
+            checkPF(state.nextPoll = stamp + 6000&, "long missing delayed or nontransition profile keeps changed full target")
+        end if
+        closePF(state)
+    end for
+    for each sample in [{duration: "0.000001", target: 6, interval: 1000&}, {duration: "2.002001", target: 6, interval: 2003&}, {duration: "2.499999", target: 2, interval: 2000&}]
+        state = newPF()
+        startPF(state, 0&)
+        completePF(state, playlistPF(10, 3, sample.target), 100&)
+        drainPF(state, 500&)
+        text = playlistPF(10, 4, sample.target)
+        last = "#EXTINF:2.002000," + Chr(10) + "segment-13.m4s"
+        text = text.Replace(last, "#EXTINF:" + sample.duration + "," + Chr(10) + "segment-13.m4s")
+        stamp = state.nextPoll
+        startPF(state, stamp)
+        completePF(state, text, stamp + 100&)
+        checkPF(state.nextPoll = stamp + sample.interval and state.playlistLastTail = 13&, "advancing tail uses integer ceiling with one second floor and declared target cap")
+        closePF(state)
+    end for
+    ' Omitted scalar arguments retain the existing manual snapshot contract.
+    state = newPF()
+    startPF(state, 0&)
+    completePF(state, playlistPF(), 100&)
+    drainPF(state, 500&)
+    startPF(state, 6000&)
+    checkPF(nlCancelInput(state), "manual polling fixture cancels native input before direct acceptance")
+    nlAcceptPlaylistPoll(state, "manual", 6, 6100&)
+    checkPF(state.nextPoll = 12000& and state.playlistLastTail = 12&, "legacy manual changed call retains full target and previous tail")
+    startPF(state, 12000&)
+    checkPF(nlCancelInput(state), "manual polling fixture cancels repeated native input")
+    nlAcceptPlaylistPoll(state, "manual", 6, 12100&)
+    checkPF(state.nextPoll = 15000& and state.playlistLastTail = 12&, "legacy manual unchanged call retains half target")
+    closePF(state)
+    state = newPF()
+    startPF(state, 0&)
+    completePF(state, playlistPF(), 100&)
+    drainPF(state, 500&)
+    startPF(state, 6000&)
+    checkPF(nlCancelInput(state), "long fragment manual fixture cancels native input")
+    nlAcceptPlaylistPoll(state, "longer fragment", 6, 6100&, 13&, 2500000&)
+    checkPF(state.nextPoll = 12000&, "longer fragment scalar retains changed full target")
+    closePF(state)
 end sub
 
 sub retryPF()
@@ -254,14 +368,16 @@ sub epochsPF()
     old = nativeLivePublication(state)
     startPF(state, 7000&)
     completePF(state, playlistPF(10, 4), 7400&)
-    checkPF(state.phase = "init-rotation" and state.nextPoll = 13000& and FormatJson(nativeLivePublication(state)) = FormatJson(old), "epoch early return retains full floor and old publication")
+    ' Steady short fragments schedule from the advancing tail even across an epoch.
+    checkPF(state.phase = "init-rotation" and state.nextPoll = 9002& and FormatJson(nativeLivePublication(state)) = FormatJson(old), "epoch early return retains short tail cadence and old publication")
     oldIds = state.initIds
     checkPF(rokuDemuxFeedInput(state, "init", bytesPF(m.corpus.inits.ad.input), 8000&), "genuine ad initialization approval feeds actual Core")
-    nativeLiveAdvance(state, 9000&)
-    checkPF(state.phase = "init-audio" and state.initIds[0] = oldIds[0] and state.nextPoll = 13000&, "first split cannot replace old pair or reload floor")
-    nativeLiveAdvance(state, 10000&)
+    transfers = state.transfers
+    status = nativeLiveTick(state, invalid, 10000&)
+    checkPF(status.phase = "init-audio" and state.initIds[0] = oldIds[0] and state.nextPoll = 9002& and state.op = invalid and state.transfers = transfers, "expired short cadence cannot overlap pending track conversion")
+    nativeLiveAdvance(state, 11000&)
     drainPF(state, 14000&)
-    checkPF(state.nextPoll = 13000& and state.segmentPairCount = 4 and state.initPairCount = 2, "long conversion consumes source floor without resetting it")
+    checkPF(state.nextPoll = 9002& and state.segmentPairCount = 4 and state.initPairCount = 2, "long conversion consumes short cadence without resetting it")
     intent = nlIntent(state, 14000&)
     checkPF(intent <> invalid and intent.kind = "playlist", "expired source floor permits one post-conversion reload")
     closePF(state)
@@ -287,7 +403,7 @@ sub aliasesPF()
     startPF(state, 0&)
     completePF(state, playlistPF(), 100&)
     nlAbort(state, "native-live: fixture-stop")
-    checkPF(not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt"), "failure teardown releases bounded private snapshot")
+    checkPF(not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt") and not state.DoesExist("playlistLastTail"), "failure teardown releases bounded private snapshot and tail")
     closePF(state)
 end sub
 
@@ -312,25 +428,49 @@ sub boundsPF()
     end try
     checkPF(reason = "native-live: publication progress deadline" and state.lastPublicationProgress = 500&, "frequent identical snapshots cannot hide publication stall")
     closePF(state)
+    state = newPF()
+    startPF(state, 0&)
+    completePF(state, playlistPF(), 100&)
+    drainPF(state, 500&)
+    startPF(state, 6000&)
+    completePF(state, playlistPF(10, 4), 6100&)
+    drainPF(state, 6500&)
+    for each stamp in [8002&, 11002&, 14002&, 17002&, 20002&]
+        startPF(state, stamp)
+        completePF(state, playlistPF(), stamp + 100&)
+        checkPF(state.nextPoll = stamp + 3000& and state.playlistLastTail = 13& and state.lastUpstreamProgress = 6500& and state.lastPublicationProgress = 6500&, "repeated stale tails retain half target and original health clocks")
+    end for
+    checkPF(nlIntent(state, 21499&) = invalid, "stale short cadence remains bounded before upstream deadline")
+    status = nativeLiveTick(state, invalid, 21500&)
+    checkPF(status.phase = "failed" and state.error = "native-live: upstream progress deadline" and not state.DoesExist("playlistLastTail"), "stale short cadence fails at original health deadline and releases tail")
+    closePF(state)
     base = 2147483640&
     state = newPF(true, true, base)
     startPF(state, base)
     completePF(state, playlistPF(), base + 100&)
     checkPF(state.nextPoll = base + 6000& and Type(state.nextPoll, 3) = "LongInteger", "request due time retains long clock across Integer boundary")
+    drainPF(state, base + 500&)
+    startPF(state, base + 6000&)
+    completePF(state, playlistPF(10, 4), base + 6100&)
+    checkPF(state.nextPoll = base + 8002& and Type(state.nextPoll, 3) = "LongInteger", "short tail cadence retains LongInteger dispatch arithmetic")
     state.quotaTransfers = 256
     reason = ""
     try
-        nlUseWork(state, "transfer", base + 200&)
+        nlUseWork(state, "transfer", base + 6200&)
     catch e
         reason = e.message
     end try
     checkPF(reason = "native-live: steady work interval bound" and state.quotaTransfers = 256, "request scheduling keeps exact existing transfer quota")
     closePF(state)
-    base = 4294967234900&
+    base = 4294967225000&
     state = newPF(true, true, base)
     startPF(state, base)
     completePF(state, playlistPF(), base + 50&)
     checkPF(state.nextPoll = base + 6000&, "terminal clock due time remains long without wrapping")
+    drainPF(state, base + 500&)
+    startPF(state, base + 6000&)
+    completePF(state, playlistPF(10, 4), base + 6100&)
+    checkPF(state.nextPoll = base + 8002& and Type(state.nextPoll, 3) = "LongInteger", "short cadence stays exact near terminal long clock cap")
     reason = ""
     try
         nlTime(state, 4294967235001&)
@@ -462,6 +602,8 @@ sub main()
         m.corpus = ParseJSON(ReadAsciiFile("pkg:/corpus.json"))
         wiringPF()
         floorsPF()
+        tailCadencePF()
+        cadenceBoundsPF()
         retryPF()
         epochsPF()
         aliasesPF()

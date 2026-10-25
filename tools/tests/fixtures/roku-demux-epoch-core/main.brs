@@ -473,6 +473,87 @@ sub admissionEC()
     closeEC(state)
 end sub
 
+' The native GET boundary is not opened; record its real Core dispatch hook.
+sub playlistStartedEC(state as object, nowMs as dynamic)
+    checkEC(nlIntent(state, nowMs).kind = "playlist", "stale-tail poll starts only when due")
+    state.op = { kind: "playlist", phase: "get", deadline: nowMs + 6000& }
+    nativeLivePlaylistStarted(state, nowMs)
+    state.op = invalid
+end sub
+
+sub staleTailEC()
+    caseEC("mixed-shorter-tail-discard-and-health-deadline")
+    for each retained in [true, false]
+        for each requestPolling in [false, true]
+            state = preparedEC()
+            nativeLiveFeed(state, "playlist", playlistEC(10, 6), 3000&)
+            drainEC(state, 3000&)
+            current = nativeLivePublication(state)
+            checkEC(current.generation = 2 and current.mediaSequence = 13 and current.discontinuitySequence = 1 and state.publishedLast = 15&, "stale-tail baseline has forward ad publication")
+            if not retained then nativeLiveRetire(state, 1&)
+            checkEC((nlSegmentIndex(state, 12&) >= 0) = retained, "mixed stale-tail case has requested cache retention")
+            held = nativeLiveAcquire(state, current.segments[0].videoId)
+            beforeWindow = FormatJson(state.window)
+            beforeSegments = FormatJson(state.segments)
+            beforeGenerations = FormatJson(state.generations)
+            beforeBytes = state.cacheBytes
+            beforeSerial = state.serial
+            beforeGate = m.gateCalls
+            state.pollFromRequest = requestPolling
+            if requestPolling then state.playlistSnapshot = playlistEC(10, 6)
+            playlistStartedEC(state, 6000&)
+            stale = playlistEC(10, 5)
+            checkEC(rokuDemuxFeedInput(state, "playlist", stale, 6400&), "actual Fetch caller accepts completed stale snapshot")
+            nativeLiveAdvance(state, 6400&)
+            checkEC(state.phase = "ready" and FormatJson(state.window) = beforeWindow and state.publishedFirst = 13& and state.publishedLast = 15&, "stale tail preserves published window and bounds")
+            checkEC(FormatJson(nativeLivePublication(state)) = FormatJson(current) and FormatJson(state.generations) = beforeGenerations and state.nextGeneration = 3&, "stale tail preserves publication and generation")
+            checkEC(state.lastUpstreamProgress = 3000& and state.lastPublicationProgress = 3000& and state.lastPlaylistSequence = 10&, "stale tail cannot refresh progress")
+            checkEC(FormatJson(state.segments) = beforeSegments and state.cacheBytes = beforeBytes and state.serial = beforeSerial and state.segmentPairCount = 6 and state.initPairCount = 2 and m.gateCalls = beforeGate and state.pendingWindow = invalid, "mixed stale tail cannot consult missing history or stage old epoch")
+            expectedPoll = 9400&
+            if requestPolling then expectedPoll = 12000&
+            checkEC(state.nextPoll = expectedPoll and nlIntent(state, expectedPoll - 1&) = invalid, "changed stale snapshot keeps source target polling floor")
+            playlistStartedEC(state, expectedPoll)
+            checkEC(rokuDemuxFeedInput(state, "playlist", playlistEC(10, 6), expectedPoll + 100&), "actual Fetch caller accepts unchanged published tail")
+            nativeLiveAdvance(state, expectedPoll + 100&)
+            checkEC(state.lastUpstreamProgress = expectedPoll + 100& and state.lastPublicationProgress = 3000& and FormatJson(nativeLivePublication(state)) = FormatJson(current), "unchanged tail still refreshes upstream health without publication")
+            nextPoll = state.nextPoll
+            playlistStartedEC(state, nextPoll)
+            checkEC(rokuDemuxFeedInput(state, "playlist", playlistEC(10, 7), nextPoll + 100&), "actual Fetch caller accepts resumed forward tail")
+            drainEC(state, nextPoll + 100&)
+            nextPub = nativeLivePublication(state)
+            checkEC(loopbackPublicationValid(nextPub) and nextPub.generation = 3 and nextPub.mediaSequence = 14 and state.publishedLast = 16& and state.segmentPairCount = 7 and state.initPairCount = 3, "forward tail resumes once across next genuine epoch")
+            retireEC(state)
+            checkEC(not nativeLiveClose(state) and nlBodyDigest(held.data) = m.corpus.media[3].video.sha256, "discard and forward recovery preserve held real body until release")
+            nativeLiveRelease(state, held.id)
+            closeEC(state)
+        end for
+    end for
+    state = preparedEC()
+    nativeLiveFeed(state, "playlist", playlistEC(10, 6), 3000&)
+    drainEC(state, 3000&)
+    current = nativeLivePublication(state)
+    state.pollFromRequest = true
+    state.playlistSnapshot = playlistEC(10, 6)
+    for each stamp in [6000&, 12000&, 15000&]
+        playlistStartedEC(state, stamp)
+        checkEC(rokuDemuxFeedInput(state, "playlist", playlistEC(10, 5), stamp + 400&), "actual Fetch caller discards repeated stale snapshots")
+        expectedPoll = stamp + 3000&
+        if stamp = 6000& then expectedPoll = 12000&
+        checkEC(state.nextPoll = expectedPoll and state.lastUpstreamProgress = 3000& and state.lastPublicationProgress = 3000&, "repeated stale snapshots keep half target floor without extending health")
+    end for
+    checkEC(nlIntent(state, 17999&) = invalid, "stale upstream remains bounded just before health deadline")
+    reason = ""
+    try
+        unused = nlIntent(state, 18000&)
+    catch error
+        reason = error.message
+    end try
+    checkEC(reason = "native-live: upstream progress deadline" and FormatJson(nativeLivePublication(state)) = FormatJson(current), "stale snapshots fail at original upstream health deadline")
+    nlAbort(state, reason)
+    checkEC(state.phase = "failed" and not state.DoesExist("playlistSnapshot") and not state.DoesExist("playlistRequestStartedAt") and not state.DoesExist("playlistRequestPending"), "stale health failure releases private polling state")
+    closeEC(state)
+end sub
+
 sub budgetsEC()
     caseEC("unchanged-deadlines-quotas-local-overflow-and-stop")
     for each mode in ["upstream", "publication", "local-overflow", "quota", "stop"]
@@ -539,6 +620,7 @@ sub main()
         aliasesEC()
         identityEC()
         admissionEC()
+        staleTailEC()
         budgetsEC()
         print "STITCH_EPOCH_CORE_PASS: __MARKER__ cases="; m.cases; " assertions="; m.assertions; " goldens="; m.goldens; " manifests="; m.manifests; " pairs="; m.pairs; " gateCalls="; m.gateCalls
     catch e
