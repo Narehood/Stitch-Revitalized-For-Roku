@@ -83,17 +83,26 @@ sub testLiveCounts()
         check(not overlay.visible, "a known count does not reveal hidden controls")
         video.setFocus(true)
         press("ok")
-        settle(200)
+        waitOverlay(overlay, true)
         check(overlay.visible and label.visible, "revealing controls exposes the live count")
         for each chat in [false, true]
             video.chatIsVisible = chat
             verifyLayout(video)
         end for
         press("down")
-        settle(200)
+        waitOverlay(overlay, false)
         check(not overlay.visible, "hiding controls also hides the counter")
         closePlayer(player)
     end for
+end sub
+
+sub waitOverlay(overlay as object, visible as boolean)
+    elapsed = createObject("roTimespan")
+    while elapsed.totalMilliseconds() < 3000
+        if overlay.visible = visible then return
+        pump(20)
+    end while
+    fail("timed out waiting for overlay visible=" + visible.toStr())
 end sub
 
 sub verifyLayout(video as object)

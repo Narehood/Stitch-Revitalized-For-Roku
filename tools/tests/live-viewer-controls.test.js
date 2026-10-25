@@ -68,9 +68,9 @@ async function buildPackage(dir, marker) {
     await addFile(dir, 'components/ViewerProbe.brs', 'function fixtureRead() as object\n    return { task: m.PlayVideo, video: m.video }\nend function\n');
 }
 
-function runPackage(zip, cwd) {
+function runPackage(zip, cwd, preload) {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [path.join(__dirname, 'fixtures/ui-startup-player/key-driver.js'),
+        const child = spawn(process.execPath, [...(preload ? ['--require', preload] : []), path.join(__dirname, 'fixtures/ui-startup-player/key-driver.js'),
             path.join(root, 'node_modules/brs-node/bin/brs.cli.js'), zip],
         { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
         let output = '';
@@ -94,29 +94,82 @@ function runPackage(zip, cwd) {
     });
 }
 
-test('live viewers propagate through VideoPlayer and fit the actual controls in both chat layouts', { timeout: 60000 }, async t => {
+function checkResult(result, marker) {
+    const failure = result.output.slice(-20000);
+    assert.equal(result.timedOut, false, `fixture timed out\n${failure}`);
+    assert.equal(result.exceeded, false, `fixture exceeded output limit\n${failure}`);
+    assert.equal(result.code, 0, `fixture exited ${result.code} (${result.signal})\n${failure}`);
+    assert.doesNotMatch(result.output, /STITCH_UI_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
+    assert.match(result.output, /EXIT_USER_NAV/, `fixture did not close normally\n${failure}`);
+    const summary = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
+    assert.ok(summary, `fresh fixture success marker missing\n${failure}`);
+    assert.ok(Number(summary[1]) >= 100, `expected the full viewer regression coverage\n${failure}`);
+    return Number(summary[1]);
+}
+
+async function checkFixture(t, { delayKeys = false, disableHide = false } = {}) {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     const marker = `STITCH_UI_PASS:${randomUUID()}`;
     try {
         const dir = path.join(temp, 'package');
         await buildPackage(dir, marker);
+        let preload;
+        if (delayKeys) {
+            preload = path.join(temp, 'delayed-keys.cjs');
+            // Delay terminal delivery, keeping the engine focus chain and
+            // production handlers intact. Never write an overlay field.
+            await fs.writeFile(preload, `
+const emit = process.stdin.emit.bind(process.stdin);
+process.stdin.emit = (event, ...args) => {
+    if (event === 'keypress' && ['return', 'down'].includes(args[1]?.name)) {
+        setTimeout(() => emit(event, ...args), 600);
+        return true;
+    }
+    return emit(event, ...args);
+};
+`);
+        }
+        if (disableHide) {
+            // Negative control changes only the disposable package: native
+            // Down still reaches the real handler, which consumes it without
+            // hiding the overlay. The tracked production source stays intact.
+            const file = 'components/Modules/StitchVideo/StitchVideo.brs';
+            const source = (await fs.readFile(path.join(dir, file), 'utf8')).replaceAll('\r\n', '\n');
+            const branch = 'else if key = "down" or key = "back"\n        hideOverlay()';
+            assert.equal(source.split(branch).length, 2, 'negative control must disable exactly the native hide branch');
+            await addFile(dir, file, source.replace(branch, 'else if key = "down" or key = "back"\n        \' Negative control: leave the controls visible.'));
+        }
         const zip = path.join(temp, 'fixture.zip');
         await zipFolder(dir, zip);
-        const result = await runPackage(zip, temp);
-        const failure = result.output.slice(-20000);
-        assert.equal(result.timedOut, false, `fixture timed out\n${failure}`);
-        assert.equal(result.exceeded, false, `fixture exceeded output limit\n${failure}`);
-        assert.equal(result.code, 0, `fixture exited ${result.code} (${result.signal})\n${failure}`);
-        assert.doesNotMatch(result.output, /STITCH_UI_FAIL:|FIXTURE_DRIVER_ERROR|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|runtime error|BrightScript Debugger|unhandled exception/i, failure);
-        assert.match(result.output, /EXIT_USER_NAV/, `fixture did not close normally\n${failure}`);
-        const summary = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
-        assert.ok(summary, `fresh fixture success marker missing\n${failure}`);
-        assert.ok(Number(summary[1]) >= 100, `expected the full viewer regression coverage\n${failure}`);
-        t.diagnostic(`${summary[1]} assertions; actual VideoPlayer/wrappers/labels, inert tasks and registry; native font pixels and decoding require native QA`);
+        const result = await runPackage(zip, temp, preload);
+        if (disableHide) {
+            assert.equal(result.timedOut, false, result.output);
+            assert.equal(result.exceeded, false, result.output);
+            assert.equal(result.code, 0, result.output);
+            assert.match(result.output, /EXIT_USER_NAV/, result.output);
+            assert.doesNotMatch(result.output, /EXIT_BRIGHTSCRIPT_CRASH|runtime error|BrightScript Debugger|unhandled exception/i, result.output);
+            assert.match(result.output, /STITCH_UI_FAIL:timed out waiting for overlay visible=false/, result.output);
+            assert.match(result.output, /STITCH_UI_FAIL:hiding controls also hides the counter/, result.output);
+            assert.ok(!result.output.includes(marker), result.output);
+            assert.throws(() => checkResult(result, marker), /STITCH_UI_FAIL:/);
+            t.diagnostic('native Down with disabled hide is rejected by the bounded visibility wait and the existing failure guard');
+        } else {
+            t.diagnostic(`${checkResult(result, marker)} assertions; actual VideoPlayer/wrappers/labels, inert tasks and registry; native font pixels and decoding require native QA${delayKeys ? '; show/hide terminal keys delayed 600 ms' : ''}`);
+        }
     } finally {
         const target = path.resolve(temp);
         assert.equal(path.dirname(target), path.resolve(os.tmpdir()), 'cleanup must stay directly inside the temp directory');
         assert.ok(path.basename(target).startsWith(prefix), 'cleanup must target this fixture directory');
         await fs.rm(target, { recursive: true, force: true });
     }
+}
+
+test('live viewers propagate through VideoPlayer and fit the actual controls in both chat layouts', { timeout: 60000 }, checkFixture);
+
+test('live viewer overlay waits for delayed native show and hide keys', { timeout: 60000 }, async t => {
+    await checkFixture(t, { delayKeys: true });
+});
+
+test('live viewer fixture rejects native Down that does not hide controls', { timeout: 60000 }, async t => {
+    await checkFixture(t, { disableHide: true });
 });
