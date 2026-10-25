@@ -53,12 +53,12 @@ sub main()
     chat.callFunc("fixturePrune", group)
 
     for each sample in [
-        { text: "@viewer", highlighted: "@viewer" },
-        { text: "(@Viewer_1),", highlighted: "@Viewer_1" },
-        { text: "@one,@two", highlighted: "@one@two" },
-        { text: "@" + string(25, "a"), highlighted: "@" + string(25, "a") },
-        { text: "mail@example.com @@viewer bare@viewer @" + string(26, "a"), highlighted: "" }
-    ]
+            { text: "@viewer", highlighted: "@viewer" },
+            { text: "(@Viewer_1),", highlighted: "@Viewer_1" },
+            { text: "@one,@two", highlighted: "@one@two" },
+            { text: "@" + string(25, "a"), highlighted: "@" + string(25, "a") },
+            { text: "mail@example.com @@viewer bare@viewer @" + string(26, "a"), highlighted: "" }
+        ]
         group = chat.callFunc("fixtureBuild", sample.text)
         check(highlightedText(group) = sample.highlighted, "mention colors honor username boundaries and leave email addresses untouched")
         check(textOf(group) = sample.text + " ", "mention highlighting preserves punctuation and source text")
@@ -90,8 +90,32 @@ sub main()
     if dialog <> invalid
         check(highlightedText(dialog) = "@viewer", "full pinned message shares mention highlighting")
     end if
+    m.global.addFields({
+        twitchBadges: {
+            "moderator/1": "https://static-cdn.jtvnw.net/badges/moderator.png",
+            "subscriber/2042": "https://static-cdn.jtvnw.net/badges/subscriber.png",
+            "gamerduo/1": "https://static-cdn.jtvnw.net/badges/gamerduo.png"
+        }
+    })
+    pin.badges = ["moderator/1", "subscriber/2042", "gamerduo/1"]
+    pin.updatedAt = now + 1&
+    chat.pinnedMessage = pin
+    header = chat.callFunc("fixturePinAuthor")
+    headerImages = posters(header)
+    check(headerImages.count() = 3 and textOf(header) = "Viewer", "pinned author includes the message's assigned moderator, subscriber and event badges")
+    if headerImages.count() = 3
+        check(headerImages[0].uri = m.global.twitchBadges["moderator/1"] and headerImages[1].uri = m.global.twitchBadges["subscriber/2042"] and headerImages[2].uri = m.global.twitchBadges["gamerduo/1"], "pinned badges retain assignment order and use the existing channel badge catalog")
+        authorRow = header.getChild(0)
+        check(authorRow.getChild(1).translation[0] = 63 and headerImages[0].width = 18 and headerImages[2].translation[0] = 42, "pinned badges fit the fixed author row before the name")
+    end if
+    check(chat.callFunc("showPinnedMessage"), "pin with badges opens its full dialog")
+    authorDialog = m.scene.dialog.findNode("pinDialogAuthor")
+    check(authorDialog <> invalid and posters(authorDialog).count() = 3 and textOf(authorDialog) = "Viewer", "full pinned message includes the same author badges before the name")
+    chat.width = 100
+    check(posters(header).count() = 0 and header.getChild(0).getChild(1).width = 76, "narrow pin headers preserve room for the author instead of clipping badges into the name")
+    chat.width = 275
     chat.pinnedMessage = invalid
-    check(preview.getChildCount() = 0 and m.scene.dialog = invalid, "unpin releases both rich views and closes the dialog")
+    check(preview.getChildCount() = 0 and header.getChildCount() = 0 and m.scene.dialog = invalid, "unpin releases both rich views and author badges and closes the dialog")
     status = chat.callFunc("fixtureChatStatus", "connecting", false)
     check(status.statusVisible and status.clipTop = status.statusHeight + 24, "reconnecting without a pin also reserves a separate status area")
     chat.callFunc("fixtureChatStatus", "connected", true)
@@ -138,6 +162,13 @@ sub main()
     chat.pinnedMessage = pin
     check(chat.callFunc("showPinnedMessage"), "pin can open before provider loading completes")
     cache.LatePin = "https://cdn.7tv.app/emote/late-pin/1x_static.webp"
+    chat.callFunc("fixtureChatStatus", "syncing", false)
+    pending = chat.callFunc("fixturePublishProvider", cache)
+    check(chatAssetPosters(chat.callFunc("fixturePinPreview")) = 1 and chatAssetPosters(m.scene.dialog) = 1, "incremental provider results refresh both pinned views before chat sync or provider completion")
+    check(not pending.completed and not pending.rendered and pending.presentation = "syncing" and pending.statusVisible, "pin refresh leaves delayed chat and the unfinished provider worker unchanged")
+    priorPreview = chat.callFunc("fixturePinPreview").getChild(0)
+    chat.callFunc("fixturePublishProvider", cache)
+    check(not priorPreview.isSameNode(chat.callFunc("fixturePinPreview").getChild(0)), "later provider publications refresh a pin without a new pinned-message snapshot")
     chat.callFunc("fixtureCompleteEmotes", cache)
     check(chatAssetPosters(chat.callFunc("fixturePinPreview")) = 1 and chatAssetPosters(m.scene.dialog) = 1, "provider completion refreshes both open rich pin views")
     check(chat.callFunc("fixtureGifState").descriptors[gifUri] <> invalid, "provider completion preserves learned GIF attachment descriptors")

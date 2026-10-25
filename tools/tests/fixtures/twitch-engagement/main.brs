@@ -73,6 +73,12 @@ sub main()
     runWorkerMain()
     check(getGlobalAA().tokenReads = 0 and getGlobalAA().validations = 0 and getGlobalAA().discoveries = 0 and m.attempts = 0, "anonymous pins never access account credentials or telemetry")
     check(m.top.response.pinnedMessage.text = "Read this first" and getGlobalAA().pinCalls > 1, "pins-only chat polls independently without a Hype Train setting")
+    check(m.top.response.pinnedMessage.badges.count() = 0, "pins without badge metadata publish an empty badges array")
+    setup("pins-badges")
+    runWorkerMain()
+    check(m.pinState = "active" and getGlobalAA().pinCalls > 1 and m.top.response.pinnedMessage.senderName = "JOURDA1N", "the actual worker accepts the observed author badge pin")
+    check(formatJson(m.top.response.pinnedMessage.badges) = formatJson(["moderator/1", "subscriber/2042", "gamerduo/1"]), "the actual worker publishes observed badge keys in provider order")
+    check(getGlobalAA().tokenReads = 0 and getGlobalAA().validations = 0 and getGlobalAA().discoveries = 0 and m.attempts = 0, "observed author badges use only the public pin request")
     setup("pins-refused")
     runWorkerMain()
     check(m.attempts = 1 and m.accepted = 1 and m.top.response.pinnedMessage = invalid and m.pinState = "unavailable", "pin schema failures cannot stop legitimate watch reports")
@@ -148,13 +154,17 @@ sub setup(mode as string)
         m.top.watchEnabled = false
         state.registryAccount = "$default$"
     end if
-    if mode = "pins-only" or mode = "pins-refused"
+    if mode = "pins-only" or mode = "pins-refused" or mode = "pins-badges"
         m.top.hypeEnabled = false
         m.top.pinsEnabled = true
-        if mode = "pins-only"
+        if mode <> "pins-refused"
             m.top.watchEnabled = false
             state.registryAccount = "$default$"
         end if
+    end if
+    if mode = "pins-badges"
+        state.pinFixture = parseJson(readAsciiFile("pkg:/pinned-author-badges.json"))
+        m.top.channelId = "155586958"
     end if
     if mode = "initial-retry" then m.top.hypeEnabled = false
     if mode = "revoked" or mode = "client-mismatch" or mode = "login-mismatch" or mode = "pin-metadata-fail" then m.top.pinsEnabled = true
@@ -194,6 +204,7 @@ function fixtureMilliseconds() as double
 end function
 
 function fixtureSeconds() as double
+    if getGlobalAA().mode = "pins-badges" then return getGlobalAA().pinFixture.fixtureNowSeconds + getGlobalAA().tick
     return engagementUtcSeconds("2026-10-24T03:45:00Z") + getGlobalAA().tick
 end function
 
@@ -238,9 +249,11 @@ function fixtureHttp(url as string, method as string, headers as object, body as
         request = parseJson(body)
         if request.query.instr("StitchPinnedChat") >= 0
             state.pinCalls++
-            check(request.variables.doesExist("channelID") and request.variables.channelID = "101", "pin queries preserve the native channelID wire key")
+            check(request.variables.doesExist("channelID") and request.variables.channelID = m.top.channelId, "pin queries preserve the native channelID wire key")
+            check(request.query.instr("sender { id login displayName } senderBadges { setID version }") >= 0, "pin query selects message sender badge pairs")
             check(not headers.doesExist("Authorization"), "public pin query carries no viewer credential")
             if state.mode = "pins-refused" then return { status: 200, body: formatJson({ errors: [{ message: "schema changed" }] }) }
+            if state.mode = "pins-badges" then return { status: 200, body: formatJson(state.pinFixture.response) }
             pin = { id: "pin-1", type: "MOD", startsAt: "2026-10-24T03:44:00Z", updatedAt: "2026-10-24T03:44:00Z", endsAt: invalid, pinnedMessage: { id: "message-1", sentAt: "2026-10-24T03:43:00Z", content: { text: "Read this first" }, sender: { id: "202", login: "moderator", displayName: "Moderator" } } }
             return { status: 200, body: formatJson({ data: { channel: { id: "101", pinnedChatMessages: { edges: [{ node: pin }] } } } }) }
         end if
@@ -270,7 +283,7 @@ function fixtureHttp(url as string, method as string, headers as object, body as
         execution = { id: "train", startedAt: "2026-10-24T03:40:35Z", expiresAt: "2026-10-24T03:48:12.519249618Z", endedAt: invalid, progress: { goal: 5300, level: { value: 3 }, progression: 1000 }, sharedHypeTrainDetails: invalid }
         channel = invalid
         if request.variables.includeHype then channel = { hypeTrain: { execution: execution } }
-        return { status: 200, body: formatJson({ data: { user: { id: "101", stream: stream, channel: channel } } }) }
+        return { status: 200, body: formatJson({ data: { user: { id: m.top.channelId, stream: stream, channel: channel } } }) }
     else if url = "https://www.twitch.tv/canned"
         state.discoveries++
         return { status: 200, body: "https://assets.twitch.tv/config/settings.0123456789abcdef.js" }

@@ -15,6 +15,10 @@ function fixturePinPreview() as object
     return m.pinRichText
 end function
 
+function fixturePinAuthor() as object
+    return m.pinAuthorRichText
+end function
+
 function fixtureGifs(text as string, tags as object, enabled as boolean) as object
     m.animateChatEmotes = enabled
     attachments = ircGifAttachments(tags, text)
@@ -45,6 +49,19 @@ function fixtureAnimationData() as object
     return m.descriptors
 end function
 
+function fixturePublishProvider(cache as object) as object
+    m.global.setField("emoteCache", cache)
+    if m.EmoteJob = invalid
+        m.EmoteJob = createObject("roSGNode", "EmoteJob")
+        m.top.appendChild(m.EmoteJob)
+        m.EmoteJob.channel = m.top.channel
+        m.EmoteJob.channel_id = m.top.channel_id
+        m.EmoteJob.observeField("animatedEmotes", "onAnimatedEmotes")
+    end if
+    m.EmoteJob.animatedEmotes = {}
+    return { job: m.EmoteJob, completed: m.EmoteJob.completed, rendered: m.hasRenderedComment, presentation: m.chatPresentationState, statusVisible: m.chatStatus.visible }
+end function
+
 function fixtureMissingDescriptor() as boolean
     owner = createObject("roSGNode", "Group")
     owner.addFields({ chatImageUri: "missing-descriptor" })
@@ -69,8 +86,10 @@ end function
 
 sub fixtureCompleteEmotes(cache as object)
     m.global.emoteCache = cache
-    m.EmoteJob = createObject("roSGNode", "EmoteJob")
-    m.top.appendChild(m.EmoteJob)
+    if m.EmoteJob = invalid
+        m.EmoteJob = createObject("roSGNode", "EmoteJob")
+        m.top.appendChild(m.EmoteJob)
+    end if
     m.EmoteJob.cacheComplete = true
     m.EmoteJob.completed = true
     onEmotesCompleted()

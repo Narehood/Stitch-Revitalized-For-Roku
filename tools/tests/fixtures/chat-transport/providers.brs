@@ -60,7 +60,7 @@ sub main()
     getGlobalAA().cancelUrl = bttvChannel
     runEmoteJob()
     check(not m.top.completed and not m.top.cacheComplete and getGlobalAA().providerRequests.count() = 3, "stop during actual HTTP provider handling starts no later provider")
-    check(getGlobalAA().cachePublications = 1, "stop during actual HTTP provider handling suppresses late cache publication")
+    check(getGlobalAA().cachePublications = getGlobalAA().publicationsAtCancel, "stop during actual HTTP provider handling adds no cache publication after cancellation")
 
     if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions"
 end sub
@@ -81,6 +81,7 @@ sub resetProviders()
     state.cachePublications = 0
     state.publishedCache = invalid
     state.cancelUrl = ""
+    state.publicationsAtCancel = -1
 end sub
 
 function HttpRequest(params as object) as object
@@ -88,7 +89,10 @@ function HttpRequest(params as object) as object
     requests = state.providerRequests
     requests.push(params.url)
     state.providerRequests = requests
-    if params.url = state.cancelUrl then m.top.stopRequested = true
+    if params.url = state.cancelUrl
+        state.publicationsAtCancel = state.cachePublications
+        m.top.stopRequested = true
+    end if
     return { url: params.url, send: fixtureHttpSend }
 end function
 

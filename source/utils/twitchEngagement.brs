@@ -135,6 +135,33 @@ function engagementPinId(value as dynamic) as boolean
     return createObject("roRegex", "^[A-Za-z0-9_-]{1,80}$", "").isMatch(value)
 end function
 
+' Local metadata limits: inspect at most 32 entries and retain 8 unique pairs.
+' Optional malformed badges never invalidate a pin; keys only resolve existing catalogs.
+function engagementPinBadges(value as dynamic) as object
+    badges = []
+    if GetInterface(value, "ifArray") = invalid then return badges
+    entryCount = value.count()
+    if entryCount > 32 then entryCount = 32
+    invalidToken = createObject("roRegex", "[^A-Za-z0-9_-]", "")
+    for i = 0 to entryCount - 1
+        badge = value[i]
+        if GetInterface(badge, "ifAssociativeArray") = invalid then continue for
+        setId = badge.setID
+        version = badge.version
+        if GetInterface(setId, "ifString") = invalid or GetInterface(version, "ifString") = invalid then continue for
+        if setId.len() < 1 or setId.len() > 80 or version.len() < 1 or version.len() > 80 then continue for
+        if invalidToken.isMatch(setId) or invalidToken.isMatch(version) then continue for
+        key = setId + "/" + version
+        duplicate = false
+        for each existing in badges
+            if existing = key then duplicate = true
+        end for
+        if not duplicate then badges.push(key)
+        if badges.count() = 8 then exit for
+    end for
+    return badges
+end function
+
 function engagementPinnedMessage(node as dynamic, nowSeconds as double) as dynamic
     if GetInterface(node, "ifAssociativeArray") = invalid then return invalid
     if node.type <> "MOD" or not engagementPinId(node.id) then return invalid
@@ -163,7 +190,7 @@ function engagementPinnedMessage(node as dynamic, nowSeconds as double) as dynam
         if expiresAt = invalid then return invalid
         if expiresAt <= nowSeconds or expiresAt <= startsAt or expiresAt > nowSeconds + 86400 then return invalid
     end if
-    return { id: node.id, messageId: message.id, userId: sender.id, login: sender.login, senderName: name.replace(chr(13), " ").replace(chr(10), " "), text: text.replace(chr(13), ""), sentAt: sentAt, updatedAt: updatedAt, expiresAt: expiresAt, observedAt: nowSeconds }
+    return { id: node.id, messageId: message.id, userId: sender.id, login: sender.login, senderName: name.replace(chr(13), " ").replace(chr(10), " "), badges: engagementPinBadges(message.senderBadges), text: text.replace(chr(13), ""), sentAt: sentAt, updatedAt: updatedAt, expiresAt: expiresAt, observedAt: nowSeconds }
 end function
 
 function engagementSettingsUrl(page as string) as dynamic

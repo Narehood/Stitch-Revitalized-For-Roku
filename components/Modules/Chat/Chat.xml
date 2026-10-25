@@ -75,9 +75,10 @@
             <Label id="pinTitle" translation="[12, 6]" width="251" height="24" color="0xBF94FFFF">
                 <font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="18" />
             </Label>
-            <Label id="pinAuthor" translation="[12, 32]" width="251" height="22" color="0xEFEFF1FF">
+            <Label id="pinAuthor" visible="false" translation="[12, 32]" width="251" height="22" color="0xEFEFF1FF">
                 <font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="16" />
             </Label>
+            <Group id="pinAuthorRichText" translation="[12, 32]" clippingRect="[0, 0, 251, 22]" />
             <Label id="pinText" visible="false" translation="[12, 58]" width="251" height="88" wrap="true" maxLines="4" ellipsisText="…" color="0xEFEFF1FF">
                 <font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="16" />
             </Label>

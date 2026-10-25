@@ -93,6 +93,10 @@ sub runEmoteTests()
     publishEmoteCache({ New: "https://cdn.example/new.png" })
     cache = getGlobalAA().publishedCache
     check(getGlobalAA().cachePublications = 1 and cache.IRC = "https://cdn.example/irc.png" and cache.New = "https://cdn.example/new.png", "completed fetch publication keeps emotes learned from IRC")
+    check(GetInterface(m.top.animatedEmotes, "ifAssociativeArray") <> invalid, "static-only provider results publish a pin-refresh notification before completion")
+    m.top.animatedEmotes = { "https://cdn.example/static.png": { uri: "https://cdn.example/animated.webp" } }
+    publishEmoteCache({ New: "https://cdn.example/new.png" })
+    check(m.top.animatedEmotes.count() = 1, "static-only publication preserves previously supplied animation descriptors")
 end sub
 
 sub resetEmoteBoundary()

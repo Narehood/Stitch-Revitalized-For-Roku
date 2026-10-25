@@ -406,6 +406,7 @@ sub onAnimatedEmotes(event as object)
     if m.EmoteJob.channel <> m.top.channel or m.EmoteJob.channel_id <> m.top.channel_id then return
     descriptors = event.getData()
     mergeChatAnimations(descriptors)
+    refreshPinnedEmotes()
     syncChatAnimation()
 end sub
 

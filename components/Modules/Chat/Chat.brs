@@ -14,6 +14,7 @@ sub init()
     m.pinPanel = m.top.findNode("pinPanel")
     m.pinTitle = m.top.findNode("pinTitle")
     m.pinAuthor = m.top.findNode("pinAuthor")
+    m.pinAuthorRichText = m.top.findNode("pinAuthorRichText")
     m.pinText = m.top.findNode("pinText")
     m.pinRichText = m.top.findNode("pinRichText")
     m.pinRenderedKey = ""
@@ -94,6 +95,7 @@ sub setChatPanelSize()
         label.width = m.top.width - 24
     end for
     m.pinRichText.clippingRect = [0, 0, m.top.width - 24, 88]
+    m.pinAuthorRichText.clippingRect = [0, 0, m.top.width - 24, 22]
     m.pinRenderedKey = ""
     setSizingParameters()
     updateHypeTrain()
@@ -236,6 +238,10 @@ end sub
 
 sub clearPinnedPreview()
     if m.pinRichText = invalid then return
+    for each child in m.pinAuthorRichText.getChildren(-1, 0)
+        releaseChatImages(child)
+        m.pinAuthorRichText.removeChild(child)
+    end for
     for each child in m.pinRichText.getChildren(-1, 0)
         releaseChatImages(child)
         m.pinRichText.removeChild(child)
@@ -246,9 +252,43 @@ end sub
 sub renderPinnedPreview(key as string)
     if m.pinRenderedKey = key or m.font_size = invalid then return
     clearPinnedPreview()
+    m.pinAuthorRichText.appendChild(buildPinnedAuthor(m.pinAuthor.width))
     m.pinRichText.appendChild(buildMessage(m.pinText.text, 0, false, m.pinText.width))
     m.pinRenderedKey = key
 end sub
+
+function buildPinnedAuthor(availableWidth as integer) as object
+    group = createObject("roSGNode", "Group")
+    badges = []
+    pin = m.top.pinnedMessage
+    if GetInterface(pin.badges, "ifArray") <> invalid
+        limit = pin.badges.count()
+        if limit > 8 then limit = 8
+        for i = 0 to limit - 1
+            badge = pin.badges[i]
+            if GetInterface(badge, "ifString") <> invalid then badges.push(badge)
+        end for
+    end if
+    badgeGroup = buildBadges(badges, 18)
+    maxBadges = int((availableWidth - 80) / 21)
+    if maxBadges < 0 then maxBadges = 0
+    while badgeGroup.getChildCount() > maxBadges
+        badgeGroup.removeChildIndex(badgeGroup.getChildCount() - 1)
+    end while
+    badgeGroup.translation = [0, 2]
+    group.appendChild(badgeGroup)
+    advance = badgeGroup.getChildCount() * 21
+    author = createObject("roSGNode", "Label")
+    author.text = pin.senderName
+    author.font = m.pinAuthor.font
+    author.color = m.pinAuthor.color
+    author.height = 22
+    author.width = availableWidth - advance
+    if author.width < 0 then author.width = 0
+    author.translation = [advance, 0]
+    group.appendChild(author)
+    return group
+end function
 
 function pinnedMessageModerated(pin as object) as boolean
     if GetInterface(pin.sentAt, "ifInt") = invalid and GetInterface(pin.sentAt, "ifLongInt") = invalid and GetInterface(pin.sentAt, "ifDouble") = invalid then return true
@@ -283,8 +323,10 @@ function showPinnedMessage() as boolean
     title.primaryTitle = tr("Pinned message")
     dialog.appendChild(title)
     content = createObject("roSGNode", "StdDlgContentArea")
-    author = createObject("roSGNode", "StdDlgTextItem")
-    author.text = pin.senderName
+    author = createObject("roSGNode", "StdDlgCustomItem")
+    author.id = "pinDialogAuthor"
+    author.fixedWidthField = 760
+    author.appendChild(buildPinnedAuthor(760))
     content.appendChild(author)
     body = createObject("roSGNode", "StdDlgCustomItem")
     body.id = "pinDialogBody"
@@ -531,9 +573,22 @@ sub onEmotesCompleted(event = invalid as dynamic)
     destroyTask(emoteJob, "completed")
     destroyTask(emoteJob, "animatedEmotes")
     m.top.removeChild(emoteJob)
+    refreshPinnedEmotes()
+    syncChatAnimation()
+end sub
+
+sub refreshPinnedEmotes()
     m.pinRenderedKey = ""
     updatePinnedMessage()
     if m.pinDialog <> invalid
+        author = m.pinDialog.findNode("pinDialogAuthor")
+        if author <> invalid
+            for each child in author.getChildren(-1, 0)
+                releaseChatImages(child)
+                author.removeChild(child)
+            end for
+            author.appendChild(buildPinnedAuthor(760))
+        end if
         body = m.pinDialog.findNode("pinDialogBody")
         if body <> invalid
             for each child in body.getChildren(-1, 0)
@@ -543,7 +598,6 @@ sub onEmotesCompleted(event = invalid as dynamic)
             body.appendChild(buildMessage(m.top.pinnedMessage.text, 0, false, 760))
         end if
     end if
-    syncChatAnimation()
 end sub
 
 function extractMessage(section) as object
@@ -559,7 +613,8 @@ function extractMessage(section) as object
     return message
 end function
 
-function buildBadges(badges)
+function buildBadges(badges, badgeSize = -1 as float)
+    if badgeSize < 0 then badgeSize = m.badge_size
     group = createObject("roSGNode", "Group")
     group.visible = true
     badge_translation = 0
@@ -569,12 +624,12 @@ function buildBadges(badges)
                 if m.global.twitchBadges[badge] <> invalid
                     poster = createObject("roSGNode", "Poster")
                     poster.uri = m.global.twitchBadges[badge]
-                    poster.width = m.badge_size
-                    poster.height = m.badge_size
+                    poster.width = badgeSize
+                    poster.height = badgeSize
                     poster.visible = true
                     poster.translation = [badge_translation, 0]
                     group.appendChild(poster)
-                    badge_translation += (m.badge_size + (m.badge_size / 6))
+                    badge_translation += (badgeSize + (badgeSize / 6))
                 end if
             end if
         end if

@@ -8,7 +8,12 @@ sub publishEmoteCache(fetched as object)
     cache = m.global.emoteCache
     if cache = invalid then cache = {}
     m.global.setField("emoteCache", ircMergeEmoteCache(cache, fetched))
-    if m.animationDescriptors <> invalid then m.top.animatedEmotes = m.animationDescriptors
+    ' Notify after each provider, including static-only results, so rich pins
+    ' can update while the remaining HTTP requests and chat sync are pending.
+    descriptors = m.animationDescriptors
+    if descriptors = invalid then descriptors = m.top.animatedEmotes
+    if GetInterface(descriptors, "ifAssociativeArray") = invalid then descriptors = {}
+    m.top.animatedEmotes = descriptors
 end sub
 
 sub publishAnimatedEmote(staticUri as dynamic, descriptor as dynamic)
@@ -158,6 +163,7 @@ sub getTwitchBadges()
     else
         m.global.setField("twitchBadges", badgelist)
     end if
+    publishEmoteCache({})
 end sub
 
 function invokerest(link as string) as object

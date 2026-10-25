@@ -55,6 +55,7 @@ async function run(mutation, transportUrl) {
     try {
         await fs.writeFile(path.join(dir, 'worker.brs'), source);
         await fs.writeFile(path.join(dir, 'main.brs'), (await fs.readFile(path.join(__dirname, 'fixtures/twitch-engagement', transportUrl ? 'http-main.brs' : 'main.brs'), 'utf8')).replace('__PASS_MARKER__', marker));
+        await fs.copyFile(path.join(__dirname, 'fixtures/twitch-engagement/pinned-author-badges.json'), path.join(dir, 'pinned-author-badges.json'));
         for (const helper of ['twitchEngagement.brs', 'twitchAdCountdown.brs']) {
             await fs.copyFile(path.join(root, 'source/utils', helper), path.join(dir, helper));
         }
@@ -127,6 +128,7 @@ for (const [name, before, after, expected] of [
     ['account owner guard', 'if get_setting("active_user", "$default$") <> m.account then return false', 'if false then return false', 'logout stops the old account'],
     ['broadcast accrual reset', '        m.broadcastId = snapshot.broadcastId\n        m.watch = engagementWatchState()', '        m.broadcastId = snapshot.broadcastId', 'a changed broadcast discards the pending old minute'],
     ['one-minute submission floor', 'if nowMs - m.lastAttemptMs < 60000 then return', 'if false then return', 'a caller cannot burst another submission'],
+    ['pinned-message badge selection', ' senderBadges { setID version }', '', 'pin query selects message sender badge pairs'],
 ]) {
     test(`removing the ${name} is rejected by actual worker assertions`, async () => {
         const result = await run([before, after]);
