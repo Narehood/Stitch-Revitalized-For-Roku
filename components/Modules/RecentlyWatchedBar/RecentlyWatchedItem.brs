@@ -8,7 +8,7 @@ sub init()
     m.root = m.top.findNode("root")
     m.liveDot = m.top.findNode("liveDot")
     m.pinBadge = m.top.findNode("pinBadge")
-    m.top.findNode("pinLabel").text = tr("PIN")
+    m.top.findNode("pinLabel").text = tr("PINNED")
 end sub
 
 sub onDataChanged()

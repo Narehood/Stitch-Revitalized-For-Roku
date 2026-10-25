@@ -1053,7 +1053,7 @@
         <message><source>100%</source><translation>100%</translation></message>
         <message><source>{0} of {1}</source><translation>{0} of {1}</translation></message>
         <message><source>Press Down or Back to hide controls</source><translation>Press Down or Back to hide controls</translation></message>
-        <message><source>PIN</source><translation>PIN</translation></message>
+        <message><source>PINNED</source><translation>PINNED</translation></message>
         <message><source>Press * to pin</source><translation>Press * to pin</translation></message>
         <message><source>Press * to unpin</source><translation>Press * to unpin</translation></message>
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Press * to pin to sidebar ({0} max)</translation></message>

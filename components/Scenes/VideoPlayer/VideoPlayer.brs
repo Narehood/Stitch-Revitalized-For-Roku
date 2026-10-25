@@ -501,7 +501,7 @@ sub onChannelActionsRequested(event as object)
     name = content.streamerDisplayName
     if m.channelActionsPinned
         pinLabel = tr("Unpin streamer")
-        name += " · " + tr("PIN")
+        name += " · " + tr("PINNED")
     end if
     dialog = CreateObject("roSGNode", "StandardMessageDialog")
     dialog.title = tr("Channel actions")

@@ -252,7 +252,7 @@ sub testPlayerPins()
         dialog.buttonSelected = 1
         check(m.global.fixtureWrites = writes and RW_IsPinned("canned"), "late duplicate pin selection cannot toggle or repeat a write")
         openActions(video, kind)
-        check(m.scene.dialog.buttons[1] = "Unpin streamer" and m.scene.dialog.message[0] = "Canned · PIN", "reopened menu refreshes current pin label and visible PIN state")
+        check(m.scene.dialog.buttons[1] = "Unpin streamer" and m.scene.dialog.message[0] = "Canned · PINNED", "reopened menu refreshes current pin label and visible PINNED state")
         pinFromDialog()
         check(not RW_IsPinned("canned") and RW_LoadPins().Count() = 0 and railEntry("canned") = invalid, "actual unpin action removes the pin and refreshes the empty rail")
         check(hero().active.IsSameNode(player) and video.control = "play" and not player.backPressed and video.CallFunc("fixtureOverlay").fade = "start", "unpin preserves playback and restarts control fade")

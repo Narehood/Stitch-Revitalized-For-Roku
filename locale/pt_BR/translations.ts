@@ -1063,7 +1063,7 @@
         <message><source>100%</source><translation>100%</translation></message>
         <message><source>{0} of {1}</source><translation>{0} de {1}</translation></message>
         <message><source>Press Down or Back to hide controls</source><translation>Pressione Baixo ou Voltar para ocultar os controles</translation></message>
-        <message><source>PIN</source><translation>PIN</translation></message>
+        <message><source>PINNED</source><translation>FIXADO</translation></message>
         <message><source>Press * to pin</source><translation>Pressione * para fixar</translation></message>
         <message><source>Press * to unpin</source><translation>Pressione * para desafixar</translation></message>
         <message><source>Press * to pin to sidebar ({0} max)</source><translation>Pressione * para fixar na barra lateral (máx. {0})</translation></message>

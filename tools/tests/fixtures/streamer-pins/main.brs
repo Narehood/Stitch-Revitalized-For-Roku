@@ -206,7 +206,7 @@ sub testRailAndPage(scene as object)
     state = rail.callFunc("fixtureRead")
     pinned = state.items[0]
     check(RW_IsPinned("channel_9") and state.index = 0 and pinned.itemData.login = "channel_9" and pinned.focused, "native Options persists the pin and retains focus on that channel after sorting")
-    check(pinned.findNode("pinBadge").visible and pinned.findNode("pinLabel").text = "PIN", "the pinned avatar has a persistent code-native PIN indicator")
+    check(pinned.findNode("pinBadge").visible and pinned.findNode("pinLabel").text = "PINNED", "the pinned avatar has a persistent code-native PINNED indicator")
     check(rail.findNode("captionHint").text = "Press * to unpin" and rail.findNode("caption").translation[1] = pinned.translation[1] + 12, "pinning changes the hint without moving the centered tooltip")
     badge = pinned.findNode("pinBadge")
     label = pinned.findNode("pinLabel")

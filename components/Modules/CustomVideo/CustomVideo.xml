@@ -131,9 +131,11 @@
                 <Group id="channelGroup" translation="[456,0]" visible="false">
                     <Poster uri="pkg:/images/twitch-redesign/round6.9.png" blendColor="0x26262CFF" width="64" height="48" />
                     <Poster id="channelFocus" uri="pkg:/images/twitch-redesign/focus-round6.9.png" width="64" height="48" visible="false" />
-                    <Label width="64" height="48" horizAlign="center" vertAlign="center" text="↗" color="0xFFFFFFFF">
-                        <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="28" />
-                    </Label>
+                    <Group translation="[18,10]">
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[0,11]" blendColor="0xFFFFFFFF" />
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[11,11]" blendColor="0xFFFFFFFF" />
+                        <Poster uri="pkg:/images/profile-mask-540-white.png" width="6" height="6" loadWidth="6" loadHeight="6" loadDisplayMode="scaleToFit" translation="[22,11]" blendColor="0xFFFFFFFF" />
+                    </Group>
                 </Group>
             </Group>
         </Group>
