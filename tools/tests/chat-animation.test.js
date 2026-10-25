@@ -12,6 +12,28 @@ const corpus = require('./fixtures/chat-animation/corpus');
 const root = path.resolve(__dirname, '../..');
 const fixtures = path.join(__dirname, 'fixtures/chat-animation');
 const cli = path.join(root, 'node_modules/brs-node/bin/brs.cli.js');
+const chatEntries = [
+    {
+        scenario: 'testChatAnimations',
+        name: 'actual Chat renderer keeps one visible native owner, restores static images and disposes tasks/files on every removal path',
+        detail: 'actual renderer/Task/filesystem assertions; only native AnimatedImage and HTTP are boundaries, not proof of native animation',
+    },
+    {
+        scenario: 'testCacheLimits',
+        name: 'actual Chat cache bounds entries and compressed bytes while protecting the active file',
+        detail: 'actual cache/Task/real-file assertions, including 18 small assets and six 1 MiB assets',
+    },
+    {
+        scenario: 'testSharedOwnership',
+        name: 'actual Chat instances reserve one global worker and cache through disposal, failed cleanup and completed handoff',
+        detail: 'cross-instance renderer/Task/real-file assertions, including retained 4 MiB cache and held deletion completion',
+    },
+    {
+        scenario: 'testStorageWaiterLifecycle',
+        name: 'actual release observers wake only visible waiters and survive synchronous acquisition callbacks',
+        detail: 'actual observer/lifecycle assertions, including synchronous own-acquire delivery before Task creation',
+    },
+];
 
 async function add(dir, name, data) {
     const file = path.join(dir, name);
@@ -34,11 +56,12 @@ async function run(args, cwd, timeout = 45000) {
         child.once('close', code => {clearTimeout(timer); resolve({code, output, timedOut, excessive});});
     });
 }
-function accept(result, marker) {
-    assert.equal(result.timedOut, false, result.output.slice(-12000));
-    assert.equal(result.excessive, false);
-    assert.equal(result.code, 0, result.output.slice(-12000));
+function accept(result, marker, sg = false) {
+    assert.equal(result.timedOut, false, `child timed out\n${result.output.slice(-12000)}`);
+    assert.equal(result.excessive, false, 'child output exceeded limit');
+    assert.equal(result.code, 0, `child exited unsuccessfully\n${result.output.slice(-12000)}`);
     assert.doesNotMatch(result.output, /CHAT_ANIMATION_FAIL:|STITCH_UI_FAIL:|runtime error|BrightScript Debugger|EXIT_BRIGHTSCRIPT_CRASH|failed to set up component|unhandled exception/i);
+    if (sg) assert.match(result.output, /EXIT_USER_NAV/);
     const count = result.output.match(new RegExp(`${marker}:\\s*(\\d+) assertions`));
     assert.ok(count && Number(count[1]) > 0, `missing fresh nonzero test summary\n${result.output.slice(-12000)}`);
     return Number(count[1]);
@@ -53,8 +76,7 @@ async function execute(build, sg = false) {
             await zipFolder(path.join(dir, 'package'), zip);
             const driver = path.join(__dirname, 'fixtures/ui-startup-player/key-driver.js');
             const result = await run([driver, cli, zip], dir, 60000);
-            assert.match(result.output, /EXIT_USER_NAV/);
-            return accept(result, marker);
+            return accept(result, marker, true);
         }
         const files = (await fs.readdir(dir)).filter(name => name.endsWith('.brs'));
         return accept(await run([cli, '--no-sg', '--root', dir, ...files], dir), marker);
@@ -135,8 +157,11 @@ test('actual BTTV and 7TV producers publish static strings and separate URI-keye
 async function buildAsset(dir, marker, mutate = source => source) {
     const source = mutate(await fs.readFile(path.join(root, 'components/Modules/Chat/ChatAnimationAsset/ChatAnimationAsset.brs'), 'utf8'));
     assert.equal((source.match(/type\(event\) = "roUrlEvent"/g) || []).length, 1);
+    assert.equal((source.match(/\bfs\.stat\(/g) || []).length, 2, 'explicit stat boundary covers only polling and final admission');
     const task = source.replace(/\bcreateObject\("(roFileSystem|roMessagePort|roTimespan|roUrlTransfer|roByteArray)"\)/gi, 'fixtureCreateObject("$1")')
-        .replace(/\bwait\(/gi, 'fixtureWait(').replace('type(event) = "roUrlEvent"', 'fixtureIsUrlEvent(event)');
+        .replace(/\bwait\(/gi, 'fixtureWait(').replace('type(event) = "roUrlEvent"', 'fixtureIsUrlEvent(event)')
+        // Explicit stat boundary reproduces native pending metadata gaps; all other filesystem operations stay real.
+        .replace(/\bfs\.stat\(([^)]*)\)/g, 'fixtureStat(fs, $1)');
     await add(dir, 'task.brs', task);
     await add(dir, 'parser.brs', await fs.readFile(path.join(root, 'source/utils/chatAnimationWebp.brs')));
     await add(dir, 'main.brs', (await fixture('asset-main.brs')).replace('__PASS_MARKER__', marker));
@@ -149,7 +174,7 @@ async function buildAsset(dir, marker, mutate = source => source) {
 
 test('actual transfer logic requires bounded HEAD before GET, shares one deadline and strictly admits final files', async t => {
     const count = await execute(buildAsset);
-    t.diagnostic(`${count} transfer assertions; actual filesystem allocation/stat/deletion, controlled HTTP/clock inputs`);
+    t.diagnostic(`${count} transfer assertions; actual filesystem allocation/read/write/stat/deletion except explicit metadata gaps, controlled HTTP/clock; no native filesystem/operator proof`);
 });
 
 test('preflight regression rejects GET/file creation when HEAD is oversized or unknown', async () => {
@@ -219,20 +244,42 @@ async function buildChat(dir, marker, nativeMutation = '', scenario = 'testChatA
     for (const font of ['Archivo-Regular.otf', 'Archivo-Bold.otf']) await copy(dir, `fonts/${font}`);
 }
 
-test('actual Chat renderer keeps one visible native owner, restores static images and disposes tasks/files on every removal path', {timeout: 90000}, async t => {
-    const count = await execute((dir, marker) => buildChat(dir, marker), true);
-    t.diagnostic(`${count} actual renderer/Task/filesystem assertions; only native AnimatedImage and HTTP are boundaries, not proof of native animation`);
+test('normal Chat entries execute every original case once without repeating the dense cache case', async () => {
+    const main = await fixture('chat-main.brs');
+    const methods = new Map([...main.matchAll(/^sub (test\w+)\(\)[\s\S]*?^end sub/gm)].map(match => [match[1], match[0]]));
+    const rendererCases = [...methods.get('testChatAnimations').matchAll(/^\s+(test\w+)\(\)/gm)].map(match => match[1]);
+    assert.deepEqual(rendererCases, ['testOwnership', 'testCleanupFailure', 'testStaleGeneration', 'testVisibilityAndBounds', 'testProviderHandoff']);
+    const cases = chatEntries.flatMap(({scenario}) => scenario === 'testChatAnimations' ? rendererCases : [scenario]);
+    assert.equal(new Set(cases).size, cases.length, 'normal entries must not repeat any actual case');
+    assert.deepEqual(cases.sort(), [...methods.keys()].filter(name => name !== 'testChatAnimations').sort(), 'every actual test method must have a normal entry');
+    assert.equal(cases.filter(name => name === 'testCacheLimits').length, 1, 'dense cache case runs in exactly one child');
+    assert.equal(main.split('__CHAT_SCENARIO__()').length, 2, 'one actual main scenario entry required');
 });
 
-test('actual Chat instances reserve one global worker and cache through disposal, failed cleanup and completed handoff', {timeout: 90000}, async t => {
-    const count = await execute((dir, marker) => buildChat(dir, marker, '', 'testSharedOwnership'), true);
-    t.diagnostic(`${count} cross-instance renderer/Task/real-file assertions, including retained 4 MiB cache and held deletion completion`);
+test('Chat result validation diagnoses timeout before missing exit and preserves output guards', () => {
+    const marker = `CHAT_ANIMATION_PASS_${randomUUID()}`;
+    for (const newline of ['\n', '\r\n']) {
+        const result = {code: 0, timedOut: false, excessive: false, output: `${marker}: 1 assertions${newline}EXIT_USER_NAV${newline}`};
+        assert.equal(accept(result, marker, true), 1);
+        assert.throws(() => accept({...result, timedOut: true, code: null, output: '[package] App: Chat Animation Fixture'}, marker, true), /child timed out/);
+        assert.throws(() => accept({...result, excessive: true}, marker, true), /child output exceeded limit/);
+        assert.throws(() => accept({...result, code: 1}, marker, true), /child exited unsuccessfully/);
+        for (const failure of ['CHAT_ANIMATION_FAIL:probe', 'STITCH_UI_FAIL:probe', 'runtime error', 'BrightScript Debugger', 'EXIT_BRIGHTSCRIPT_CRASH', 'failed to set up component', 'unhandled exception']) {
+            assert.throws(() => accept({...result, output: result.output + failure}, marker, true));
+        }
+        assert.throws(() => accept(result, `${marker}_stale`, true), /missing fresh nonzero test summary/);
+        assert.throws(() => accept({...result, output: result.output.replace('1 assertions', '0 assertions')}, marker, true), /missing fresh nonzero test summary/);
+        assert.throws(() => accept({...result, output: 'EXIT_USER_NAV'}, marker, true), /missing fresh nonzero test summary/);
+        assert.throws(() => accept({...result, output: result.output.replace('EXIT_USER_NAV', '')}, marker, true), /EXIT_USER_NAV/);
+    }
 });
 
-test('actual release observers wake only visible waiters and survive synchronous acquisition callbacks', {timeout: 90000}, async t => {
-    const count = await execute((dir, marker) => buildChat(dir, marker, '', 'testStorageWaiterLifecycle'), true);
-    t.diagnostic(`${count} actual observer/lifecycle assertions, including synchronous own-acquire delivery before Task creation`);
-});
+for (const {scenario, name, detail} of chatEntries) {
+    test(name, {timeout: 90000}, async t => {
+        const count = await execute((dir, marker) => buildChat(dir, marker, '', scenario), true);
+        t.diagnostic(`${count} ${detail}`);
+    });
+}
 
 test('release observer regression rejects synchronous own-acquire reentry without the waiting latch', {timeout: 60000}, async () => {
     await assert.rejects(execute((dir, marker) => buildChat(dir, marker, source => {

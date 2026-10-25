@@ -49,9 +49,12 @@ function fetchChatAnimationFile(fs as object, request as object) as dynamic
                         event = waitChatAnimationTransfer(transfer, port, clock, fs, request.path, expectedBytes)
                         stat = fs.stat(request.path)
                         if chatAnimationContentLength(event) = expectedBytes and stat <> invalid
-                            if stat.size = expectedBytes and not m.top.stopRequested and clock.totalMilliseconds() < 8000
-                                bytes = createObject("roByteArray")
-                                if bytes.readFile(request.path, 0, 1048577) then info = chatAdmitWebp(bytes)
+                            size = stat.size
+                            if GetInterface(size, "ifInt") <> invalid or GetInterface(size, "ifLongInt") <> invalid or GetInterface(size, "ifFloat") <> invalid or GetInterface(size, "ifDouble") <> invalid
+                                if size = expectedBytes and not m.top.stopRequested and clock.totalMilliseconds() < 8000
+                                    bytes = createObject("roByteArray")
+                                    if bytes.readFile(request.path, 0, 1048577) then info = chatAdmitWebp(bytes)
+                                end if
                             end if
                         end if
                     end if
@@ -76,7 +79,13 @@ function waitChatAnimationTransfer(transfer as object, port as object, clock as 
         if m.top.stopRequested or clock.totalMilliseconds() >= 8000 then return invalid
         if path <> ""
             stat = fs.stat(path)
-            if stat <> invalid and stat.size > expectedBytes then return invalid
+            ' Native downloads may expose no numeric file size until a later poll.
+            if stat <> invalid
+                size = stat.size
+                if GetInterface(size, "ifInt") <> invalid or GetInterface(size, "ifLongInt") <> invalid or GetInterface(size, "ifFloat") <> invalid or GetInterface(size, "ifDouble") <> invalid
+                    if size > expectedBytes then return invalid
+                end if
+            end if
         end if
         if type(event) = "roUrlEvent"
             if event.getSourceIdentity() = transfer.getIdentity() then return event

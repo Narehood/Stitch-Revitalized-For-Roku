@@ -1,13 +1,26 @@
-﻿sub main()
+sub main()
 m.assertions = 0
 m.failures = 0
 modes = ["valid", "valid-catjam", "valid-sourpls", "limit", "head-oversize", "head-missing", "head-zero", "head-negative", "head-decimal", "head-exponent", "head-junk", "head-huge", "head-duplicate", "head-encoded", "head-chunked", "head-nonstring", "head-invalid-array", "head-http-error", "head-start-failed", "head-timeout", "head-cancel", "head-late-event", "head-wrong-event", "get-empty", "get-oversize", "get-truncated", "get-http-error", "get-timeout", "get-start-failed", "get-cancel", "get-wrong-event", "get-missing-length", "get-changed-length", "get-changed-body", "get-duplicate", "get-encoded", "get-chunked", "shared-deadline", "get-late-event", "stop-before-start"]
+for each metadata in ["stat-missing", "stat-empty", "size-invalid", "size-string", "size-bool", "size-object", "size-array"]
+    modes.push("pending-" + metadata)
+    modes.push("final-" + metadata)
+end for
+for each metadata in ["stat-missing", "stat-empty"]
+    modes.push("timeout-" + metadata)
+    modes.push("cancel-" + metadata)
+end for
+modes.push("pending-stat-oversize")
 for each mode in modes
     state = getGlobalAA()
     state.mode = mode
     state.nowMs = 0
     state.canceled = 0
     state.waits = 0
+    state.getWaits = 0
+    state.getEvents = 0
+    state.stats = 0
+    state.statGaps = 0
     state.heads = 0
     state.gets = 0
     state.writes = 0
@@ -24,9 +37,9 @@ for each mode in modes
     else
         check(state.canceled = 1, "transfer canceled/released for " + mode)
     end if
-    if mode = "valid" or mode = "valid-catjam" or mode = "valid-sourpls" or mode = "limit"
+    if mode = "valid" or mode = "valid-catjam" or mode = "valid-sourpls" or mode = "limit" or (mode.left(8) = "pending-" and mode <> "pending-stat-oversize")
         check(m.top.response <> invalid and m.top.response.info <> invalid, "admitted download is published: " + mode)
-        check(m.top.response.path = m.top.request.path and m.top.response.generation = 7 and m.top.response.info.bytes = fixtureLength(), "response retains exact request ownership and parsed actual size: " + mode)
+        if m.top.response.info <> invalid then check(m.top.response.path = m.top.request.path and m.top.response.generation = 7 and m.top.response.info.bytes = fixtureLength(), "response retains exact request ownership and parsed actual size: " + mode)
         check(m.top.response.removed.count() = 0 and fs.exists(m.top.request.path), "completed admitted file remains owned by Chat: " + mode)
         check(state.heads = 1 and state.gets = 1 and state.writes = 1, "one HEAD precedes the only GET writer: " + mode)
         fs.delete(m.top.request.path)
@@ -46,6 +59,22 @@ for each mode in modes
     end if
     if mode = "get-oversize"
         check(state.peakBytes = 2097152 and m.top.response.info = invalid, "lying GET can overshoot before polling but is never admitted or decoded")
+        check(state.getWaits = 1 and state.getEvents = 0 and state.nowMs = 100, "oversized pending file is rejected before URL completion")
+    end if
+    if mode.left(8) = "pending-"
+        check(state.statGaps = 1 and state.getWaits = 2, "pending metadata gap is polled before final real stat: " + mode)
+    end if
+    if mode.left(6) = "final-"
+        check(state.statGaps = 1 and state.getEvents = 1 and state.getWaits = 1, "unusable metadata is injected only at final admission: " + mode)
+    end if
+    if mode.left(8) = "timeout-"
+        check(state.statGaps > 1 and state.getEvents = 0, "missing metadata continues bounded polling without URL completion: " + mode)
+    end if
+    if mode.left(7) = "cancel-"
+        check(state.statGaps > 0 and state.getWaits = 2 and state.getEvents = 1 and state.nowMs = 150, "cancellation after metadata gap beats racing URL completion: " + mode)
+    end if
+    if mode = "pending-stat-oversize"
+        check(state.peakBytes = 2097152 and state.getEvents = 0 and state.nowMs = 150, "real oversized file after metadata gap is rejected without URL completion")
     end if
 end for
 if m.failures = 0 then print "__PASS_MARKER__: "; m.assertions; " assertions"
@@ -83,12 +112,12 @@ function fixtureStart(path as string) as boolean
     state.phase = "get"
     state.gets++
     if state.mode = "get-start-failed" then return false
-    ' Real file operations and admission execute; only HTTP/clock inputs are canned.
+    ' Real file operations and admission execute; HTTP/clock and deliberate stat gaps are boundaries.
     source = "petpet.webp"
     if state.mode = "valid-catjam" then source = "catjam.webp"
     if state.mode = "valid-sourpls" then source = "sourpls.webp"
     if state.mode = "limit" then source = "one-mib.webp"
-    if state.mode = "get-oversize" then source = "oversize.webp"
+    if state.mode = "get-oversize" or state.mode = "pending-stat-oversize" then source = "oversize.webp"
     bytes = createObject("roByteArray")
     bytes.readFile("pkg:/" + source)
     if state.mode = "get-truncated" or state.mode = "get-changed-body" then bytes.pop()
@@ -98,10 +127,41 @@ function fixtureStart(path as string) as boolean
     return bytes.writeFile(path)
 end function
 
+' Only this stat boundary models the native pending-file metadata gap. Normal
+' polling and completion still use actual engine filesystem stat, not native proof.
+function fixtureStat(fs as object, path as string) as dynamic
+    state = getGlobalAA()
+    mode = state.mode
+    state.stats++
+    missing = mode.left(8) = "pending-" and state.getWaits = 1
+    missing = missing or (mode.left(6) = "final-" and state.stats = 2)
+    missing = missing or mode.left(8) = "timeout-" or mode.left(7) = "cancel-"
+    if missing
+        state.statGaps++
+        if mode.instr("stat-empty") >= 0 or mode = "pending-stat-oversize" then return {}
+        if mode.instr("size-invalid") >= 0 then return { size: invalid }
+        if mode.instr("size-string") >= 0 then return { size: "3842" }
+        if mode.instr("size-bool") >= 0 then return { size: true }
+        if mode.instr("size-object") >= 0 then return { size: {} }
+        if mode.instr("size-array") >= 0 then return { size: [] }
+        return invalid
+    end if
+    return fs.stat(path)
+end function
+
 function fixtureWait(duration as integer, port as object) as dynamic
     state = getGlobalAA()
     state.nowMs += duration
     state.waits++
+    if state.phase = "get"
+        state.getWaits++
+        if state.mode.left(8) = "pending-" and state.getWaits = 1 then return invalid
+        if state.mode.left(8) = "timeout-" or state.mode = "get-oversize" or state.mode = "pending-stat-oversize" then return invalid
+        if state.mode.left(7) = "cancel-"
+            if state.getWaits = 1 then return invalid
+            state.task.stopRequested = true
+        end if
+    end if
     if state.mode = state.phase + "-cancel"
         state.task.stopRequested = true
         ' A completed event racing cancellation must still be rejected.
@@ -113,6 +173,7 @@ function fixtureWait(duration as integer, port as object) as dynamic
         if state.phase = "get" then return invalid
     end if
     if state.phase = "head" then state.headDoneMs = state.nowMs
+    if state.phase = "get" then state.getEvents++
     return { getSourceIdentity: fixtureSourceIdentity, getResponseCode: fixtureResponseCode, getResponseHeadersArray: fixtureHeaders }
 end function
 

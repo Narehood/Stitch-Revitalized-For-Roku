@@ -75,11 +75,11 @@ sub testStorageWaiterLifecycle()
 end sub
 
 sub testChatAnimations()
+    ' The dense testCacheLimits case runs through its own child entry.
     testOwnership()
     if m.failures > 0 then return
     testCleanupFailure()
     testStaleGeneration()
-    testCacheLimits()
     testVisibilityAndBounds()
     testProviderHandoff()
     for each support in ["unsupported", "missing-fields", "wrong-field-types"]
