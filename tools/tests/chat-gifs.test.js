@@ -204,8 +204,8 @@ test('budget regression rejects ignoring cancellation in the extended conversion
     await assert.rejects(execute((dir,marker)=>buildAtlas(dir,marker,source=>mutateGuard(source,
         'if m.gifCancelled then throw "GIF conversion cancelled"','if false then throw "GIF conversion cancelled"'),'', 'budget-cancel')),/cancellation remains active below 3000 ms/);
 });
-test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase and preserves one global owner/worker', async t => {
-    const count=await execute(async (dir,marker) => {
+for (const omitDesignScaling of [false, true]) test(omitDesignScaling ? 'GIF readiness regression rejects restoring physical-pixel-only bitmap dimensions' : 'actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase and preserves one global owner/worker', async t => {
+    const run=()=>execute(async (dir,marker) => {
         const pkg=path.join(dir,'package');
         await add(pkg,'manifest','title=GIF Manager Contract Fixture\nmajor_version=1\nminor_version=0\nbuild_version=0\nui_resolutions=hd\n');
         await add(pkg,'source/main.brs',await fs.readFile(path.join(fixtures,'manager-main.brs')));
@@ -214,7 +214,8 @@ test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase
         const chat=await fs.readFile(path.join(root,'components/Modules/Chat/Chat.brs'),'utf8');
         await add(pkg,'components/ChatGifBuilder.brs',['buildChatGif','chatTextNode'].map(name=>chat.match(new RegExp(`^function ${name}\\([^]*?^end function`,'m'))[0]).join('\n'));
         await add(pkg,'fonts/Archivo-Regular.otf',await fs.readFile(path.join(root,'fonts/Archivo-Regular.otf')));
-        const source=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimations.brs'),'utf8');
+        let source=await fs.readFile(path.join(root,'components/Modules/Chat/ChatAnimations.brs'),'utf8');
+        if(omitDesignScaling) source=mutateGuard(source,'for each scale in [1.0, 2.0 / 3.0, 1.5]','for each scale in [1.0]');
         await add(pkg,'components/ChatAnimations.brs',source.replace('createObject("roSGNode", nodeType)','createObject("roSGNode", "AnimatedImageBoundary")')
             .replace('createObject("roSGNode", "Poster")','createObject("roSGNode", "PosterBoundary")')
             .replace('createObject("roTimespan")','fixtureElapsedClock()')
@@ -227,5 +228,10 @@ test('actual manager plays GIF atlas without AnimatedImage, bounds elapsed phase
                 '<script uri="manager-scene.brs" /><script uri="manager-atlas.brs" /><script uri="ChatAnimations.brs" /><script uri="ChatGifBuilder.brs" />'+
                 '<script uri="pkg:/source/utils/ircGifs.brs" /><script uri="pkg:/source/utils/ircEmotes.brs" /><script uri="pkg:/source/utils/taskFactory.brs" /></component>');
     },true);
+    if(omitDesignScaling) {
+        await assert.rejects(run(),/design-scaled bitmap readiness dimensions/);
+        return;
+    }
+    const count=await run();
     t.diagnostic(`${count} actual manager assertions with scripted native states; no GIF decoding or visible motion proof`);
 });

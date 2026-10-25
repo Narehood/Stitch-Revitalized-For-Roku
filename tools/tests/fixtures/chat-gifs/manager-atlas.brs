@@ -1,4 +1,6 @@
 sub runFixture()
+    testAtlasBitmapSizes()
+    if m.failures > 0 then return
     m.animateChatEmotes = true
     m.animationSupported = false
     getGlobalAA().elapsed = 0
@@ -18,11 +20,12 @@ sub runFixture()
     check(owner.getChild(0).visible and m.animationTimer = invalid, "title persists until Poster readiness")
     removeChatAnimationCache(uri)
     check(m.animationPartials.count() = 0 and m.animationCacheBytes = 60000, "loading atlas protected; storage counts actual retained atlas")
-    native.bitmapWidth = 256
-    native.bitmapHeight = 256
+    native.bitmapWidth = 170.667
+    native.bitmapHeight = 170.667
     native.loadStatus = "ready"
     timer = m.animationTimer
-    check(not owner.getChild(0).visible and duplicate.getChild(0).visible and timer <> invalid, "dimension-validated texture hides only owner title and starts one timer")
+    check(not owner.getChild(0).visible and duplicate.getChild(0).visible and timer <> invalid, "design-scaled bitmap readiness hides only owner title and starts one timer")
+    if timer = invalid then return
     check(timer.repeat = false and timer.duration >= 0.02, "one-shot timer is at least twenty milliseconds")
     native.loadStatus = "ready"
     syncChatAnimation()
@@ -97,10 +100,24 @@ sub runFixture()
     if m.failures = 0 then print "__PASS_MARKER__: "; m.checks; " assertions"
 end sub
 
+sub testAtlasBitmapSizes()
+    poster = createObject("roSGNode", "PosterBoundary")
+    for each size in [[256, 256, true], [170.667, 170.667, true], [384, 384, true], [0, 0, false], [1, 1, false], [170, 170, false], [256, 128, false], [170.667, 256, false], [-256, -256, false]]
+        poster.bitmapWidth = size[0]
+        poster.bitmapHeight = size[1]
+        check(chatAnimationAtlasBitmapSize(poster, { atlasWidth: 256, atlasHeight: 256 }) = size[2], "design-scaled bitmap readiness dimensions: " + size[0].toStr() + "/" + size[1].toStr())
+    end for
+    for each size in [[256, 128], [170.667, 85.3333], [384, 192]]
+        poster.bitmapWidth = size[0]
+        poster.bitmapHeight = size[1]
+        check(chatAnimationAtlasBitmapSize(poster, { atlasWidth: 256, atlasHeight: 128 }), "non-square design-scaled bitmap readiness")
+    end for
+end sub
+
 sub testAtlasAspectRatio(uri as string)
-    starts = [0,70,130,200,270,330,400,470,530,600,670,730,800,870,930]
-    cells = [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[0,3],[1,3],[2,3]]
-    for each size in [[64,32,96,48,0,24],[32,64,48,96,24,0]]
+    starts = [0, 70, 130, 200, 270, 330, 400, 470, 530, 600, 670, 730, 800, 870, 930]
+    cells = [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2], [0, 3], [1, 3], [2, 3]]
+    for each size in [[64, 32, 96, 48, 0, 24], [32, 64, 48, 96, 24, 0]]
         m.animationFailed = {}
         syncChatAnimation()
         info = fixtureAtlasInfo()
@@ -149,7 +166,7 @@ end sub
 
 sub testPhases()
     info = { frames: 3, durationMs: 120, frameEnds: [20, 60, 120], loopCount: -1 }
-    for each spec in [[-1,0,false,20],[0,0,false,20],[19,0,false,20],[20,1,false,40],[59,1,false,20],[60,2,false,60],[120,2,true,20],[900,2,true,20]]
+    for each spec in [[-1, 0, false, 20], [0, 0, false, 20], [19, 0, false, 20], [20, 1, false, 40], [59, 1, false, 20], [60, 2, false, 60], [120, 2, true, 20], [900, 2, true, 20]]
         phase = chatAnimationAtlasPhase(info, spec[0])
         check(phase.index = spec[1] and phase.done = spec[2] and phase.waitMs = spec[3], "absent-loop elapsed boundary " + spec[0].toStr())
     end for
@@ -223,7 +240,7 @@ sub disposeContender()
     if m.animationTask <> invalid then fixtureComplete(invalid)
 end sub
 function fixtureAtlasInfo() as object
-    return { format: "gif", renderer: "gif-atlas", bytes: 60000, sourceBytes: 998959, width: 480, height: 480, loadWidth: 64, loadHeight: 64, frames: 15, durationMs: 990, loopCount: 0, frameEnds: [70,130,200,270,330,400,470,530,600,670,730,800,870,930,990], columns: 4, atlasWidth: 256, atlasHeight: 256 }
+    return { format: "gif", renderer: "gif-atlas", bytes: 60000, sourceBytes: 998959, width: 480, height: 480, loadWidth: 64, loadHeight: 64, frames: 15, durationMs: 990, loopCount: 0, frameEnds: [70, 130, 200, 270, 330, 400, 470, 530, 600, 670, 730, 800, 870, 930, 990], columns: 4, atlasWidth: 256, atlasHeight: 256 }
 end function
 function fixtureEvent(node as object, data as dynamic) as object
     return { node: node, data: data, getRoSGNode: fixtureEventNode, getData: fixtureEventData }

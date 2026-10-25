@@ -6,7 +6,7 @@
         <field id="height" type="float" />
         <field id="loadDisplayMode" type="string" />
         <field id="loadStatus" type="string" alwaysNotify="true" />
-        <field id="bitmapWidth" type="integer" />
-        <field id="bitmapHeight" type="integer" />
+        <field id="bitmapWidth" type="float" />
+        <field id="bitmapHeight" type="float" />
     </interface>
 </component>

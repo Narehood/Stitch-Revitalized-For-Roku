@@ -282,7 +282,7 @@ sub onChatAnimationAtlasStatus(event as object)
     if status = "ready"
         if m.animationClock <> invalid then return
         info = m.animationAsset.info
-        if m.animationNative.bitmapWidth <> info.atlasWidth or m.animationNative.bitmapHeight <> info.atlasHeight
+        if not chatAnimationAtlasBitmapSize(m.animationNative, info)
             failChatAnimation()
             syncChatAnimation()
             return
@@ -299,6 +299,15 @@ sub onChatAnimationAtlasStatus(event as object)
         syncChatAnimation()
     end if
 end sub
+
+function chatAnimationAtlasBitmapSize(poster as object, info as object) as boolean
+    ' Poster reports design-space dimensions when HD/FHD autoscaling is active.
+    ' The Task validates the original PNG dimensions and bytes before publication.
+    for each scale in [1.0, 2.0 / 3.0, 1.5]
+        if abs(poster.bitmapWidth - info.atlasWidth * scale) < 0.01 and abs(poster.bitmapHeight - info.atlasHeight * scale) < 0.01 then return true
+    end for
+    return false
+end function
 
 sub onChatAnimationAtlasTick(event as object)
     if m.disposed or m.animationTimer = invalid or m.animationOwner = invalid or not m.top.visible then return
