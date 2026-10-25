@@ -44,17 +44,17 @@ function extractJob(source) {
     return matches[0][0].replace(/^sub main\(\)/, 'sub runChatJob()');
 }
 
-async function runFixture(body, connection = '', sendLogin = '', job = '', moderation = false, emote = '') {
+async function runFixture(body, connection = '', sendLogin = '', job = '', moderation = false, emote = '', fixturePath = fixture) {
     // The interpreter has no native TCP/WebSocket implementation. Replace only
     // object creation and waiting with explicit, deterministic OS boundaries.
     // All production connection/send/login decisions, deadlines and cleanup execute.
     const combined = [body, connection, sendLogin, job, emote].join('\n');
-    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, 4 + (connection ? 5 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
-    assert.equal([...combined.matchAll(/\bwait\(/gi)].length, 1 + (connection ? 1 : 0) + (job ? 1 : 0));
+    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, (body ? 4 : 0) + (connection ? 5 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
+    assert.equal([...combined.matchAll(/\bwait\(/gi)].length, (body ? 1 : 0) + (connection ? 1 : 0) + (job ? 1 : 0));
     const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(')
         .replace(/\bsleep\(/gi, 'fixtureSleep(');
     const marker = `STITCH_CHAT_TRANSPORT_PASS_${randomUUID()}`;
-    const main = (await fs.readFile(fixture, 'utf8')).replace('__PASS_MARKER__', marker)
+    const main = (await fs.readFile(fixturePath, 'utf8')).replace('__PASS_MARKER__', marker)
         .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '')
         .replace('__SEND_TESTS__', sendLogin ? 'runSendTests()' : '')
         .replace('__JOB_TESTS__', job ? 'runJobTests()' : '')
@@ -179,6 +179,18 @@ test('actual emote lifecycle stops between providers, suppresses canceled public
     const body = extractTransport(await fs.readFile(production, 'utf8'));
     const count = acceptResult(await runFixture(body, '', '', '', false, emote));
     t.diagnostic(`${count} transport/emote lifecycle assertions; provider fetch functions are explicit offline boundaries`);
+});
+
+test('actual emote providers reject malformed HTTP 200 payloads, retry incomplete caches and accept empty arrays or explicit no-set', async t => {
+    const source = await fs.readFile(path.join(root, 'components/Modules/Chat/EmoteJob/EmoteJob.brs'), 'utf8');
+    assert.equal([...source.matchAll(/^sub main\(\)/gm)].length, 1);
+    const http = await fs.readFile(path.join(root, 'source/utils/http.brs'), 'utf8');
+    const decoders = [...http.matchAll(/^function decodeJsonBody\([^\r\n]*\) as dynamic\r?\n[\s\S]*?^end function(?=\r?$)/gm)];
+    assert.equal(decoders.length, 1, 'expected the complete production HTTP body decoder');
+    const emote = source.replace(/^sub main\(\)/m, 'sub runEmoteJob()') + '\n' + decoders[0][0];
+    const count = acceptResult(await runFixture('', '', '', '', false, emote,
+        path.join(__dirname, 'fixtures/chat-transport/providers.brs')));
+    t.diagnostic(`${count} actual provider/lifecycle/JSON decoder assertions; only HTTP and registry boundaries are canned`);
 });
 
 for (const [name, gate, replacement, expected] of [

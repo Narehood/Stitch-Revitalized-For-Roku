@@ -170,13 +170,19 @@ sub getChannel7tvEmotes(channel_id)
     emoteCache = {}
     try
         temp = invokerest("https://7tv.io/v3/users/twitch/" + channel_id)
+        if not temp.doesExist("emote_set")
+            m.fetchFailed = true
+            return
+        end if
         if temp.emote_set <> invalid
-            if temp.emote_set.emotes <> invalid
-                for each emote in temp.emote_set.emotes
-                    uri = irc7tvImage(emote)
-                    if uri <> invalid then emoteCache[emote.name] = uri
-                end for
+            if type(temp.emote_set.emotes) <> "roArray"
+                m.fetchFailed = true
+                return
             end if
+            for each emote in temp.emote_set.emotes
+                uri = irc7tvImage(emote)
+                if uri <> invalid then emoteCache[emote.name] = uri
+            end for
         end if
     catch e
         m.fetchFailed = true
@@ -190,6 +196,10 @@ sub getGlobal7tvEmotes()
     emoteCache = {}
     try
         temp = invokerest("https://7tv.io/v3/emote-sets/global")
+        if type(temp.emotes) <> "roArray"
+            m.fetchFailed = true
+            return
+        end if
         for each emote in temp.emotes
             uri = irc7tvImage(emote)
             if uri <> invalid then emoteCache[emote.name] = uri
@@ -206,6 +216,10 @@ sub getGlobalTTVEmotes()
     emoteCache = {}
     try
         temp = invokerest("https://api.betterttv.net/3/cached/emotes/global")
+        if type(temp) <> "roArray"
+            m.fetchFailed = true
+            return
+        end if
         for each emote in temp
             uri = ircBttvImage(emote)
             emoteCache[emote.code] = uri
@@ -222,6 +236,10 @@ sub getChannelTTVFrankerEmotes(channel_id)
     emoteCache = {}
     try
         temp = invokerest("https://api.betterttv.net/3/cached/frankerfacez/users/twitch/" + channel_id)
+        if type(temp) <> "roArray"
+            m.fetchFailed = true
+            return
+        end if
         for each emote in temp
             if emote?.images?["1x"] <> invalid then emoteCache[emote.code] = ircImageUrl(emote.images["1x"])
         end for
@@ -237,6 +255,10 @@ sub getChannelTTVEmotes(channel_id)
     try
         ' ? "[EmoteJob] - getChannelTTVEmotes"
         temp = invokerest("https://api.betterttv.net/3/cached/users/twitch/" + channel_id)
+        if type(temp.sharedEmotes) <> "roArray" or type(temp.channelEmotes) <> "roArray"
+            m.fetchFailed = true
+            return
+        end if
         if temp.sharedEmotes <> invalid
             for each emote in temp.sharedEmotes
                 uri = ircBttvImage(emote)
