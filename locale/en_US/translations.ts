@@ -905,6 +905,14 @@
             <translation>Show FrankerFaceZ emotes in live chat.</translation>
         </message>
         <message>
+            <source>Floating focus</source>
+            <translation>Floating focus</translation>
+        </message>
+        <message>
+            <source>Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.</source>
+            <translation>Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.</translation>
+        </message>
+        <message>
             <source>Browse: live channel order</source>
             <translation>Browse: live channel order</translation>
         </message>

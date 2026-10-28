@@ -915,6 +915,14 @@
             <translation>Muestra emotes de FrankerFaceZ en el chat en vivo.</translation>
         </message>
         <message>
+            <source>Floating focus</source>
+            <translation>Enfoque flotante</translation>
+        </message>
+        <message>
+            <source>Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.</source>
+            <translation>Mueve el resaltado a la izquierda y a la derecha por las filas de canales, videos y categorías. Al desactivarlo, el resaltado conserva su posición fija actual.</translation>
+        </message>
+        <message>
             <source>Browse: live channel order</source>
             <translation>Explorar: orden de los canales en vivo</translation>
         </message>
