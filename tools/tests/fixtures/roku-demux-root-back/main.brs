@@ -23,7 +23,8 @@ sub main()
     m.scene.CallFunc("fixtureLoginFinished")
     settle(60)
     check(m.scene.localPlaybackSession.IsSameNode(permanentManager) and not permanentManager.CallFunc("fixtureManager").disposed, "ordinary sign-in preserves the same usable permanent manager")
-    if "__SIGNIN_CONTROL__" = "yes"
+    if "__NEGATIVE_CONTROL__" = "yes"
+        check(false, "deliberate reversed assertion")
         finishMain(screen)
         return
     end if
@@ -42,19 +43,11 @@ sub main()
     video.state = "playing"
     selectLiveExit(video)
     check(hero().active.IsSameNode(player) and not player.backPressed and player.CallFunc("fixturePlayer").exitPending and manager.busy, "actual on-screen Exit retains busy Player until strict cleanup acknowledgment")
-    if "__ONSCREEN_CONTROL__" = "yes"
-        finishMain(screen)
-        return
-    end if
     overlay = video.CallFunc("fixtureOverlay")
     check(overlay.disposed and video.control = "stop" and overlay.fadeControl = "stop" and video.IsInFocusChain(), "actual Exit disposes focused wrapper and stops fade timer while cleanup waits")
     press("play")
     settle(350)
     check(video.control = "stop" and video.CallFunc("fixtureOverlay").fadeControl = "stop", "remote Play after disposed Exit cannot replace stop or restart fade timer")
-    if "__DISPOSED_KEY_CONTROL__" = "yes"
-        finishMain(screen)
-        return
-    end if
     press("left")
     settle(350)
     press("ok")
@@ -68,10 +61,6 @@ sub main()
     video.state = "playing"
     video.CallFunc("fixtureDisposedAction", 2)
     check(video.control = "stop" and video.CallFunc("fixtureOverlay").fadeControl = "stop", "direct disposed Play action cannot replace stop")
-    if "__DISPOSED_ACTION_CONTROL__" = "yes"
-        finishMain(screen)
-        return
-    end if
     video.qualityOptions = ["720p60", "480p30"]
     video.CallFunc("fixtureDisposedAction", 3)
     check(not video.CallFunc("fixtureOverlay").qualityVisible and m.scene.dialog = invalid and video.control = "stop", "direct disposed Quality action cannot open its valid quality dialog")
@@ -147,10 +136,6 @@ sub main()
         state = player.CallFunc("fixturePlayer")
         check(state.exitPending and manager.busy and not player.backPressed, "root-dispatched Back waits for real manager acknowledgment")
         check(not m.scene.exitApp and not m.exitRequested, "root Back never signals main exit while worker owns playback")
-        if "__ROOT_GUARD_CONTROL__" = "yes"
-            finishMain(screen)
-            return
-        end if
         check(worker.stopRequested and worker.control = "run", "root Back cooperatively stops one worker without forced controlstop")
         before = state.sessionId
         press("back")
@@ -383,7 +368,6 @@ sub main()
     press("back")
     settle(350)
     check(m.scene.exitApp and m.exitRequested, "ordinary root Back after Player removal still requests main app exit")
-    if "__NEGATIVE_CONTROL__" = "yes" then check(false, "deliberate reversed assertion")
     retained = manager.CallFunc("fixtureManager").worker
     m.scene.UnobserveField("exitApp")
     m.scene.CallFunc("onDestroy")

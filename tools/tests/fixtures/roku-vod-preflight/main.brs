@@ -72,11 +72,16 @@ sub main()
         for each label in ["max", "over"]
             bytes = CreateObject("roByteArray")
             check(bytes.ReadFile("pkg:/" + mode + "-" + label + ".bin"), "bounded boundary fixture loads")
-            parsed = rokuVodIndexParse(bytes, source, origin) <> invalid
+            index = rokuVodIndexParse(bytes, source, origin)
+            parsed = index <> invalid
             validated = rokuVodIndexValidate(bytes, source, origin)
             check(parsed = (label = "max"), "full boundary " + mode + " " + label)
             check(validated = (label = "max"), "validate boundary " + mode + " " + label)
             check(parsed = validated, "boundary differential " + mode + " " + label)
+            if index <> invalid and label = "max"
+                if mode = "entries" then check(index.count = 8192, "entry ceiling exact")
+                if mode = "duration" then check(index.totalUs = 172800000000&, "48-hour total uses long integer")
+            end if
         end for
     else if mode = "long"
         bytes = CreateObject("roByteArray")
