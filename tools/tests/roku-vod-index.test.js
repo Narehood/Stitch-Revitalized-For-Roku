@@ -79,16 +79,7 @@ async function fixture(mode, mutation) {
             absolute: corpus.single.replace('0.m4s', `${corpus.origin}/absolute.m4s?x=fixture%2B%25`), comments: corpus.comments, bad: corpus.bad };
         await fs.writeFile(path.join(dir, 'corpus.json'), JSON.stringify(data));
         await fs.writeFile(path.join(dir, 'large.bin'), large.text);
-        for (const [name, body] of [
-            ['entries-max.bin', corpus.playlist(8192)], ['entries-over.bin', corpus.playlist(8193)],
-            ['duration-max.bin', corpus.playlist(5760, '30', 30)], ['duration-over.bin', corpus.playlist(5761, '30', 30)]
-        ]) {
-            assert.ok(Buffer.byteLength(body) <= 262144, `${name} isolates count/duration rather than byte cap`);
-            await fs.writeFile(path.join(dir, name), body);
-        }
         const existingLines = corpus.single.split('\n').length - 1;
-        await fs.writeFile(path.join(dir, 'lines-max.bin'), corpus.single + '\n'.repeat(16448 - existingLines));
-        await fs.writeFile(path.join(dir, 'lines-over.bin'), corpus.single + '\n'.repeat(16449 - existingLines));
         for (const [name, limit] of [['comment-lines-max.bin', 16448], ['comment-lines-over.bin', 16449]]) {
             const body = corpus.single.replace('#EXT-X-ENDLIST\n', '#c\n'.repeat(limit - existingLines) + '#EXT-X-ENDLIST\n');
             assert.ok(Buffer.byteLength(body) <= 262144, `${name} isolates ignored-comment line count`);
@@ -110,12 +101,10 @@ test('actual recorded index retains all7376 entries, packed offsets, microsecond
     t.diagnostic(`${accept(result, marker)} actual pure-index assertions; no network/backend/device claim`);
 });
 
-test('actual recorded index independently enforces entries,48hour timeline and line-count boundaries', { timeout: 210000 }, async t => {
-    // Give each complete boundary input its own existing 60-second child budget.
-    // Two full 8192-entry scans in one child can time out on hosted Windows.
-    const boundaries = [['entries-max', 2], ['entries-over', 1],
-        ['duration-max', 2], ['duration-over', 1], ['lines-max', 1], ['lines-over', 1],
-        ['comment-lines-max', 1], ['comment-lines-over', 1]];
+test('actual recorded index enforces ignored-comment line-count boundaries', { timeout: 210000 }, async t => {
+    // Shared entry, duration and blank-line limits run through both APIs in
+    // roku-vod-preflight. Keep this distinct ignored-comment input here.
+    const boundaries = [['comment-lines-max', 1], ['comment-lines-over', 1]];
     for (const [mode, expectedAssertions] of boundaries) {
         const started = performance.now();
         t.diagnostic(`running boundary input ${mode}`);

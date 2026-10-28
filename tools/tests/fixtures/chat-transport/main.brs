@@ -153,6 +153,13 @@ sub getChannel7tvEmotes(channelId as string)
 end sub
 
 sub runConnectionTests()
+    check(ircParseMessage(privmsg("skip", "101", "alice", "discarded"), false) = invalid, "a full queue rejects chat before decoding its tags")
+    notice = "@id=notice;login=alice;system-msg=Alice\sgifted! :tmi.twitch.tv USERNOTICE #canned"
+    check(ircParseMessage(notice, false) = invalid, "a full queue also rejects queued notices")
+    deletion = ircParseMessage("@target-msg-id=gone :tmi.twitch.tv CLEARMSG #canned :removed", false)
+    check(deletion <> invalid and deletion.tags.target_msg_id = "gone", "full-queue admission preserves moderation tags")
+    ping = ircParseMessage("PING :tmi.twitch.tv", false)
+    check(ping <> invalid and ping.command.command = "PING" and ping.parameters = "tmi.twitch.tv", "full-queue admission keeps transport keepalives")
     resetBoundary()
     getGlobalAA().readMode = "pending"
     getGlobalAA().stopAt = 3
@@ -203,7 +210,56 @@ sub runConnectionTests()
         check(delivered[2].parameters = "Kappa thanks!" and delivered[2].tags.emotes["25"][0].startPosition = 0, "resub delivery preserves user text and emote offsets")
     end if
     runTimingTests()
+    runWorkloadTests()
 end sub
+
+' Actual parsing executes; only its elapsed cost is a controlled clock boundary.
+sub runWorkloadTests()
+    for each parseCost in [0, 10, -1]
+        resetBoundary()
+        state = getGlobalAA()
+        state.readMode = "script"
+        state.stopAt = 20
+        state.parseCostMs = parseCost
+        if parseCost = -1
+            state.parseCostMs = 0
+            state.receiveCostMs = 1000
+        end if
+        m.top.delaySeconds = 60.0
+        state.script = [":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)]
+        for batch = 1 to 16
+            chunk = ""
+            for index = 1 to 100
+                chunk += privmsg(batch.toStr() + "-" + index.toStr(), "101", "alice", "held for Sync")
+            end for
+            state.script.push(chunk)
+        end for
+        runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+        check(state.delivered.count() = 0, "work measurements do not bypass the Sync hold")
+        if parseCost = 0
+            check(m.top.workload = invalid, "fast ingress and queued Sync messages alone produce no costly work window")
+        else
+            workload = m.top.workload
+            check(workload <> invalid, "actual receive/parse loop publishes measured work windows")
+            if workload <> invalid
+                check(workload.highWindows = 2 and workload.busyMs * 4 >= workload.windowMs, "two consecutive costly windows qualify as sustained ingress load")
+                if parseCost = -1
+                    check(workload.parseMs = 0 and workload.receiveMs = workload.busyMs, "receive cost is measured separately from parsing and socket waits")
+                else
+                    check(workload.receiveMs = 0 and workload.parseMs = workload.busyMs, "parse cost is measured separately from receiving and socket waits")
+                end if
+                check(workload.events >= 50 and workload.windowMs >= 5000 and workload.windowMs <= 10000, "published workload retains actual input counts and bounded elapsed duration")
+                check(wallSeconds() - workload.observedAt <= 5, "work observation has a fresh wall-clock timestamp")
+            end if
+        end if
+    end for
+end sub
+
+function fixtureParseMessage(line as string, acceptChat = true as boolean) as dynamic
+    parsed = ircParseMessage(line, acceptChat)
+    getGlobalAA().clock += getGlobalAA().parseCostMs
+    return parsed
+end function
 
 ' Each timespan has its own origin; time advances only at wait/sleep boundaries.
 ' Both server timestamps and receipt-only messages must survive the full delay.
@@ -233,10 +289,10 @@ sub runTimingTests()
         check(state.delivered.count() = 2, "both timestamp and tagless messages eventually deliver")
         if state.deliveredAt.count() = 2
             if live
-                check(state.deliveredAt[0] = 200 and state.deliveredAt[1] = 300, "Live delivers timestamp and tagless messages immediately at bounded cadence")
+                check(state.deliveredAt[0] = 300 and state.deliveredAt[1] = 600, "Live delivers timestamp and tagless messages at the readable render cadence")
                 check(not sawDeliveryState("syncing"), "Live never adds a video sync hold")
             else
-                check(state.deliveredAt[0] = 13000 and state.deliveredAt[1] = 13200, "Sync holds server-timed and tagless messages for thirteen real seconds")
+                check(state.deliveredAt[0] = 13000 and state.deliveredAt[1] = 13300, "Sync holds server-timed and tagless messages for thirteen real seconds")
                 check(sawDeliveryState("syncing") and state.liveAt = 0 and not m.top.forceLive, "Sync proof never switches forceLive to release messages")
             end if
         end if
@@ -270,12 +326,36 @@ sub runTimingTests()
     end for
     state.script = [burst]
     runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
-    check(state.delivered.count() = 250, "backpressure retains only the bounded oldest 250 pending messages")
-    if state.delivered.count() = 250
-        check(state.delivered[0].identity.id = "m1" and state.delivered[249].identity.id = "m250", "busy Sync delivery preserves the oldest messages instead of perpetually replacing them")
-        check(state.deliveredAt[0] = 15000 and state.deliveredAt[249] = 39900, "renderer backpressure releases at ten messages per second without erasing receipt age")
+    check(state.delivered.count() = 4, "busy chat keeps a short eligible backlog instead of replaying hundreds of stale messages")
+    if state.delivered.count() = 4
+        check(state.delivered[0].identity.id = "m247" and state.delivered[3].identity.id = "m250", "the bounded pending queue catches up only after messages become eligible")
+        check(state.deliveredAt[0] = 15000 and state.deliveredAt[3] = 15900, "backpressure releases at most four messages per second without erasing receipt age")
     end if
     check(not m.top.forceLive, "backpressure fixture stays in Sync mode throughout")
+
+    resetBoundary()
+    state = getGlobalAA()
+    state.readMode = "script"
+    state.stopAt = 100
+    m.top.delaySeconds = 1.3
+    m.top.readyForNextComment = true
+    state.script = [":tmi.twitch.tv 001 justinfan12345 :Welcome" + chr(13) + chr(10)]
+    for index = 1 to 60
+        state.script.push(privmsg(index.toStr(), "101", "alice", "fast chat"))
+    end for
+    runChatConnection({ socket: fixtureCreateObject("roStreamSocket"), secure: false })
+    check(state.delivered.count() > 4 and state.delivered.count() < 30, "sustained fast chat samples messages at a bounded render rate")
+    previousId = 0
+    previousTime = -1000
+    for index = 0 to state.delivered.count() - 1
+        id = state.delivered[index].identity.id.toInt()
+        deliveredAt = state.deliveredAt[index]
+        check(id > previousId and deliveredAt - previousTime >= 250, "sampled messages retain order and leave time between rendering callbacks")
+        check(deliveredAt - (id + 1) * 100 >= 1300, "catching up never discards the selected message's Sync hold")
+        previousId = id
+        previousTime = deliveredAt
+    end for
+    check(previousId = 60 and previousTime <= 8500, "sustained fast chat reaches the latest message without an accumulating delay")
 
     resetBoundary()
     state = getGlobalAA()
@@ -523,6 +603,8 @@ sub resetBoundary()
     state.webSocketAvailable = false
     state.webSocketOpened = false
     state.clock = 0
+    state.parseCostMs = 0
+    state.receiveCostMs = 0
     state.waits = 0
     state.readyAt = 0
     state.stopAt = 99
@@ -677,6 +759,7 @@ function receiveData(limit as integer) as string
         ' Past the script every read is EAGAIN, never EOF.
         if state.receiveCalls > state.script.count() then return ""
         state.readSuccess = true
+        state.clock += state.receiveCostMs
         return state.script[state.receiveCalls - 1]
     end if
     if state.readMode = "error"

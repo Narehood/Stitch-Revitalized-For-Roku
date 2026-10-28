@@ -6,7 +6,7 @@ function ircWebSocketText(info as dynamic) as dynamic
     return text
 end function
 
-function ircParseMessage(message as dynamic) as dynamic
+function ircParseMessage(message as dynamic, acceptChat = true as boolean) as dynamic
     if type(message) <> "String" and type(message) <> "roString" then return invalid
     if message.len() = 0 or message.len() > 8192 then return invalid
     while message.right(1) = chr(13) or message.right(1) = chr(10)
@@ -14,11 +14,12 @@ function ircParseMessage(message as dynamic) as dynamic
     end while
     if message.instr(chr(13)) >= 0 or message.instr(chr(10)) >= 0 then return invalid
     parsed = { tags: {}, source: invalid, command: {}, parameters: "" }
+    rawTags = ""
     index = 0
     if message.left(1) = "@"
         ending = message.instr(" ")
         if ending < 2 then return invalid
-        parsed.tags = ircParseTags(message.mid(1, ending - 1))
+        rawTags = message.mid(1, ending - 1)
         index = ending + 1
     end if
     while index < message.len() and message.mid(index, 1) = " "
@@ -46,6 +47,8 @@ function ircParseMessage(message as dynamic) as dynamic
         parsed.parameters = parts[1]
     end if
     command = parsed.command.command
+    if not acceptChat and (command = "PRIVMSG" or command = "USERNOTICE") then return invalid
+    if rawTags <> "" then parsed.tags = ircParseTags(rawTags)
     if command = "PRIVMSG" or command = "USERNOTICE"
         if parts.count() < 2 or parts[1].left(1) <> "#" then return invalid
         if command = "PRIVMSG" and trailing < 0 then return invalid
@@ -82,6 +85,7 @@ function ircParseSource(source as string) as object
 end function
 
 function ircUnescapeTag(value as string) as string
+    if value.instr(chr(92)) < 0 then return value
     result = ""
     index = 0
     while index < value.len()
@@ -138,6 +142,7 @@ end function
 
 function ircParseEmotes(value as string) as object
     result = {}
+    if value = "" then return result
     idPattern = createObject("roRegex", "^[A-Za-z0-9_-]{1,128}$", "")
     for each emote in value.split("/")
         parts = emote.split(":")

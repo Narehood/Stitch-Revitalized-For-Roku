@@ -98,6 +98,9 @@ async function buildPackage(dir, marker, negative) {
         'FixtureScene.xml', 'scene.brs', 'TwitchApiTask.xml', 'ProxyHealthCheck.xml',
         'proxy-task-probe.brs', 'http-boundary.brs', 'QrBoundary.xml', 'CardBoundary.xml', 'InfoBoundary.xml',
     ]) await addFile(dir, `components/${file}`, await fixture(file));
+    for (const file of ['KeyboardBoundary.xml', 'keyboard.brs']) {
+        await addFile(dir, `components/${file}`, await fs.readFile(path.join(fixtures, '../ui', file)));
+    }
     await addFile(dir, 'source/main.brs', (await fixture('main.brs'))
         .replaceAll('__PASS_MARKER__', marker).replace('__NEGATIVE_CONTROL__', negative ? 'true' : 'false'));
 
@@ -122,6 +125,14 @@ end function
 `;
     await addComponent(dir, 'components/Scenes/Following', 'Following', detail,
         [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/Browse', 'Browse', detail,
+        [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/GamePage', 'GamePage', detail,
+        [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/Search', 'Search', detail, [
+        ['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'],
+        ['<DynamicMiniKeyboard', '<KeyboardBoundary'],
+    ]);
     await addComponent(dir, 'components/Scenes/ChannelPage', 'ChannelPage', detail, [
         ['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'],
         ['<SimpleLabel', '<Label'], ['<InfoPane', '<InfoBoundary'], ['fontSize="32"', ''], ['fontSize="20"', ''],
@@ -221,16 +232,20 @@ async function runFixture(negative = false) {
     }
 }
 
-test('Settings preserves storage contracts and upstream support alongside the redesigned choices', async () => {
+test('Settings preserves retained storage contracts and upstream support in grouped panels', async () => {
     // Explicit stable schema contract, independent of Git or a second copy of
     // the current schema. Copy and ordering can evolve without changing ids.
     const before = JSON.parse(await fixture('original-setting-contracts.json'));
-    const after = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const schema = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const leaves = items => items.flatMap(item => item.children ? leaves(item.children) : [item]);
+    const after = leaves(schema);
+    assert.deepEqual(schema.filter(item => item.children).map(item => item.id), ['playback', 'chat', 'emotes', 'browsing', 'advanced']);
+    assert.equal(schema[0].settingName, 'logout');
     const map = new Map(after.map(setting => [setting.settingName, setting]));
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before;
     assert.equal(retained.length, 13);
-    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity'];
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ui.gridDensity', 'chat.enabled', 'ui.floatingFocus'];
     assert.equal(after.length, retained.length + additions.length);
     assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.get('support').action, 'support_stitch', 'upstream donation action remains available');

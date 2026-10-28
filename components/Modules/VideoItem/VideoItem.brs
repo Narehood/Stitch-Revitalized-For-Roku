@@ -42,6 +42,10 @@ sub initTitleFonts()
     m.gameTitleFont = invalid
     if m.itemlabel = invalid or m.itemlabel.font = invalid then return
     m.titleFont = m.itemlabel.font
+    if m.global?.compactGrid = true
+        m.titleFont.size = 18
+        m.itemSubtitle.font.size = 16
+    end if
     m.gameTitleFont = CreateObject("roSGNode", "Font")
     m.gameTitleFont.uri = m.titleFont.uri
     m.gameTitleFont.size = 18
@@ -98,17 +102,25 @@ end sub
 ' Restores the LIVE/VOD/CLIP card geometry. RowList recycles item components
 ' across rows, so GAME or USER geometry would otherwise carry over.
 sub resetLayout()
-    m.itemposter.width = 320
-    m.itemposter.height = 180
-    m.itemposter.loadwidth = 320
-    m.itemposter.loadheight = 180
-    m.itemlabel.maxwidth = 320
+    tile = getStreamTile()
+    setThumbnailSize(tile.width, tile.height)
+    m.itemlabel.maxwidth = tile.width
     ' The title's 28 px line (EmojiLabel y is its centre) starts 6 px below the
     ' focus slab, which reaches 8 px under the thumbnail.
-    m.itemlabel.translation = [0, 208]
-    m.itemSubtitle.width = 320
-    m.itemSubtitle.translation = [0, 226]
-    setPosterBase(320, 180)
+    m.itemlabel.translation = [0, tile.height + 28]
+    m.itemSubtitle.width = tile.width
+    m.itemSubtitle.translation = [0, tile.height + 46]
+    m.avatarGroup.translation = [0, tile.height + 22]
+    m.viewsRect.translation = [8, tile.height - 32]
+    setPosterBase(tile.width, tile.height)
+end sub
+
+sub setThumbnailSize(width as integer, height as integer)
+    m.itemposter.width = width
+    m.itemposter.height = height
+    ' Roku autoscaling maps these logical sizes to the display resolution.
+    m.itemposter.loadWidth = width
+    m.itemposter.loadHeight = height
 end sub
 
 sub setPosterBase(width as integer, height as integer)
@@ -152,6 +164,7 @@ end sub
 
 sub showcontent()
     if m.disposed then return
+    m.itemLabel.repeatCount = 0
     resetVisibility()
     if m.itemposter <> invalid and m.itemlabel <> invalid and m.itemSubtitle <> invalid then resetLayout()
     GlobalSettings()
@@ -186,10 +199,7 @@ sub GameSettings()
     if m.timestampLabel = invalid or m.timestampRect = invalid then return
     m.runtimeRect.visible = false
     m.runtimeLabel.visible = false
-    m.itemposter.width = 188
-    m.itemposter.height = 250
-    m.itemposter.loadwidth = 188
-    m.itemposter.loadheight = 250
+    setThumbnailSize(188, 250)
     setPosterBase(188, 250)
     ' Text starts below the focus slab, which reaches 8 px under the box art.
     m.itemlabel.maxwidth = 188
@@ -214,10 +224,11 @@ sub setAvatar(uri as dynamic)
     if not hasAvatar then return
     m.avatar.uri = uri
     textX = m.avatarSize + 12
-    m.itemlabel.maxwidth = 320 - textX
-    m.itemlabel.translation = [textX, 208]
-    m.itemSubtitle.width = 320 - textX
-    m.itemSubtitle.translation = [textX, 226]
+    tile = getStreamTile()
+    m.itemlabel.maxwidth = tile.width - textX
+    m.itemlabel.translation = [textX, tile.height + 28]
+    m.itemSubtitle.width = tile.width - textX
+    m.itemSubtitle.translation = [textX, tile.height + 46]
 end sub
 
 sub LiveSettings()
@@ -296,13 +307,6 @@ end sub
 
 sub onGetFocus()
     if m.disposed then return
-    if m.top.itemHasFocus
-        if m.itemLabel.localBoundingRect().width > m.itemLabel.maxWidth
-            m.itemLabel.repeatCount = -1
-        end if
-    else
-        m.itemLabel.repeatCount = 0
-    end if
     onFocusChange()
 end sub
 
@@ -319,6 +323,9 @@ sub onFocusChange()
         if not m.sawFocusPercent and m.top.itemHasFocus = true then amount = 1.0
     end if
     if amount > 1 then amount = 1.0
+    repeatCount = 0
+    if amount >= 1 and m.itemLabel.width > m.itemLabel.maxWidth then repeatCount = -1
+    m.itemLabel.repeatCount = repeatCount
     if m.isCircle
         m.lift.visible = false
         if m.circleRing <> invalid then m.circleRing.visible = amount >= 0.5

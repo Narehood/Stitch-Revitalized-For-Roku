@@ -19,10 +19,12 @@
         <field id="forceLive" type="bool" value="false" onChange="onChatTimingChange" />
         <field id="delaySeconds" type="float" value="0" onChange="onChatTimingChange" />
         <field id="connectionState" type="string" value="stopped" />
+        <field id="pausedForPerformance" type="boolean" value="false" onChange="onChatPerformancePause" />
         <field id="hypeTrain" type="assocarray" onChange="onHypeTrainChange" alwaysNotify="true" />
         <field id="pinnedMessage" type="assocarray" onChange="onPinnedMessageChange" alwaysNotify="true" />
         <field id="fontSize" type="integer" value="14" onChange="updatePanelTranslation" />
         <function name="stopJobs" />
+        <function name="suspendIfOverloaded" />
         <function name="onDestroy" />
         <function name="showPinnedMessage" />
     </interface>

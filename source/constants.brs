@@ -20,6 +20,7 @@ sub setConstants()
     if appInfo.IsDev() then appID = appID + "Dev"
     ' Set Global Constants
     m.global.addFields({
+        compactGrid: false,
         appID: appID,
         appInfo: {
             ID: appInfo.GetID(),

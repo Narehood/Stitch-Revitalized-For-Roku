@@ -2,6 +2,23 @@
 ' Keep upstream release history and add new changes under their actual version.
 function getChangelog() as object
     return {
+        "3.2.0": [
+            "3.2.0: Grouped Settings, stream grids and player details",
+            "New: Settings panels for Playback, Chat, Emotes, Browsing and Advanced",
+            "New: Optional floating focus under Browsing; off keeps the existing behavior",
+            "New: Choose Comfortable three-column or Compact four-column stream grids",
+            "Improved: Clearer stream and category thumbnail decoding",
+            "New: Player live duration, category name and larger category art",
+            "Fix: Player titles and category details remain through quality changes",
+            "Fix: Long titles repeat at a readable speed, including emoji image fallback",
+            "New: Enable chat setting stops chat work and explains when chat is disabled",
+            "Improved: Bounded chat parsing, wrapping and emote-cache work",
+            "New: Session chat pause when sustained chat overload accompanies playback recovery",
+            "Fix: Changing channels while chat is disabled clears stale channel emotes",
+            "Fix: Up from the first setting returns to its parent panel",
+            "Retained: Supported 1080p and higher stream qualities",
+            "Maintenance: Faster regression checks with direct behavior coverage retained"
+        ],
         "3.1.0": [
             "3.1.0: Modernized interface, playback and chat",
             "New: Redesigned navigation, stream cards, Settings and player controls",

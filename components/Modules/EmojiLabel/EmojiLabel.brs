@@ -36,17 +36,19 @@ sub init()
 end sub
 
 sub onTimerFireChange() as void
+    if m.disposed then return
     if m.animation = invalid or m.timer = invalid then return
     m.animation.repeat = false
     m.animation.control = "stop"
     m.components.translation = [0, 0]
     m.timer.control = "stop"
+    if m.top.repeatCount < 0 then doScroll()
 end sub
 
 sub doScroll()
     if m.disposed then return
     cancelScroll()
-    if m.top.repeatCount <> invalid and m.top.repeatCount <> 0 and m.top.text <> ""
+    if m.top.repeatCount <> invalid and m.top.repeatCount <> 0 and m.top.text <> "" and m.top.width > m.top.maxWidth
         if m.scrollStartTimer <> invalid
             m.scrollStartPending = true
             m.scrollStartTimer.control = "start"
@@ -58,11 +60,15 @@ sub onScrollStart()
     if m.scrollStartPending <> true then return
     m.scrollStartPending = false
     if m.disposed or m.top.repeatCount = 0 or m.top.text = "" then return
-    if m.animation = invalid or m.timer = invalid or m.top.maxWidth <= 0 then return
-    m.animation.repeat = true
-    m.timer.repeat = true
-    m.animation.duration = (m.top.width / m.top.maxWidth) * 2
-    m.timer.duration = m.animation.duration
+    if m.animation = invalid or m.timer = invalid or m.vector = invalid or m.top.maxWidth <= 0 then return
+    distance = m.top.width - m.top.maxWidth
+    if distance <= 0 then return
+    m.animation.repeat = false
+    m.timer.repeat = false
+    m.vector.keyValue = [[0, 0], [0 - distance, 0]]
+    m.animation.duration = distance / 40
+    if m.animation.duration < 1 then m.animation.duration = 1
+    m.timer.duration = m.animation.duration + 1
     m.animation.control = "start"
     m.timer.control = "start"
 end sub
@@ -132,21 +138,10 @@ sub updateComponents()
         if width = 0 or boundingWidth > width
             width = boundingWidth
         end if
-        innerWidth = 0 - width
         m.top.width = width * 1.1
         if m.top.maxWidth = 0
             m.top.maxWidth = m.top.width
         end if
-        if m.animation <> invalid
-            m.animation.duration = (m.top.width / m.top.maxWidth)
-        end if
-        if m.timer <> invalid
-            m.timer.duration = (m.top.width / m.top.maxWidth)
-        end if
-        if m.vector <> invalid
-            m.vector.keyValue = [[0, 0], [innerWidth, 0]]
-        end if
-
         if m.top.emojiSize > height
             height = m.top.emojiSize
         end if
@@ -177,6 +172,9 @@ sub updateComponents()
         }
         ' m.top.translation = [m.top.translation[0], m.top.translation[1] + (height / 2)]
         ' m.components.translation = [xTranslation, height]
+        if m.scrollStartPending = true or (m.animation <> invalid and m.animation.control = "start")
+            doScroll()
+        end if
     end if
 end sub
 

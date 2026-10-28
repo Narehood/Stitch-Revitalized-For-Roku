@@ -1,5 +1,6 @@
 ' Shared stream geometry in the redesigned interface's HD coordinate space.
 function getStreamTile() as object
+    if m.global?.compactGrid = true then return { width: 256, height: 144, perRow: 4 }
     return { width: 320, height: 180, perRow: 3 }
 end function
 
@@ -17,15 +18,15 @@ function getRowConfig(contentType, hasRowLabel as boolean, tallRows = false as b
         itemSize = [tile.width, tile.height]
         if tallRows
             if hasRowLabel
-                rowHeight = 295
+                rowHeight = tile.height + 115
             else
-                rowHeight = 255
+                rowHeight = tile.height + 75
             end if
         else
             if hasRowLabel
-                rowHeight = 275
+                rowHeight = tile.height + 95
             else
-                rowHeight = 235
+                rowHeight = tile.height + 55
             end if
         end if
         return { itemSize: itemSize, rowHeight: rowHeight }

@@ -132,6 +132,13 @@ end sub
 sub runChatConnection(transport as object)
     bufferState = { buffer: "", discarding: false }
     queue = []
+    m.top.workload = invalid
+    workWindow = createObject("roTimespan")
+    parseClock = createObject("roTimespan")
+    receiveMs = 0
+    parseMs = 0
+    inputEvents = 0
+    highWindows = 0
     m.connectionLifetime = createObject("roTimespan")
     lastActivity = createObject("roTimespan")
     lastDelivery = createObject("roTimespan")
@@ -139,6 +146,7 @@ sub runChatConnection(transport as object)
     updateDeliveryState("waiting")
     while not m.top.stopRequested
         event = wait(100, m.port)
+        parseClock.mark()
         chunk = ""
         if transport.secure
             if type(event) = "roWebSocketEvent" and event.getSocketId() = transport.socket.getSocketId()
@@ -160,15 +168,19 @@ sub runChatConnection(transport as object)
         end if
         if chunk <> ""
             if chunk.len() > 65536 then return
+            receiveMs += parseClock.totalMilliseconds()
             lastActivity.mark()
+            parseClock.mark()
             consumed = ircConsumeChunk(bufferState, chunk)
             bufferState = { buffer: consumed.buffer, discarding: consumed.discarding }
             for each line in consumed.lines
-                message = ircParseMessage(line)
+                message = ircParseMessage(line, queue.count() < 250)
                 if message = invalid then continue for
                 command = message.command.command
                 if command = "PING"
+                    parseMs += parseClock.totalMilliseconds()
                     if not sendChatLine(transport, "PONG :" + message.parameters) then return
+                    parseClock.mark()
                 else if command = "RECONNECT"
                     return
                 else if command = "001" or command = "ROOMSTATE"
@@ -191,6 +203,23 @@ sub runChatConnection(transport as object)
                     if moderation <> invalid then publishModeration(queue, moderation)
                 end if
             end for
+            parseMs += parseClock.totalMilliseconds()
+            inputEvents += consumed.lines.count()
+        end if
+        workElapsed = workWindow.totalMilliseconds()
+        if workElapsed >= 5000
+            ' Elapsed receive/dispatch work excludes socket waits and Sync holds.
+            busyMs = receiveMs + parseMs
+            if workElapsed <= 10000 and busyMs * 4 >= workElapsed and inputEvents * 100 >= workElapsed
+                if highWindows < 2 then highWindows++
+            else
+                highWindows = 0
+            end if
+            m.top.workload = { observedAt: createObject("roDateTime").asSeconds(), windowMs: workElapsed, busyMs: busyMs, receiveMs: receiveMs, parseMs: parseMs, events: inputEvents, highWindows: highWindows }
+            workWindow.mark()
+            receiveMs = 0
+            parseMs = 0
+            inputEvents = 0
         end if
         ' A missing welcome or dead connection gets a finite retry rather than a frozen panel.
         if not welcomed and m.connectionLifetime.totalMilliseconds() > 15000 then return
@@ -200,17 +229,22 @@ sub runChatConnection(transport as object)
         if queue.count() > 0
             oldest = queue[0]
             delay = ircBoundedDelay(m.top.delaySeconds, m.top.forceLive)
-            age = oldest.receivedAt.totalMilliseconds() / 1000.0
-            ircTimestamp = oldest.comment.tags.tmi_sent_ts
-            if ircTimestamp <> invalid and ircIsDigits(ircTimestamp) and ircTimestamp.len() >= 10
-                sentAt = ircTimestamp.left(10).toInt()
-                serverAge = createObject("roDateTime").asSeconds() - sentAt
-                ' Ignore implausible server/device clock differences; receipt age is bounded.
-                if serverAge >= 0 and serverAge <= 120 then age = serverAge
-            end if
+            nowSeconds = createObject("roDateTime").asSeconds()
+            age = queuedChatAge(oldest, nowSeconds)
             if age < delay then deliveryState = "syncing"
             updateDeliveryState(deliveryState)
-            if m.top.readyForNextComment and lastDelivery.totalMilliseconds() >= 100 and age >= delay
+            if m.top.readyForNextComment and lastDelivery.totalMilliseconds() >= 250 and age >= delay
+                ' Bound render work and catch up within the eligible prefix only.
+                ' Messages still waiting for video sync must keep their receipt age.
+                eligible = 0
+                for each pending in queue
+                    if queuedChatAge(pending, nowSeconds) < delay then exit for
+                    eligible++
+                end for
+                while eligible > 4
+                    queue.shift()
+                    eligible--
+                end while
                 nextComment = queue.shift()
                 lastDelivery.mark()
                 ' The renderer checks moderation newer than this stamp while the comment is in flight.
@@ -223,6 +257,18 @@ sub runChatConnection(transport as object)
         end if
     end while
 end sub
+
+function queuedChatAge(entry as object, nowSeconds as integer) as float
+    age = entry.receivedAt.totalMilliseconds() / 1000.0
+    ircTimestamp = entry.comment.tags.tmi_sent_ts
+    if ircTimestamp <> invalid and ircIsDigits(ircTimestamp) and ircTimestamp.len() >= 10
+        sentAt = ircTimestamp.left(10).toInt()
+        serverAge = nowSeconds - sentAt
+        ' Ignore implausible server/device clock differences; receipt age is bounded.
+        if serverAge >= 0 and serverAge <= 120 then age = serverAge
+    end if
+    return age
+end function
 
 sub updateDeliveryState(state as string)
     if m.top.deliveryState <> state then m.top.deliveryState = state

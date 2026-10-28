@@ -913,6 +913,30 @@
             <translation>Mostra emotes do FrankerFaceZ no chat ao vivo.</translation>
         </message>
         <message>
+            <source>Floating focus</source>
+            <translation>Foco flutuante</translation>
+        </message>
+        <message>
+            <source>Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.</source>
+            <translation>Mova o destaque para a esquerda e a direita nas linhas de canais, vídeos e categorias. Quando desativado, o destaque permanece na posição fixa atual.</translation>
+        </message>
+        <message>
+            <source>Stream grid</source>
+            <translation>Grade de transmissões</translation>
+        </message>
+        <message>
+            <source>Choose larger cards or fit more streams on screen. Takes effect when opening a content page.</source>
+            <translation>Escolha cartões maiores ou mostre mais transmissões na tela. A mudança se aplica ao abrir uma página de conteúdo.</translation>
+        </message>
+        <message>
+            <source>Comfortable</source>
+            <translation>Confortável</translation>
+        </message>
+        <message>
+            <source>Compact</source>
+            <translation>Compacta</translation>
+        </message>
+        <message>
             <source>Browse: live channel order</source>
             <translation>Navegar: ordem dos canais ao vivo</translation>
         </message>
@@ -1084,6 +1108,25 @@
         <message><source>Unpin from sidebar</source><translation>Desafixar da barra lateral</translation></message>
         <message><source>Remove from sidebar</source><translation>Remover da barra lateral</translation></message>
         <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>As alterações da barra lateral ficam neste Roku e não mudam quem você segue na Twitch.</translation></message>
+        <message>
+            <source>Live for {0}</source>
+            <translation>Ao vivo: {0}</translation>
+        </message>
+        <message><source>Enable chat</source><translation>Ativar chat</translation></message>
+        <message><source>Turn off to stop chat connections, emotes and chat events. Takes effect when chat opens.</source><translation>Desative para interromper as conexões, os emotes e os eventos do chat. Entra em vigor ao abrir o chat.</translation></message>
+        <message><source>Chat is disabled in Settings.</source><translation>O chat está desativado nas Configurações.</translation></message>
+        <message><source>Chat is too fast for this TV. Chat is paused for this stream.</source><translation>O chat é rápido demais para esta TV. O chat está pausado nesta transmissão.</translation></message>
+        <message><source>Playback</source><translation>Reprodução</translation></message>
+        <message><source>Chat</source><translation>Chat</translation></message>
+        <message><source>Emotes</source><translation>Emotes</translation></message>
+        <message><source>Browsing</source><translation>Navegação</translation></message>
+        <message><source>Advanced</source><translation>Avançado</translation></message>
+        <message><source>Open</source><translation>Abrir</translation></message>
+        <message><source>Choose startup quality, live latency and watch credit.</source><translation>Escolha a qualidade inicial, a latência ao vivo e o crédito de visualização.</translation></message>
+        <message><source>Control chat processing, layout, timing, text size and chat events.</source><translation>Configure o processamento, o layout, a sincronização, o tamanho do texto e os eventos do chat.</translation></message>
+        <message><source>Choose emote providers and animation for live chat.</source><translation>Escolha os provedores de emotes e as animações do chat ao vivo.</translation></message>
+        <message><source>Choose stream card size and channel order.</source><translation>Escolha o tamanho dos cartões de transmissão e a ordem dos canais.</translation></message>
+        <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configure a compatibilidade de reprodução e os diagnósticos opcionais.</translation></message>
         <message>
             <source>Support Stitch</source>
             <translation>Apoie o Stitch</translation>

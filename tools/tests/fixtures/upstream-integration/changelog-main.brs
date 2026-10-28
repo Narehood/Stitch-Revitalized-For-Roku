@@ -3,7 +3,7 @@ sub main()
     versions = getSortedChangelogVersions(entries)
     pending = []
     for each version in versions
-        if compareVersions(version, "2.9.0") > 0 and compareVersions(version, "3.1.0") <= 0
+        if compareVersions(version, "2.9.0") > 0 and compareVersions(version, "3.2.0") <= 0
             pending.push(version)
         end if
     end for

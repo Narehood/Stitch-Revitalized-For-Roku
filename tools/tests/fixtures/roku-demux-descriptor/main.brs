@@ -32,6 +32,7 @@ sub descriptorRun(host as object, master as string, bodies as object, enabled as
     host.callFunc("loadHlsContent", request)
     if host.response.contentType <> "ERROR"
         descriptorAssert(host.response.contentId = request.contentId and host.response.streamerId = request.streamerId and host.response.description = request.description, "original request metadata retained")
+        if contentType = "LIVE" then descriptorAssert(host.response.createdAt = "2026-10-27T18:00:00Z" and host.response.gameName = "fresh-category" and host.response.gameDisplayName = "Fresh category" and host.response.gameBoxArtUrl = "https://static-cdn.jtvnw.net/ttv-boxart/fixture-188x250.jpg", "live playback keeps the fresh stream start, category and usable art alongside the selected transport")
     end if
 end sub
 

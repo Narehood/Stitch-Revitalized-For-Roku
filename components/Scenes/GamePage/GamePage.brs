@@ -81,7 +81,8 @@ end function
 
 function buildContentNodeFromShelves(streams)
     contentCollection = createObject("RoSGNode", "ContentNode")
-    for each rowItems in chunkItems(buildGameStreamItems(streams), 3)
+    tile = getStreamTile()
+    for each rowItems in chunkItems(buildGameStreamItems(streams), tile.perRow)
         row = createObject("RoSGNode", "ContentNode")
         row.title = ""
         for each fields in rowItems

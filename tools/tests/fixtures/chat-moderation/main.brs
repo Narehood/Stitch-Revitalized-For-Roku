@@ -10,10 +10,13 @@ sub main()
     m.screen.setMessagePort(m.port)
     m.global = m.screen.getGlobalNode()
     setConstants()
-    m.global.addFields({ emoteCache: {} })
+    m.global.addFields({ emoteCache: {}, fixtureRegistry: {} })
     scene = m.screen.createScene("ModerationHost")
     m.screen.show()
     m.log = []
+    checkDisabledChat(scene)
+    checkChatOverload(scene)
+    checkRenderOverload(scene)
     checkStartupLifecycle(scene)
 
     chat = createObject("roSGNode", "Chat")
@@ -172,6 +175,116 @@ sub main()
     scene.removeChild(chat)
     checkPins(scene)
     finish()
+end sub
+
+sub checkChatOverload(scene as object)
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.channel = "performance"
+    waitUntil(chat, "job", true, "performance chat starts")
+    job = chat.callFunc("fixtureJob")
+    job.connectionState = "connected"
+    now = createObject("roDateTime").asSeconds()
+    job.workload = { observedAt: now, windowMs: 5000, busyMs: 10, events: 500, highWindows: 0 }
+    chat.delaySeconds = 60
+    check(not chat.callFunc("suspendIfOverloaded"), "healthy fast chat and a Sync hold do not pause processing")
+    job.workload = { observedAt: now, windowMs: 5000, busyMs: 2000, events: 500, highWindows: 1 }
+    check(not chat.callFunc("suspendIfOverloaded"), "one costly window is insufficient to pause chat")
+    job.workload = { observedAt: now - 20, windowMs: 5000, busyMs: 2000, events: 500, highWindows: 2 }
+    check(not chat.callFunc("suspendIfOverloaded"), "stale pressure cannot pause current playback")
+    job.workload = { observedAt: now, windowMs: 5000, busyMs: 2000, events: 500, highWindows: 2 }
+    chat.visible = false
+    chat.visible = true
+    waitUntil(chat, "job", true, "performance chat reopens")
+    current = chat.callFunc("fixtureJob")
+    current.connectionState = "connected"
+    check(not chat.callFunc("suspendIfOverloaded"), "a replaced worker's old pressure is ignored")
+    current.workload = { observedAt: now, windowMs: 5000, busyMs: 2000, events: 500, highWindows: 2 }
+    check(chat.callFunc("suspendIfOverloaded"), "fresh sustained expensive chat can pause for an accepted playback recovery")
+    state = chat.callFunc("fixtureRead")
+    check(chat.visible and chat.pausedForPerformance and not state.job and state.emoteJob = invalid and state.statusVisible and state.status = "Chat is too fast for this TV. Chat is paused for this stream.", "automatic pause stops work and keeps an explanatory notice")
+    chat.visible = false
+    chat.visible = true
+    check(not chat.callFunc("fixtureRead").job, "reopening cannot silently restart a performance-paused chat")
+    set_user_setting("chat.enabled", "false")
+    chat.visible = false
+    chat.visible = true
+    check(chat.callFunc("fixtureRead").status = "Chat is disabled in Settings.", "manual Off takes precedence over the performance notice")
+    chat.callFunc("onDestroy")
+    scene.removeChild(chat)
+    set_user_setting("chat.enabled", "true")
+end sub
+
+sub checkRenderOverload(scene as object)
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.channel = "render-performance"
+    waitUntil(chat, "job", true, "render performance chat starts")
+    job = chat.callFunc("fixtureJob")
+    job.connectionState = "connected"
+    for window = 1 to 2
+        chat.callFunc("fixtureRenderCost", 1000, 800)
+        deliver(job, privmsg("first" + window.toStr(), "101", "alice", "a rendered comment"), 0)
+        chat.callFunc("fixtureRenderCost", 5000, 800)
+        deliver(job, privmsg("second" + window.toStr(), "101", "alice", "another rendered comment"), 0)
+        if window = 1 then check(not chat.callFunc("suspendIfOverloaded"), "one costly actual-render window does not pause chat")
+    end for
+    check(job.workload = invalid and chat.callFunc("suspendIfOverloaded"), "actual rendering can establish sustained pressure independently of ingress")
+    check(chat.pausedForPerformance and rows(chat).count() = 0 and not chat.callFunc("fixtureRead").job, "render-triggered pause clears messages and stops its worker")
+    chat.callFunc("onDestroy")
+    scene.removeChild(chat)
+end sub
+
+sub checkDisabledChat(scene as object)
+    set_user_setting("chat.enabled", "false")
+    chat = createObject("roSGNode", "Chat")
+    scene.appendChild(chat)
+    chat.channel_id = "42"
+    chat.channel = "disabled"
+    chat.control = true
+    settle(80)
+    state = chat.callFunc("fixtureRead")
+    check(not state.job and state.emoteJob = invalid and state.statusVisible and state.status = "Chat is disabled in Settings.", "disabled chat opens its notice without a connection or emote worker")
+    m.global.setField("emoteCache", { previousChannelOnly: "pkg:/images/iconLogin.png" })
+    chat.channel_id = "43"
+    chat.channel = "still-disabled"
+    check(m.global.emoteCache.count() = 0, "a channel change clears the previous channel's emotes even while chat processing is disabled")
+    chat.visible = false
+    chat.visible = true
+    settle(80)
+    state = chat.callFunc("fixtureRead")
+    check(not state.job and state.emoteJob = invalid and not chat.findNode("chatPanel").visible, "channel and visibility changes cannot restart disabled chat")
+    now = createObject("roDateTime").asSeconds()
+    chat.hypeTrain = { id: "train", level: 3, percent: 18, expiresAt: now + 90&, observedAt: now, status: "active", shared: false }
+    check(not chat.callFunc("fixtureRead").hypeVisible, "disabled chat does not render a late chat-event banner")
+    set_user_setting("chat.enabled", "true")
+    chat.visible = false
+    chat.visible = true
+    waitUntil(chat, "job", true, "enabled chat can open again")
+    job = chat.callFunc("fixtureJob")
+    emotes = chat.callFunc("fixtureRead").emoteJob
+    check(emotes <> invalid, "enabling chat restores its emote loader")
+    check(not m.global.emoteCache.doesExist("previousChannelOnly"), "re-enabling chat cannot resolve an emote left by the previous channel")
+    m.global.setField("emoteCache", { currentChannelOnly: "pkg:/images/iconLogin.png" })
+    set_user_setting("chat.enabled", "false")
+    chat.visible = false
+    chat.visible = true
+    settle(80)
+    state = chat.callFunc("fixtureRead")
+    check(not state.job and state.emoteJob = invalid and job.stopRequested and emotes.stopRequested and job.getParent() = invalid and emotes.getParent() = invalid, "turning processing off drains and detaches existing chat workers")
+    job.nextCommentObj = withIdentity(privmsg("late-disabled", "101", "alice", "late"), 0)
+    job.connectionState = "connected"
+    settle(50)
+    state = chat.callFunc("fixtureRead")
+    check(rows(chat).count() = 0 and state.status = "Chat is disabled in Settings." and state.statusVisible, "old workers cannot replace the disabled notice or render late messages")
+    set_user_setting("chat.enabled", "true")
+    chat.visible = false
+    chat.visible = true
+    waitUntil(chat, "job", true, "same-channel chat can restart")
+    check(m.global.emoteCache.doesExist("currentChannelOnly"), "same-channel disable and re-enable retains its emote cache")
+    chat.callFunc("onDestroy")
+    scene.removeChild(chat)
+    set_user_setting("chat.enabled", "true")
 end sub
 
 sub checkStartupLifecycle(scene as object)

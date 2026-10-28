@@ -118,8 +118,14 @@ sub testEmojiLabel()
     first.maxWidth = 80
     first.repeatCount = -1
     check(not first.callFunc("fixtureRead").scrolling, "long-title activation returns before scrolling starts")
-    settle(300)
+    settle(1100)
     check(first.callFunc("fixtureRead").scrolling, "the reading pause starts scrolling asynchronously")
+    s = first.callFunc("fixtureRead")
+    check((first.width - first.maxWidth) / s.duration <= 40 and s.cycleDuration = s.duration + 1, "the marquee moves at a readable speed and holds its ending before repeating")
+    settle(Int((s.cycleDuration + 0.1) * 1000))
+    check(first.callFunc("fixtureRead").pending and not first.callFunc("fixtureRead").scrolling, "a completed infinite marquee schedules another reading pause")
+    settle(1100)
+    check(first.callFunc("fixtureRead").scrolling, "the actual marquee starts a second pass while focus remains")
     first.repeatCount = 0
     check(not first.callFunc("fixtureRead").scrolling, "focus loss stops scrolling")
     first.repeatCount = -1
@@ -138,6 +144,10 @@ sub testEmojiLabel()
     settle(300)
     check(not first.callFunc("fixtureRead").scrolling, "disposal cancels a pending scroll start")
     check(not first.callFunc("fixtureRead").compiled, "disposal releases the compiled pattern")
+    second.maxWidth = 500
+    second.repeatCount = -1
+    settle(1100)
+    check(not second.callFunc("fixtureRead").scrolling and not second.callFunc("fixtureRead").pending, "titles that fit never start a marquee")
     for each label in [first, second, failing]
         m.scene.removeChild(label)
     end for

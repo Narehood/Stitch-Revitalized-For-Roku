@@ -1,6 +1,13 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    chatOwner = m.top.contentRequested.streamerLogin
+    if GetInterface(chatOwner, "ifString") = invalid then chatOwner = ""
+    chatOwner = m.top.contentRequested.contentType + ":" + lcase(chatOwner)
+    if m.chatOwner <> chatOwner
+        m.chatAutoPaused = false
+        m.chatOwner = chatOwner
+    end if
     closeChannelActions(false)
     m.channelFollowCache = invalid
     stopTwitchEngagement()
@@ -117,6 +124,7 @@ end sub
 sub initChat()
     if not m.top.chatStarted
         m.top.chatStarted = true
+        if m.chatWindow.hasField("pausedForPerformance") then m.chatWindow.pausedForPerformance = m.chatAutoPaused
         m.chatWindow.forceLive = get_user_setting("chat.timing", "sync") = "live"
         m.chatWindow.channel_id = m.top.contentRequested.streamerId
         m.chatWindow.channel = m.top.contentRequested.streamerLogin
@@ -131,7 +139,7 @@ end sub
 
 sub onQualityChangeRequested(event = invalid as dynamic)
     if m.disposed or m.isExiting or m.rokuExitPending then return
-    if m.video = invalid or m.top.metadata = invalid or m.top.contentRequested = invalid then return
+    if m.video = invalid or m.top.metadata = invalid or m.top.contentRequested = invalid or m.top.content = invalid then return
     if event <> invalid
         if not event.getRoSGNode().isSameNode(m.video) then return
         if event.getData() <> true then return
@@ -155,7 +163,7 @@ sub onQualityChangeRequested(event = invalid as dynamic)
     if m.video.isSubtype("StitchVideo") then m.video.QualityChangeRequestFlag = false
     if m.top.contentRequested.contentType <> "LIVE" then m.resumePosition = m.video.position
     new_content = CreateObject("roSGNode", "TwitchContentNode")
-    new_content.setFields(m.top.contentRequested.getFields()) ' Preserve original request fields
+    new_content.setFields(m.top.content.getFields()) ' Preserve refreshed stream details across quality changes
     new_content.setFields(m.top.metadata[index]) ' Includes URL, proxy flags and query forwarding
     m.top.content = new_content ' Update the main content node for VideoPlayer
     m.allowBreak = false
@@ -274,6 +282,10 @@ sub playContent(isRecovery = false as boolean)
         m.video = CreateObject("roSGNode", "CustomVideo")
         m.top.insertChild(m.video, 0)
     end if
+
+    ' Native FHD video defaults must fit the page's logical viewport.
+    m.video.width = 1280
+    m.video.height = 720
 
     httpAgent = CreateObject("roHttpAgent")
     httpAgent.setCertificatesFile("common:/certs/ca-bundle.crt")
@@ -708,6 +720,8 @@ function requestBack() as boolean
 end function
 
 sub init()
+    m.chatAutoPaused = false
+    m.chatOwner = ""
     m.disposed = false
     m.pendingChannel = invalid
     m.engagementTask = invalid
@@ -1251,6 +1265,14 @@ sub beginLiveReconnect(reason as string)
 
     ' If a reconnect is already scheduled/in-flight, don't stack them
     if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
+    if (reason = "stall" or reason = "buffer_timeout") and m.chatWindow <> invalid and m.chatWindow.visible
+        if m.chatWindow.hasField("pausedForPerformance")
+            if m.chatWindow.callFunc("suspendIfOverloaded") = true
+                m.chatAutoPaused = true
+                startTwitchEngagement()
+            end if
+        end if
+    end if
     pauseTwitchEngagement()
 
     resetLiveRecoveryHealth()
@@ -1806,8 +1828,9 @@ sub startTwitchEngagement()
     if m.disposed or m.isExiting or m.video = invalid then return
     if m.top.contentRequested = invalid or m.top.contentRequested.contentType <> "LIVE" then return
     watchEnabled = get_user_setting("playback.watchCredit", "false") = "true" and get_setting("active_user", "$default$") <> "$default$"
-    hypeEnabled = get_user_setting("chat.hypeTrain", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
-    pinsEnabled = get_user_setting("chat.pinnedMessages", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
+    chatEnabled = get_user_setting("chat.enabled", "true") = "true" and not m.chatAutoPaused
+    hypeEnabled = chatEnabled and get_user_setting("chat.hypeTrain", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
+    pinsEnabled = chatEnabled and get_user_setting("chat.pinnedMessages", "false") = "true" and m.chatWindow <> invalid and m.chatWindow.visible
     if not watchEnabled and not hypeEnabled and not pinsEnabled
         stopTwitchEngagement()
         return
