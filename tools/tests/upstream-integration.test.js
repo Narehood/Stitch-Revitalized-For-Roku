@@ -75,5 +75,5 @@ test('package metadata and future publication point to the upstream owner', () =
     assert.match(read('fmp4-demux-proxy/Dockerfile'), /github\.com\/jeremy-albinet\/Stitch-Revitalized-For-Roku/);
     assert.match(read('fmp4-demux-proxy/README.md'), /ghcr\.io\/jeremy-albinet\/fmp4-demux-proxy:0\.3\.2/);
     assert.match(read('.github/workflows/docker-publish.yml'), /ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/fmp4-demux-proxy/);
-    assert.match(read('.github/workflows/ci.yml'), /os: \[ubuntu-latest, windows-latest\]/);
+    assert.match(read('.github/workflows/ci.yml'), /runs-on: ubuntu-latest/);
 });
