@@ -61,6 +61,7 @@ end sub
 
 sub loadHlsContent(request as object)
     token = invalid
+    liveStream = invalid
     if request.contentType = "VOD"
         rsp = TwitchGraphQLRequest({
             query: "query VodPlayerWrapper_Query($videoId: ID!, $platform: String!, $playerType: String!, $skipPlayToken: Boolean!) { video(id: $videoId) @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } id } }",
@@ -71,10 +72,13 @@ sub loadHlsContent(request as object)
         signatureParam = "&nauthsig="
     else if request.contentType = "LIVE"
         rsp = TwitchGraphQLRequest({
-            query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { user(login: $login) { stream @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } } } }",
+            query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { user(login: $login) { stream @skip(if: $skipPlayToken) { createdAt game { name displayName boxArtURL } playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } } } }",
             variables: { login: request.streamerLogin, platform: "web_tv", "playerType": "roku", "skipPlayToken": false }
         })
-        if rsp <> invalid and rsp.data <> invalid and rsp.data.user <> invalid and rsp.data.user.stream <> invalid then token = rsp.data.user.stream.playbackAccessToken
+        if rsp <> invalid and rsp.data <> invalid and rsp.data.user <> invalid and rsp.data.user.stream <> invalid
+            liveStream = rsp.data.user.stream
+            token = liveStream.playbackAccessToken
+        end if
         endpoint = "/api/v2/channel/hls/" + request.streamerLogin + ".m3u8?token="
         signatureParam = "&sig="
     else
@@ -259,6 +263,14 @@ sub loadHlsContent(request as object)
     index = playbackPreferredQualityIndex(metadata, preference)
     content = playbackRequestContent(request)
     content.SetFields(metadata[index])
+    if liveStream <> invalid
+        if GetInterface(liveStream.createdAt, "ifString") <> invalid then content.createdAt = liveStream.createdAt
+        if GetInterface(liveStream.game, "ifAssociativeArray") <> invalid
+            if GetInterface(liveStream.game.name, "ifString") <> invalid then content.gameName = liveStream.game.name
+            if GetInterface(liveStream.game.displayName, "ifString") <> invalid then content.gameDisplayName = liveStream.game.displayName
+            if GetInterface(liveStream.game.boxArtURL, "ifString") <> invalid then content.gameBoxArtUrl = liveStream.game.boxArtURL.Replace("{width}", "188").Replace("{height}", "250")
+        end if
+    end if
     content.live = request.contentType = "LIVE"
     m.top.metadata = metadata
     m.top.response = content

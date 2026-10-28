@@ -66,7 +66,8 @@ function loopbackAssetId(value as dynamic) as boolean
         if number >= 1 and number <= 256 then return true
     end if
     if value.Len() < 39 or value.Len() > 48 then return false
-    if not CreateObject("roRegex", "^live-[0-9a-f]{32}-[1-9][0-9]{0,9}$", "").IsMatch(value) then return false
+    if m.loopbackAssetIdRegex = invalid then m.loopbackAssetIdRegex = CreateObject("roRegex", "^live-[0-9a-f]{32}-[1-9][0-9]{0,9}$", "")
+    if not m.loopbackAssetIdRegex.IsMatch(value) then return false
     digits = value.Mid(38)
     return loopbackIdentityNumber(digits) >= 1&
 end function
@@ -85,7 +86,8 @@ end function
 
 function loopbackSteadySessionIdValid(value as dynamic) as boolean
     if not loopbackString(value) then return false
-    return CreateObject("roRegex", "^[0-9a-f]{32}$", "").IsMatch(value)
+    if m.loopbackSessionIdRegex = invalid then m.loopbackSessionIdRegex = CreateObject("roRegex", "^[0-9a-f]{32}$", "")
+    return m.loopbackSessionIdRegex.IsMatch(value)
 end function
 
 function loopbackAssetSession(value as dynamic) as string

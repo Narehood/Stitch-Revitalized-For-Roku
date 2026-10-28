@@ -202,6 +202,15 @@ sub main()
     check(textOf(group) = "ordinary words " + string(70, "x") + " tail ", "wrapping preserves ASCII text and spaces")
     chat.callFunc("fixturePrune", group)
 
+    chat.width = 275
+    state = chat.callFunc("fixtureState")
+    longWord = string(256, "W")
+    group = chat.callFunc("fixtureBuild", longWord)
+    print "STITCH_CHAT_LONGWORD_NODES:"; group.getChildCount()
+    check(textOf(group) = longWord + " " and inBounds(group, state), "long-word line runs preserve every character and stay within chat bounds")
+    check(group.getChildCount() < 32, "long words use line runs instead of hundreds of individual character nodes")
+    chat.callFunc("fixturePrune", group)
+
     ' A native emote after a non-BMP character must be cached under its entire
     ' token, not a UTF-16 slice beginning at the preceding space.
     chat.width = 275

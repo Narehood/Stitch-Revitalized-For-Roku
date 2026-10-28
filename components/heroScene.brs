@@ -268,6 +268,7 @@ end sub
 
 function buildNode(name)
     if name = invalid then return invalid
+    m.global.compactGrid = get_user_setting("ui.gridDensity", "comfortable") = "compact"
 
     ' Dispatch to scene-specific factory
     if name = "Following"

@@ -11,8 +11,101 @@ sub main()
     testRecordedCounts()
     testRetainedControls()
     testRetainedPlayer()
+    testStreamDetails()
+    testQualityDetails()
 
     fixtureEnd()
+end sub
+
+sub testStreamDetails()
+    player = createObject("roSGNode", "VideoPlayer")
+    m.scene.appendChild(player)
+    player.contentRequested = request("LIVE")
+    started = createObject("roDateTime")
+    started.FromSeconds(TimeStamp() - 3661)
+    details = response("LIVE", 2468)
+    details.createdAt = started.ToISOString()
+    details.gameDisplayName = "A very long category name that still needs to fit beside the live clock"
+    details.gameBoxArtUrl = "pkg:/images/default_banner.png"
+    details.contentTitle = "A deliberately long stream title that should scroll while controls are open and stop scrolling once the controls are hidden. A deliberately long stream title that should scroll."
+    player.callFunc("fixtureRead").task.response = details
+    video = player.callFunc("fixtureRead").video
+    category = video.findNode("streamCategory")
+    uptime = video.findNode("liveUptime")
+    overlay = video.findNode("controlOverlay")
+    check(video.findNode("videoTitle").text = details.contentTitle, "the actual wrapper title field populates its rendered EmojiLabel")
+    check(category.visible and category.text = details.gameDisplayName, "actual playback content supplies the category label")
+    check(video.findNode("categoryArt").visible and video.findNode("categoryArt").uri = details.gameBoxArtUrl and video.findNode("categoryArt").width = 84 and video.findNode("categoryArt").height = 112 and category.translation[0] = 164, "the larger category cover appears beside the category without covering it")
+    check(uptime.visible and uptime.text.inStr("Live for 1:01:") = 0, "live duration starts at the broadcast time rather than opening the player")
+    video.setFocus(true)
+    press("ok")
+    waitOverlay(overlay, true)
+    check(video.findNode("videoTitle").repeatCount = -1, "an overflowing player title scrolls while controls are shown")
+    pump(1100)
+    for each chat in [false, true]
+        video.chatIsVisible = chat
+        width = 1280
+        if chat then width = 960
+        info = video.findNode("infoRow")
+        art = video.findNode("categoryArt")
+        check(info.translation[0] + art.translation[0] + art.width < video.findNode("controls").translation[0] and overlay.translation[1] + info.translation[1] + art.translation[1] + art.height <= 720, "the taller artwork clears the centered controls and fits the overlay")
+        check(category.translation[0] + category.width + 24 <= uptime.translation[0], "category and live clock reserve separate horizontal space")
+        check(info.translation[0] + uptime.translation[0] + uptime.width = width - 48, "live clock respects the current video area's right margin")
+        check(info.translation[1] + category.translation[1] + category.height <= video.findNode("caption").translation[1], "the new metadata line clears the control captions")
+    end for
+    previous = uptime.text
+    video.control = "pause"
+    pump(1200)
+    check(uptime.text <> previous, "the visible live clock advances independently of paused playback")
+    title = video.findNode("videoTitle")
+    check(Abs(title.findNode("testAnimation").duration - (title.width - title.maxWidth) / 40) < 0.02, "chat resizing restarts an active title at the readable overflow speed")
+    press("down")
+    waitOverlay(overlay, false)
+    check(video.findNode("videoTitle").repeatCount = 0, "hiding player controls stops title scrolling")
+    previous = uptime.text
+    pump(1200)
+    check(uptime.text = previous, "hiding controls stops the live clock timer")
+    video.content = request("LIVE")
+    check(not category.visible and not uptime.visible and not video.findNode("categoryArt").visible and category.text = "" and uptime.text = "", "new content without metadata clears the old labels and category art")
+    details.gameDisplayName = ""
+    details.gameName = "Fallback category"
+    details.createdAt = "not a date"
+    video.content = details
+    check(category.text = "Fallback category" and category.visible and not uptime.visible, "category fallback remains available while invalid start times stay hidden")
+    started.FromSeconds(TimeStamp() + 3600)
+    details.createdAt = started.ToISOString()
+    video.content = details
+    check(not uptime.visible, "future stream timestamps never produce a negative live duration")
+    closePlayer(player)
+end sub
+
+sub testQualityDetails()
+    player = createObject("roSGNode", "VideoPlayer")
+    m.scene.appendChild(player)
+    player.contentRequested = request("LIVE")
+    details = response("LIVE", 2468)
+    started = createObject("roDateTime")
+    started.FromSeconds(TimeStamp() - 3600)
+    details.createdAt = started.ToISOString()
+    details.contentTitle = "Updated stream title from playback metadata with enough text to keep its marquee running while changing resolutions. Updated stream title from playback metadata with enough text to keep its marquee running."
+    details.gameDisplayName = "Updated category"
+    details.gameBoxArtUrl = "pkg:/images/default_banner.png"
+    task = player.callFunc("fixtureRead").task
+    task.metadata = [{ QualityID: "source", url: "", streamFormat: "hls", isTransmux: false, isProxied: false }, { QualityID: "720p60", url: "", streamFormat: "hls", isTransmux: false, isProxied: false }]
+    task.response = details
+    for each index in [1, 0, 1]
+        previous = player.callFunc("fixtureRead").video
+        oldTitle = previous.findNode("videoTitle")
+        oldTitle.repeatCount = -1
+        previous.QualityChangeRequest = index
+        previous.QualityChangeRequestFlag = true
+        video = player.callFunc("fixtureRead").video
+        check(not video.isSameNode(previous) and video.selectedQuality = player.metadata[index].QualityID, "actual quality callback replaces the wrapper with the chosen resolution")
+        check(video.videoTitle = details.contentTitle and video.findNode("videoTitle").text = details.contentTitle and video.findNode("videoTitle").callFunc("getAllComponents").count() > 0, "quality changes preserve the current title field and its rendered text")
+        check(video.findNode("streamCategory").text = details.gameDisplayName and video.findNode("categoryArt").uri = details.gameBoxArtUrl and video.findNode("liveUptime").visible, "quality changes preserve refreshed category art and the broadcast clock")
+        check(oldTitle.findNode("scrollStartTimer").control = "stop" and oldTitle.callFunc("getAllComponents").count() = 0, "replaced wrappers dispose the old title and cancel its pending marquee")
+    end for
+    closePlayer(player)
 end sub
 
 sub testRetainedPlayer()
@@ -58,6 +151,7 @@ function openPlayer(kind as string, count as dynamic, typed = true as boolean) a
     player.contentRequested = request(kind)
     player.callFunc("fixtureRead").task.response = response(kind, count, typed)
     check(player.callFunc("fixtureRead").video <> invalid, kind + " response creates a wrapper")
+    check(player.callFunc("fixtureRead").video.width = 1280 and player.callFunc("fixtureRead").video.height = 720, kind + " wrapper starts in the logical viewport when chat is hidden")
     return player
 end function
 

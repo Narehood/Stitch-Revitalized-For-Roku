@@ -47,6 +47,10 @@ sub init()
     ' Video info
     m.videoTitle = m.top.findNode("videoTitle")
     m.viewerCount = m.top.findNode("viewerCount")
+    m.streamCategory = m.top.findNode("streamCategory")
+    m.categoryArt = m.top.findNode("categoryArt")
+    m.liveUptime = m.top.findNode("liveUptime")
+    m.streamStartSeconds = 0
     m.channelUsername = m.top.findNode("channelUsername")
     m.avatar = m.top.findNode("avatar")
 
@@ -81,6 +85,11 @@ sub init()
     m.fadeAwayTimer.repeat = false
     m.fadeAwayTimer.duration = 5
     m.fadeAwayTimer.control = "stop"
+
+    m.streamDetailsTimer = createObject("roSGNode", "Timer")
+    m.streamDetailsTimer.duration = 1
+    m.streamDetailsTimer.repeat = true
+    m.streamDetailsTimer.observeField("fire", "updateLiveUptime")
 
     ' Live-edge latency diagnostic timer.
     ' Logs streamingSegment.latency every 5s while the stream is active
@@ -178,8 +187,12 @@ sub layoutOverlay()
     m.controlsHint.width = width - 96
     m.scrimFadeFill.width = width
     m.scrimFade.maskSize = [width, 48]
-    m.latencyTag.translation = [width - 48 - 360, 69]
+    m.latencyTag.translation = [width - 48 - 360, 35]
     m.viewerCount.translation = [width - 96 - m.viewerCount.width, 34]
+    m.liveUptime.translation = [width - 96 - m.liveUptime.width, 80]
+    categoryX = m.streamCategory.translation[0]
+    m.streamCategory.width = width - 96 - categoryX
+    if m.liveUptime.visible then m.streamCategory.width = m.liveUptime.translation[0] - categoryX - 24
     titleWidth = 900
     if width < 1280
         titleWidth = 660
@@ -188,7 +201,11 @@ sub layoutOverlay()
         availableTitleWidth = m.viewerCount.translation[0] - 64 - 24
         if titleWidth > availableTitleWidth then titleWidth = availableTitleWidth
     end if
-    m.videoTitle.maxWidth = titleWidth
+    if m.videoTitle.maxWidth <> titleWidth
+        m.videoTitle.repeatCount = 0
+        m.videoTitle.maxWidth = titleWidth
+    end if
+    updateTitleScroll()
     controlsWidth = 292
     if m.top.channelAvailable then controlsWidth += 76
     m.controls.translation = [Int((width - controlsWidth) / 2), 178]
@@ -276,6 +293,7 @@ end sub
 sub onContentChange()
     ' Counts are launch/refresh metadata; a new item must not keep the old count.
     m.top.viewersCount = -1
+    loadStreamDetails()
     ignored = clearAdCountdown(m.adOwner)
     if m.top.content <> invalid
         m.startupSeekFired = false
@@ -284,6 +302,44 @@ sub onContentChange()
         m.pendingSeekOutcomePreMs = invalid
         updateLatencyTag()
     end if
+end sub
+
+sub loadStreamDetails()
+    m.streamStartSeconds = 0
+    m.streamCategory.text = ""
+    m.categoryArt.uri = ""
+    content = m.top.content
+    if content <> invalid and m.top.video_type = "LIVE"
+        category = content.gameDisplayName
+        if category = invalid or category = "" then category = content.gameName
+        if GetInterface(category, "ifString") <> invalid then m.streamCategory.text = category
+        if GetInterface(content.gameBoxArtUrl, "ifString") <> invalid then m.categoryArt.uri = content.gameBoxArtUrl
+        if GetInterface(content.createdAt, "ifString") <> invalid and content.createdAt <> ""
+            started = CreateObject("roDateTime")
+            started.FromSeconds(0)
+            started.FromISO8601String(content.createdAt)
+            m.streamStartSeconds = started.AsSeconds()
+        end if
+    end if
+    m.streamCategory.visible = m.streamCategory.text <> ""
+    m.categoryArt.visible = m.streamCategory.visible and m.categoryArt.uri <> ""
+    categoryX = 64
+    if m.categoryArt.visible then categoryX = 164
+    m.streamCategory.translation = [categoryX, 80]
+    updateLiveUptime()
+    layoutOverlay()
+    m.streamDetailsTimer.control = "stop"
+    if m.isOverlayVisible and m.liveUptime.visible then m.streamDetailsTimer.control = "start"
+end sub
+
+sub updateLiveUptime()
+    if m.disposed then return
+    elapsed = TimeStamp() - m.streamStartSeconds
+    wasVisible = m.liveUptime.visible
+    m.liveUptime.visible = m.streamStartSeconds > 0 and elapsed >= 0
+    m.liveUptime.text = ""
+    if m.liveUptime.visible then m.liveUptime.text = Substitute(tr("Live for {0}"), convertToReadableTimeFormat(elapsed))
+    if wasVisible <> m.liveUptime.visible then layoutOverlay()
 end sub
 
 sub onVideoStateChange()
@@ -602,6 +658,9 @@ sub showOverlay()
     m.isOverlayVisible = true
     m.controlOverlay.visible = true
     updateLatencyTag()
+    updateLiveUptime()
+    updateTitleScroll()
+    if m.liveUptime.visible then m.streamDetailsTimer.control = "start"
     focusButton(m.currentFocusedButton)
 
     ' Start fade timer
@@ -612,8 +671,23 @@ end sub
 sub hideOverlay()
     m.isOverlayVisible = false
     m.controlOverlay.visible = false
+    updateTitleScroll()
+    m.streamDetailsTimer.control = "stop"
     clearAllButtonFocus()
     updateCaption()
+end sub
+
+sub updateTitleScroll()
+    repeatCount = 0
+    if m.isOverlayVisible and m.videoTitle.width > m.videoTitle.maxWidth then repeatCount = -1
+    m.videoTitle.repeatCount = repeatCount
+end sub
+
+sub onVideoTitleChange()
+    if m.disposed or m.videoTitle = invalid then return
+    m.videoTitle.repeatCount = 0
+    m.videoTitle.text = m.top.videoTitle
+    updateTitleScroll()
 end sub
 
 sub onFadeAway()
@@ -881,10 +955,15 @@ end function
 sub onDestroy()
     if m.disposed then return
     m.disposed = true
+    m.videoTitle.callFunc("onDestroy")
     destroyAdCountdown()
     if m.fadeAwayTimer <> invalid
         m.fadeAwayTimer.control = "stop"
         m.fadeAwayTimer.unobserveField("fire")
+    end if
+    if m.streamDetailsTimer <> invalid
+        m.streamDetailsTimer.control = "stop"
+        m.streamDetailsTimer.unobserveField("fire")
     end if
     if m.messageTimer <> invalid
         m.messageTimer.control = "stop"

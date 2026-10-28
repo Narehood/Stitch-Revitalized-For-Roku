@@ -905,6 +905,22 @@
             <translation>Show FrankerFaceZ emotes in live chat.</translation>
         </message>
         <message>
+            <source>Stream grid</source>
+            <translation>Stream grid</translation>
+        </message>
+        <message>
+            <source>Choose larger cards or fit more streams on screen. Takes effect when opening a content page.</source>
+            <translation>Choose larger cards or fit more streams on screen. Takes effect when opening a content page.</translation>
+        </message>
+        <message>
+            <source>Comfortable</source>
+            <translation>Comfortable</translation>
+        </message>
+        <message>
+            <source>Compact</source>
+            <translation>Compact</translation>
+        </message>
+        <message>
             <source>Browse: live channel order</source>
             <translation>Browse: live channel order</translation>
         </message>
@@ -1074,5 +1090,24 @@
         <message><source>Unpin from sidebar</source><translation>Unpin from sidebar</translation></message>
         <message><source>Remove from sidebar</source><translation>Remove from sidebar</translation></message>
         <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</translation></message>
+        <message>
+            <source>Live for {0}</source>
+            <translation>Live for {0}</translation>
+        </message>
+        <message><source>Enable chat</source><translation>Enable chat</translation></message>
+        <message><source>Turn off to stop chat connections, emotes and chat events. Takes effect when chat opens.</source><translation>Turn off to stop chat connections, emotes and chat events. Takes effect when chat opens.</translation></message>
+        <message><source>Chat is disabled in Settings.</source><translation>Chat is disabled in Settings.</translation></message>
+        <message><source>Chat is too fast for this TV. Chat is paused for this stream.</source><translation>Chat is too fast for this TV. Chat is paused for this stream.</translation></message>
+        <message><source>Playback</source><translation>Playback</translation></message>
+        <message><source>Chat</source><translation>Chat</translation></message>
+        <message><source>Emotes</source><translation>Emotes</translation></message>
+        <message><source>Browsing</source><translation>Browsing</translation></message>
+        <message><source>Advanced</source><translation>Advanced</translation></message>
+        <message><source>Open</source><translation>Open</translation></message>
+        <message><source>Choose startup quality, live latency and watch credit.</source><translation>Choose startup quality, live latency and watch credit.</translation></message>
+        <message><source>Control chat processing, layout, timing, text size and chat events.</source><translation>Control chat processing, layout, timing, text size and chat events.</translation></message>
+        <message><source>Choose emote providers and animation for live chat.</source><translation>Choose emote providers and animation for live chat.</translation></message>
+        <message><source>Choose stream card size and channel order.</source><translation>Choose stream card size and channel order.</translation></message>
+        <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configure playback compatibility and optional diagnostics.</translation></message>
     </context>
 </TS>

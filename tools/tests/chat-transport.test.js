@@ -24,8 +24,8 @@ function extractTransport(source) {
 }
 
 function extractConnection(source) {
-    const matches = [...source.matchAll(/^sub (?:runChatConnection\(transport as object\)|publishModeration\(queue as object, event as object\)|updateDeliveryState\(state as string\))\r?\n[\s\S]*?^end sub(?=\r?$)/gm)];
-    assert.equal(matches.length, 3, 'expected complete production connection, moderation and delivery state functions');
+    const matches = [...source.matchAll(/^(?:sub (?:runChatConnection\(transport as object\)|publishModeration\(queue as object, event as object\)|updateDeliveryState\(state as string\))|function queuedChatAge\(entry as object, nowSeconds as integer\) as float)\r?\n[\s\S]*?^end (?:sub|function)(?=\r?$)/gm)];
+    assert.equal(matches.length, 4, 'expected complete production connection, age, moderation and delivery state functions');
     for (const match of matches) assert.equal([...match[0].matchAll(/^(?:sub|function)\b/gim)].length, 1);
     return matches.map(match => match[0]).join('\n');
 }
@@ -49,10 +49,10 @@ async function runFixture(body, connection = '', sendLogin = '', job = '', moder
     // object creation and waiting with explicit, deterministic OS boundaries.
     // All production connection/send/login decisions, deadlines and cleanup execute.
     const combined = [body, connection, sendLogin, job, emote].join('\n');
-    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, (body ? 4 : 0) + (connection ? 5 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
+    assert.equal([...combined.matchAll(/\bcreateObject\(/gi)].length, (body ? 4 : 0) + (connection ? 8 : 0) + (sendLogin ? 2 : 0) + (job ? 2 : 0));
     assert.equal([...combined.matchAll(/\bwait\(/gi)].length, (body ? 1 : 0) + (connection ? 1 : 0) + (job ? 1 : 0));
     const bounded = combined.replace(/\bcreateObject\(/gi, 'fixtureCreateObject(').replace(/\bwait\(/gi, 'fixtureWait(')
-        .replace(/\bsleep\(/gi, 'fixtureSleep(');
+        .replace(/\bsleep\(/gi, 'fixtureSleep(').replace(/\bircParseMessage\(/g, 'fixtureParseMessage(');
     const marker = `STITCH_CHAT_TRANSPORT_PASS_${randomUUID()}`;
     const main = (await fs.readFile(fixturePath, 'utf8')).replace('__PASS_MARKER__', marker)
         .replace('__CONNECTION_TESTS__', connection ? 'runConnectionTests()' : '')
