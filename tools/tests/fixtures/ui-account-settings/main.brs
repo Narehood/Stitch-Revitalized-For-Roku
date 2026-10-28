@@ -564,10 +564,18 @@ sub testFloatingFocus(scene as object)
     settings.callFunc("fixtureSelect")
     inspect(settings).options.checkedItem = 1
     check(get_user_setting("ui.floatingFocus") = "true" and settingValue(settings, "ui.floatingFocus") = "On", "actual option observer persists floating focus opt-in")
-    for each name in ["Following", "ChannelPage"]
-        scene.callFunc("fixtureOpen", name)
-        row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
-        check(row.rowFocusAnimationStyle = "floatingFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new content page floats horizontally and keeps vertical focus: " + name)
+    pages = [
+        { name: "Following", rowId: "homeRowList", width: 1170, fixedWidth: 1280 },
+        { name: "Browse", rowId: "browseRowList", width: 1170, fixedWidth: 1280 },
+        { name: "Search", rowId: "homeRowList", width: 780, fixedWidth: 1280 },
+        { name: "ChannelPage", rowId: "homeRowList", width: 1170, fixedWidth: 1980 },
+        { name: "GamePage", rowId: "homeRowList", width: 1170, fixedWidth: 1280 }
+    ]
+    for each page in pages
+        scene.callFunc("fixtureOpen", page.name)
+        row = scene.callFunc("fixtureRead").active.findNode(page.rowId)
+        check(row.rowFocusAnimationStyle = "floatingFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new content page floats horizontally and keeps vertical focus: " + page.name)
+        check(row.itemSize[0] = page.width and row.itemSize[1] = 295, "floating rows fit the visible remainder without changing row height: " + page.name)
     end for
     scene.callFunc("fixtureOpen", "Settings")
     settings = scene.callFunc("fixtureRead").active
@@ -575,9 +583,12 @@ sub testFloatingFocus(scene as object)
     check(settingValue(settings, "ui.floatingFocus") = "On" and inspect(settings).options.checkedItem = 1, "reopened Settings restores floating focus preference")
     settings.callFunc("fixtureSelect")
     inspect(settings).options.checkedItem = 0
-    scene.callFunc("fixtureOpen", "Following")
-    row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
-    check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "turning floating focus Off restores existing content focus")
+    for each page in pages
+        scene.callFunc("fixtureOpen", page.name)
+        row = scene.callFunc("fixtureRead").active.findNode(page.rowId)
+        check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "turning floating focus Off restores existing content focus: " + page.name)
+        check(row.itemSize[0] = page.fixedWidth and row.itemSize[1] = 295, "fixed focus preserves original XML geometry: " + page.name)
+    end for
     scene.callFunc("fixtureCleanup")
 end sub
 

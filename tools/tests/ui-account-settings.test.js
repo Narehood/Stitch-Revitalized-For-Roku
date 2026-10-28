@@ -98,6 +98,9 @@ async function buildPackage(dir, marker, negative) {
         'FixtureScene.xml', 'scene.brs', 'TwitchApiTask.xml', 'ProxyHealthCheck.xml',
         'proxy-task-probe.brs', 'http-boundary.brs', 'QrBoundary.xml', 'CardBoundary.xml', 'InfoBoundary.xml',
     ]) await addFile(dir, `components/${file}`, await fixture(file));
+    for (const file of ['KeyboardBoundary.xml', 'keyboard.brs']) {
+        await addFile(dir, `components/${file}`, await fs.readFile(path.join(fixtures, '../ui', file)));
+    }
     await addFile(dir, 'source/main.brs', (await fixture('main.brs'))
         .replaceAll('__PASS_MARKER__', marker).replace('__NEGATIVE_CONTROL__', negative ? 'true' : 'false'));
 
@@ -122,6 +125,14 @@ end function
 `;
     await addComponent(dir, 'components/Scenes/Following', 'Following', detail,
         [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/Browse', 'Browse', detail,
+        [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/GamePage', 'GamePage', detail,
+        [['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"']]);
+    await addComponent(dir, 'components/Scenes/Search', 'Search', detail, [
+        ['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'],
+        ['<DynamicMiniKeyboard', '<KeyboardBoundary'],
+    ]);
     await addComponent(dir, 'components/Scenes/ChannelPage', 'ChannelPage', detail, [
         ['itemComponentName="VideoItem"', 'itemComponentName="CardBoundary"'],
         ['<SimpleLabel', '<Label'], ['<InfoPane', '<InfoBoundary'], ['fontSize="32"', ''], ['fontSize="20"', ''],
