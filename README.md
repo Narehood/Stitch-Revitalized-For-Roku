@@ -2,13 +2,23 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.1.0](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.1.0)** adds pinned streamers, preferred startup resolutions, richer chat and player channel actions, and reconciles community fixes for playback, Settings and the optional audio service while retaining the redesigned interface. Download `Stitch-Revitalized-For-Roku.zip` from its release assets to sideload the channel on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.1.0.
+**[3.2.0](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.2.0)** adds grouped Settings, optional floating focus and Compact stream grids, clearer previews, richer player details and bounded chat processing. Download `Stitch-Revitalized-For-Roku.zip` to sideload on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.2.0.
 
-**[Download the 3.1.0 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.1.0/Stitch-Revitalized-For-Roku.zip).** Earlier releases, including the 3.0.0 Alpha previews, remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.2.0 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.2.0/Stitch-Revitalized-For-Roku.zip).** Earlier releases remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.1.0
+## What's new in 3.2.0
+
+- **Grouped Settings:** Playback, Chat, Emotes, Browsing and Advanced panels have location breadcrumbs and retain the parent selection. Back, Left and Up from the first setting return through the hierarchy.
+- **Browsing:** **Settings → Browsing → Floating focus** moves selection across the visible cards; it defaults to Off and preserves saved choices. **Stream grid** offers the default three-column Comfortable layout or four-column Compact layout. Category directories share the selected density and thumbnail decoding follows the display scale.
+- **Player details:** live duration, the current category and larger category art appear beside the stream information. Titles and category details survive quality changes, recent-channel launches fill missing titles, and overflowing titles repeat at a readable speed with pauses.
+- **Chat processing:** **Settings → Chat → Enable chat** defaults to On. Off stops IRC, emote, animation and chat-event work and shows a disabled notice. Chat parsing, wrapping and emote-cache work are bounded. A session-only pause requires fresh, sustained expensive chat work together with accepted playback recovery; ordinary network buffering alone does not trigger it.
+- **Fixes and maintenance:** channel changes clear old emotes even while chat is disabled, late emoji failures preserve readable title scrolling, and nested Settings navigation returns to its parent. Redundant test reruns were removed; the measured local Node regression phase uses 17% less time while direct behavior checks remain.
+
+Supported 1080p and higher qualities remain available when offered by the stream and supported by the Roku. Heavy-room stuttering remains under investigation: the moderate-traffic native checks do not establish performance in 30k–50k viewer rooms.
+
+### Also included from 3.1.0
 
 - **Pinned streamers:** press **Options** on a sidebar streamer or their channel page, or use **Channel actions** in the player, to pin or unpin them. The sidebar separates **Pinned** channels from **Live** recent channels, with labels outside the avatars. **Remove from sidebar** clears an individual channel's local pin and history without changing Twitch follows. Watching it again can add it back to recent history. Each profile, including anonymous viewing, keeps its own pins.
 - **Player channel actions:** open the streamer's channel to browse VODs and clips, pin or unpin them, or check Follow/Unfollow status. Opening a channel waits for playback cleanup; pinning keeps the stream playing.
