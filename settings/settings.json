@@ -210,6 +210,13 @@
         "default": "true"
     },
     {
+        "title": "Floating focus",
+        "description": "Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.",
+        "settingName": "ui.floatingFocus",
+        "type": "bool",
+        "default": "false"
+    },
+    {
         "title": "Browse: live channel order",
         "description": "How live channels are ordered on the Browse page.",
         "settingName": "LiveChannelSorting",

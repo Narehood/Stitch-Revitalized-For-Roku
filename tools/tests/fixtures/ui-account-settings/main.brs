@@ -17,6 +17,8 @@ sub main()
     seed(false)
     testSettings(scene)
     seed(false)
+    testFloatingFocus(scene)
+    seed(false)
     testProxy(scene)
     testProxyTask()
     seed(true)
@@ -362,7 +364,7 @@ sub testSettings(scene as object)
     m.global.fixtureRegistry = registry
     page = addPage(scene, "Settings")
     s = inspect(page)
-    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 21, "actual Settings uses native MarkupList with all schema rows")
+    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 22, "actual Settings uses native MarkupList with all schema rows")
     check(m.global.fixtureWrites = 0 and m.global.fixtureDeletes = 0, "opening Settings displays defaults without any storage writes")
     check(settingValue(page, "ChatFontSize") = "Large (16)", "new-install chat display defaults to authorized 16")
     check(settingValue(page, "analytics.enabled") = "Off" and settingValue(page, "playback.lowLatency") = "Off", "diagnostics and experimental latency remain default off")
@@ -438,7 +440,7 @@ sub testSettings(scene as object)
     page.callFunc("fixtureHierarchy", section)
     check(inspect(page).levels = 2 and inspect(page).menu.content.getChildCount() = 1, "actual LoadMenu supports retained hierarchy")
     page.callFunc("fixtureKey", "back")
-    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 21 and not page.backPressed, "Back restores parent settings before page back")
+    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 22 and not page.backPressed, "Back restores parent settings before page back")
     page.callFunc("fixtureKey", "back")
     check(page.backPressed, "Back at root emits page back")
     page.backPressed = false
@@ -548,6 +550,35 @@ sub testProxy(scene as object)
     keyboard.wasClosed = true
     check(inspect(page).disposed and inspect(page).keyboard = invalid and inspect(page).task = invalid and pending.control = "stop" and get_user_setting("proxy.url") = "", "disposal destroys check and removes keyboard callbacks before late success")
     scene.removeChild(page)
+end sub
+
+sub testFloatingFocus(scene as object)
+    print "SECTION Floating focus"
+    scene.callFunc("fixtureOpen", "Following")
+    row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
+    check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new installs keep existing fixed content focus")
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.floatingFocus")
+    check(settingValue(settings, "ui.floatingFocus") = "Off" and inspect(settings).options.checkedItem = 0, "floating focus defaults to Off in actual Settings")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 1
+    check(get_user_setting("ui.floatingFocus") = "true" and settingValue(settings, "ui.floatingFocus") = "On", "actual option observer persists floating focus opt-in")
+    for each name in ["Following", "ChannelPage"]
+        scene.callFunc("fixtureOpen", name)
+        row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
+        check(row.rowFocusAnimationStyle = "floatingFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new content page floats horizontally and keeps vertical focus: " + name)
+    end for
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.floatingFocus")
+    check(settingValue(settings, "ui.floatingFocus") = "On" and inspect(settings).options.checkedItem = 1, "reopened Settings restores floating focus preference")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 0
+    scene.callFunc("fixtureOpen", "Following")
+    row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
+    check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "turning floating focus Off restores existing content focus")
+    scene.callFunc("fixtureCleanup")
 end sub
 
 sub testRoutes(scene as object)

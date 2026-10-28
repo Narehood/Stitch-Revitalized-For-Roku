@@ -292,6 +292,13 @@ function buildNode(name)
 
     if newNode = invalid then return invalid
 
+    ' Content pages are rebuilt when leaving Settings, so the choice applies immediately.
+    rowList = newNode.findNode("homeRowList")
+    if rowList = invalid then rowList = newNode.findNode("browseRowList")
+    if rowList <> invalid and get_user_setting("ui.floatingFocus", "false") = "true"
+        rowList.rowFocusAnimationStyle = "floatingFocus"
+    end if
+
     ' Shared observer wiring
     newNode.observeField("backPressed", "onBackPressed")
     newNode.observeField("contentSelected", "onContentSelected")
