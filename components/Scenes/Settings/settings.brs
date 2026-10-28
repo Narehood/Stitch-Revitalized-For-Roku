@@ -7,6 +7,7 @@ sub init()
     m.userLocation = []
 
     m.settingsMenu = m.top.findNode("settingsMenu")
+    m.sectionTitle = m.top.findNode("sectionTitle")
     m.settingDetail = m.top.findNode("settingDetail")
     m.settingTag = m.top.findNode("settingTag")
     m.settingTitle = m.top.findNode("settingTitle")
@@ -65,14 +66,23 @@ sub LoadMenu(configSection)
         listItem = result.CreateChild("ContentNode")
         listItem.title = settingTitle(item)
         listItem.shortDescriptionLine1 = settingValueText(item)
-        if item.settingName <> invalid then listItem.id = item.settingName
+        if item.settingName <> invalid
+            listItem.id = item.settingName
+        else if item.id <> invalid
+            listItem.id = item.id
+        end if
     end for
 
     m.settingsMenu.content = result
 
-    if configSection.selectedIndex <> invalid and configSection.selectedIndex > -1
-        m.settingsMenu.jumpToItem = configSection.selectedIndex
-    end if
+    selectedIndex = 0
+    if configSection.selectedIndex <> invalid and configSection.selectedIndex >= 0 and configSection.selectedIndex < result.getChildCount() then selectedIndex = configSection.selectedIndex
+    if result.getChildCount() > 0 then m.settingsMenu.jumpToItem = selectedIndex
+    title = tr("Settings")
+    for i = 1 to m.userLocation.count() - 1
+        title += " / " + tr(m.userLocation[i].title)
+    end for
+    m.sectionTitle.text = title
     settingFocused()
 end sub
 
@@ -123,6 +133,7 @@ end function
 
 ' Text shown beside each setting name in the list.
 function settingValueText(item as object) as string
+    if item.children <> invalid then return tr("Open")
     if item.type = invalid then return ""
     if item.type = "action"
         if item.action <> "logout" then return ""
@@ -450,7 +461,7 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
-    if key = "back" or key = "left"
+    if key = "back" or key = "left" or key = "up"
         if m.optionList.isInFocusChain()
             m.settingsMenu.setFocus(true)
             return true
@@ -460,16 +471,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
             return true
         end if
     end if
-    if key = "back"
+    if key = "back" or key = "up"
         m.top.backPressed = true
         return true
     end if
     if key = "right" and m.settingsMenu.isInFocusChain()
         settingSelected()
-        return true
-    end if
-    if key = "up"
-        m.top.backPressed = true
         return true
     end if
     return false

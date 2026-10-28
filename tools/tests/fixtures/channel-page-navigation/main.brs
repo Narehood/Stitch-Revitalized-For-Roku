@@ -32,6 +32,7 @@ sub main()
     check(state.pages.count() = 1 and state.depth = 1, "one Recents selection opens exactly one ChannelPage")
     check(task.isSameNode(first.callFunc("fixtureRead").task) and task.control = "run", "response does not restart updatePage or replace its task")
     check(liveRow.getChildCount() = 1, "visible Live now row keeps its child after overlapping responses")
+    check(liveRow.getChild(0).contentTitle = "Current title" and request.contentTitle = "", "a recent-channel LIVE request receives the fetched title without changing the shared request")
     check(request.getParent() = invalid and request.streamerId = "" and request.previewImageURL = "" and request.viewersCount = 0, "navigation request stays unparented and unchanged")
     allIds = true
     for each contentRow in rowlist.content.getChildren(rowlist.content.getChildCount(), 0)
@@ -66,6 +67,12 @@ sub main()
     check(stable, "unchanged response leaves both old and new LIVE rows populated with separate items")
     state = scene.callFunc("fixtureRead")
     check(state.pages.count() = 1 and state.depth = 1 and request.streamerId = "" and request.previewImageURL = "", "unchanged response cannot reopen navigation or mutate its request")
+    missingTitle = fixtureResponse()
+    missingTitle.liveTitle = ""
+    page.callFunc("fixtureRead").task.response = missingTitle
+    pause(150)
+    fallback = page.callFunc("fixtureRead").rowlist.content.getChild(0).getChild(0)
+    check(fallback.contentTitle <> "" and request.contentTitle = "", "missing fetched titles fall back to the channel name without mutating navigation metadata")
     print "FIXTURE_KEY:back"
     pause(350)
     state = scene.callFunc("fixtureRead")

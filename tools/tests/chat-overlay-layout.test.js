@@ -102,19 +102,15 @@ sub fixtureFocus(index as integer)
     settingFocused()
 end sub
 sub fixtureChoose(key as string, value as string)
-    for i = 0 to m.configTree.count() - 1
-        item = m.configTree[i]
-        if item.settingName = key
-            m.settingsMenu.jumpToItem = i
-            settingFocused()
-            settingSelected()
-            for j = 0 to item.options.count() - 1
-                if item.options[j].id = value
-                    m.optionList.checkedItem = j
-                    optionChanged()
-                    return
-                end if
-            end for
+    item = findConfigTreeKey(key, m.configTree)
+    if item = invalid then return
+    LoadMenu({ title: "Fixture", children: [item] })
+    settingSelected()
+    for j = 0 to item.options.count() - 1
+        if item.options[j].id = value
+            m.optionList.checkedItem = j
+            optionChanged()
+            return
         end if
     end for
 end sub
@@ -173,13 +169,16 @@ test('actual player and wrappers keep full video under overlay chat; Settings sa
 });
 
 test('all overlay settings and UI hints have complete UTF-8 translations in every supported locale', async () => {
-    const schema = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const tree = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const leaves = items => items.flatMap(item => item.children ? leaves(item.children) : [item]);
+    const schema = leaves(tree);
     const settings = schema.filter(item => ['chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ChatOption'].includes(item.settingName));
     assert.equal(settings.length, 4);
     assert.equal(settings.find(item => item.settingName === 'chat.layout').default, 'side');
     assert.equal(settings.find(item => item.settingName === 'chat.overlayPosition').default, 'bottom-right');
     assert.equal(settings.find(item => item.settingName === 'chat.overlayOpacity').default, '0.5');
     const keys = ['{0} of {1}', 'Press Down or Back to hide controls',
+        'Open', ...tree.filter(item => item.children).flatMap(item => [item.title, item.description]),
         ...settings.flatMap(item => [item.title, item.description, ...(item.options || []).map(option => option.title)])];
     for (const locale of ['en_US', 'es_MX', 'pt_BR']) {
         const xml = new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(path.join(root, 'locale', locale, 'translations.ts')));

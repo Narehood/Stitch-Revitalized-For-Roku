@@ -168,6 +168,11 @@ function buildContentNodeFromShelves(rsp)
                 previewImageURL: Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", request.streamerLogin)
             })
         end if
+        if rowItem.contentTitle = invalid or rowItem.contentTitle = ""
+            liveTitle = rsp.liveTitle
+            if GetInterface(liveTitle, "ifString") = invalid or liveTitle = "" then liveTitle = channelName()
+            rowItem.contentTitle = liveTitle
+        end if
         rowItem.streamerId = streamerId
         if rowItem.previewImageURL = invalid or rowItem.previewImageURL = ""
             rowItem.previewImageURL = Substitute("https://static-cdn.jtvnw.net/previews-ttv/live_user_{0}-1280x720.jpg", rowItem.streamerLogin)

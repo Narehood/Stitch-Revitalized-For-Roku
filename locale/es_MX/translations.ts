@@ -923,6 +923,22 @@
             <translation>Mueve el resaltado a la izquierda y a la derecha por las filas de canales, videos y categorías. Al desactivarlo, el resaltado conserva su posición fija actual.</translation>
         </message>
         <message>
+            <source>Stream grid</source>
+            <translation>Cuadrícula de streams</translation>
+        </message>
+        <message>
+            <source>Choose larger cards or fit more streams on screen. Takes effect when opening a content page.</source>
+            <translation>Elige tarjetas más grandes o muestra más streams en pantalla. Se aplica al abrir una página de contenido.</translation>
+        </message>
+        <message>
+            <source>Comfortable</source>
+            <translation>Cómoda</translation>
+        </message>
+        <message>
+            <source>Compact</source>
+            <translation>Compacta</translation>
+        </message>
+        <message>
             <source>Browse: live channel order</source>
             <translation>Explorar: orden de los canales en vivo</translation>
         </message>
@@ -1094,5 +1110,24 @@
         <message><source>Unpin from sidebar</source><translation>Desfijar de la barra lateral</translation></message>
         <message><source>Remove from sidebar</source><translation>Quitar de la barra lateral</translation></message>
         <message><source>Sidebar changes stay on this Roku and do not change who you follow on Twitch.</source><translation>Los cambios de la barra lateral se guardan en este Roku y no cambian a quién sigues en Twitch.</translation></message>
+        <message>
+            <source>Live for {0}</source>
+            <translation>En vivo: {0}</translation>
+        </message>
+        <message><source>Enable chat</source><translation>Activar chat</translation></message>
+        <message><source>Turn off to stop chat connections, emotes and chat events. Takes effect when chat opens.</source><translation>Desactívalo para detener las conexiones, los emotes y los eventos del chat. Se aplica al abrir el chat.</translation></message>
+        <message><source>Chat is disabled in Settings.</source><translation>El chat está desactivado en Configuración.</translation></message>
+        <message><source>Chat is too fast for this TV. Chat is paused for this stream.</source><translation>El chat es demasiado rápido para este televisor. Se pausó el chat para esta transmisión.</translation></message>
+        <message><source>Playback</source><translation>Reproducción</translation></message>
+        <message><source>Chat</source><translation>Chat</translation></message>
+        <message><source>Emotes</source><translation>Emotes</translation></message>
+        <message><source>Browsing</source><translation>Navegación</translation></message>
+        <message><source>Advanced</source><translation>Avanzado</translation></message>
+        <message><source>Open</source><translation>Abrir</translation></message>
+        <message><source>Choose startup quality, live latency and watch credit.</source><translation>Elige la calidad inicial, la latencia en vivo y el crédito de visualización.</translation></message>
+        <message><source>Control chat processing, layout, timing, text size and chat events.</source><translation>Configura el procesamiento, la disposición, la sincronización, el tamaño del texto y los eventos del chat.</translation></message>
+        <message><source>Choose emote providers and animation for live chat.</source><translation>Elige los proveedores de emotes y las animaciones del chat en vivo.</translation></message>
+        <message><source>Choose stream card size and channel order.</source><translation>Elige el tamaño de las tarjetas de transmisiones y el orden de los canales.</translation></message>
+        <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configura la compatibilidad de reproducción y los diagnósticos opcionales.</translation></message>
     </context>
 </TS>

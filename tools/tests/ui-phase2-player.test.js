@@ -192,8 +192,11 @@ sub fixtureSpendRecovery(count as integer)
     m.reconnectAttempts = count
 end sub
 function fixtureEngagement() as object
-    return { worker: m.engagementTask, owner: m.engagementOwner, generation: m.engagementGeneration, paused: m.engagementPaused, chat: m.chatWindow }
+    return { worker: m.engagementTask, owner: m.engagementOwner, generation: m.engagementGeneration, paused: m.engagementPaused, chat: m.chatWindow, autoPaused: m.chatAutoPaused }
 end function
+sub fixtureRecovery(reason as string)
+    beginLiveReconnect(reason)
+end sub
 `);
     await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
@@ -234,7 +237,7 @@ end function
     await addEmojiLabel(dir, `function fixtureRead() as object
     builds = 0
     if m.fixtureBuilds <> invalid then builds = m.fixtureBuilds
-    return { builds: builds, compiled: m.emojiRegex <> invalid, failed: m.emojiRegexFailed = true, parts: m.components.getChildCount(), scrolling: m.animation.control = "start" }
+    return { builds: builds, compiled: m.emojiRegex <> invalid, failed: m.emojiRegexFailed = true, parts: m.components.getChildCount(), scrolling: m.animation.control = "start", pending: m.scrollStartPending = true, duration: m.animation.duration, cycleDuration: m.timer.duration }
 end function
 sub fixtureFailCompile()
     m.fixtureFail = true
@@ -290,6 +293,16 @@ function fixtureEventNode() as object
 end function
 sub fixtureTryRender(comment as object)
     m.chat.nextCommentObj = comment
+end sub
+sub fixtureRenderCost(windowMs as integer, busyMs as integer)
+    ' Only elapsed time is canned; actual comment parsing and rendering execute.
+    m.renderWindowClock = { ms: windowMs, totalMilliseconds: fixtureElapsed, mark: fixtureClockMark }
+    m.renderWorkClock = { ms: busyMs, totalMilliseconds: fixtureElapsed, mark: fixtureClockMark }
+end sub
+function fixtureElapsed() as integer
+    return m.ms
+end function
+sub fixtureClockMark()
 end sub
 function fixtureText(node as object) as string
     if node.hasField("text") then return node.text

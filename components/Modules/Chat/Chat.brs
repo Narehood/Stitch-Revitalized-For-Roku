@@ -1,5 +1,10 @@
 sub init()
     m.disposed = false
+    m.chatSettingEnabled = get_user_setting("chat.enabled", "true") = "true"
+    m.processingEnabled = m.chatSettingEnabled and not m.top.pausedForPerformance
+    m.renderWorkClock = createObject("roTimespan")
+    m.renderWindowClock = createObject("roTimespan")
+    resetChatWorkload()
     initChatAnimations()
     m.chatPanel = m.top.findNode("chatPanel")
     m.chatBackground = m.top.findNode("chatBackground")
@@ -53,6 +58,7 @@ sub init()
     ' determines how far down the screen the first message will appear
     ' set to 700 to have first message at bottom of screen.
     m.translation = m.lower_bound - m.line_height
+    if not m.processingEnabled then updateChatStatus("disabled")
 end sub
 
 sub updatePanelTranslation()
@@ -109,9 +115,11 @@ end sub
 sub onInvisible()
     if m.disposed then return
     if m.top.visible
-        openChatAnimations()
-        startChatJob()
-        startEmoteJob()
+        if refreshChatProcessing()
+            openChatAnimations()
+            startChatJob()
+            startEmoteJob()
+        end if
     else
         stopJobs()
     end if
@@ -130,7 +138,7 @@ end sub
 sub updateHypeTrain()
     if m.hypePanel = invalid then return
     hype = m.top.hypeTrain
-    valid = not m.disposed and m.top.visible and m.hypeAge <> invalid and GetInterface(hype, "ifAssociativeArray") <> invalid
+    valid = m.processingEnabled and not m.disposed and m.top.visible and m.hypeAge <> invalid and GetInterface(hype, "ifAssociativeArray") <> invalid
     if valid
         valid = GetInterface(hype.level, "ifInt") <> invalid and GetInterface(hype.percent, "ifInt") <> invalid
         valid = valid and (GetInterface(hype.expiresAt, "ifInt") <> invalid or GetInterface(hype.expiresAt, "ifDouble") <> invalid or GetInterface(hype.expiresAt, "ifLongInt") <> invalid)
@@ -178,7 +186,7 @@ sub layoutChatHeaders()
     if m.chatStatus <> invalid and m.chatStatus.visible then offset += m.chatStatus.height + 24
     m.chatContentTop = offset
     remaining = m.chatPanel.height - offset
-    m.chatPanel.visible = remaining > 0
+    m.chatPanel.visible = m.processingEnabled and remaining > 0
     if remaining > 0 then m.chatPanel.clippingRect = [0, offset, m.chatPanel.width, remaining]
     syncChatAnimation()
 end sub
@@ -192,7 +200,7 @@ end sub
 sub updatePinnedMessage()
     if m.pinPanel = invalid then return
     pin = m.top.pinnedMessage
-    valid = not m.disposed and m.top.visible and m.pinAge <> invalid and GetInterface(pin, "ifAssociativeArray") <> invalid
+    valid = m.processingEnabled and not m.disposed and m.top.visible and m.pinAge <> invalid and GetInterface(pin, "ifAssociativeArray") <> invalid
     if valid
         valid = GetInterface(pin.id, "ifString") <> invalid and GetInterface(pin.senderName, "ifString") <> invalid and GetInterface(pin.text, "ifString") <> invalid
         valid = valid and (GetInterface(pin.observedAt, "ifInt") <> invalid or GetInterface(pin.observedAt, "ifDouble") <> invalid or GetInterface(pin.observedAt, "ifLongInt") <> invalid)
@@ -407,6 +415,70 @@ sub stopJobs()
     stopEmoteJob()
 end sub
 
+function refreshChatProcessing() as boolean
+    m.chatSettingEnabled = get_user_setting("chat.enabled", "true") = "true"
+    m.processingEnabled = m.chatSettingEnabled and not m.top.pausedForPerformance
+    if m.processingEnabled then return true
+    stopJobs()
+    m.top.hypeTrain = invalid
+    m.top.pinnedMessage = invalid
+    for each message in m.chatPanel.getChildren(-1, 0)
+        removeChatMessage(message)
+    end for
+    m.hasRenderedComment = false
+    m.translation = m.lower_bound - m.line_height
+    updateChatStatus("disabled")
+    return false
+end function
+
+sub onChatPerformancePause()
+    if m.disposed then return
+    ignored = refreshChatProcessing()
+end sub
+
+function suspendIfOverloaded() as boolean
+    if m.disposed or not m.top.visible or not m.processingEnabled or m.chat = invalid then return false
+    if m.chat.connectionState <> "connected" then return false
+    overloaded = chatWorkloadHigh(m.renderWorkload)
+    if m.chat.hasField("workload") then overloaded = overloaded or chatWorkloadHigh(m.chat.workload)
+    if not overloaded then return false
+    m.top.pausedForPerformance = true
+    return true
+end function
+
+function chatWorkloadHigh(workload as dynamic) as boolean
+    if GetInterface(workload, "ifAssociativeArray") = invalid then return false
+    if workload.highWindows = invalid or workload.windowMs = invalid or workload.busyMs = invalid or workload.observedAt = invalid then return false
+    if workload.highWindows < 2 or workload.windowMs < 5000 or workload.windowMs > 10000 then return false
+    if workload.busyMs * 4 < workload.windowMs then return false
+    age = TimeStamp() - workload.observedAt
+    return age >= 0 and age <= 10
+end function
+
+sub resetChatWorkload()
+    m.renderWindowClock.mark()
+    m.renderBusyMs = 0
+    m.renderEvents = 0
+    m.renderHighWindows = 0
+    m.renderWorkload = invalid
+end sub
+
+sub recordChatRenderWork(busyMs as integer)
+    m.renderBusyMs += busyMs
+    m.renderEvents++
+    elapsed = m.renderWindowClock.totalMilliseconds()
+    if elapsed < 5000 then return
+    if elapsed <= 10000 and m.renderBusyMs * 4 >= elapsed and m.renderEvents >= 2
+        if m.renderHighWindows < 2 then m.renderHighWindows++
+    else
+        m.renderHighWindows = 0
+    end if
+    m.renderWorkload = { observedAt: TimeStamp(), windowMs: elapsed, busyMs: m.renderBusyMs, events: m.renderEvents, highWindows: m.renderHighWindows }
+    m.renderWindowClock.mark()
+    m.renderBusyMs = 0
+    m.renderEvents = 0
+end sub
+
 sub stopEmoteJob()
     if m.EmoteJob <> invalid
         emoteJob = m.EmoteJob
@@ -425,6 +497,7 @@ end sub
 
 sub onVideoChange()
     if m.disposed then return
+    if not refreshChatProcessing() then return
     stopChatJob()
     if m.top.control and m.top.visible then startChatJob()
 end sub
@@ -446,8 +519,9 @@ sub onEnterChannel()
     m.emoteChannelId = ""
     m.animatedEmotes = {}
     m.gifAnimationKeys = []
-    if m.top.channel = "" then return
     m.global.setField("emoteCache", {})
+    if not refreshChatProcessing() then return
+    if m.top.channel = "" then return
     if m.top.visible
         openChatAnimations()
         startChatJob()
@@ -456,7 +530,7 @@ sub onEnterChannel()
 end sub
 
 sub startChatJob()
-    if m.disposed or not m.top.visible then return
+    if m.disposed or not m.processingEnabled or not m.top.visible then return
     if m.chat <> invalid or m.top.channel = "" then return
     m.chat = createObject("roSGNode", "ChatJob")
     m.top.appendChild(m.chat)
@@ -474,6 +548,7 @@ sub startChatJob()
 end sub
 
 sub stopChatJob()
+    resetChatWorkload()
     if m.chat <> invalid
         chat = m.chat
         m.chat = invalid
@@ -489,7 +564,7 @@ sub stopChatJob()
 end sub
 
 function currentChatEvent(event as dynamic) as boolean
-    if m.disposed or not m.top.visible or m.chat = invalid then return false
+    if m.disposed or not m.processingEnabled or not m.top.visible or m.chat = invalid then return false
     if event <> invalid then return event.getRoSGNode().isSameNode(m.chat)
     return true
 end function
@@ -508,6 +583,10 @@ sub onDeliveryStateChange(event = invalid as dynamic)
 end sub
 
 sub updateChatStatus(state as string)
+    if not m.processingEnabled
+        state = "disabled"
+        if m.chatSettingEnabled and m.top.pausedForPerformance then state = "overloaded"
+    end if
     if m.chatStatus = invalid then return
     if state = "connected" and not m.hasRenderedComment
         state = "waiting"
@@ -516,7 +595,11 @@ sub updateChatStatus(state as string)
     if m.chatPresentationState = state then return
     m.chatPresentationState = state
     m.chatStatus.visible = state <> "connected" and state <> "stopped"
-    if state = "connecting"
+    if state = "overloaded"
+        m.chatStatus.text = tr("Chat is too fast for this TV. Chat is paused for this stream.")
+    else if state = "disabled"
+        m.chatStatus.text = tr("Chat is disabled in Settings.")
+    else if state = "connecting"
         m.chatStatus.text = tr("Connecting to chat…")
     else if state = "reconnecting"
         m.chatStatus.text = tr("Chat disconnected. Reconnecting…")
@@ -538,7 +621,7 @@ sub onChatTimingChange()
 end sub
 
 sub startEmoteJob()
-    if m.disposed or not m.top.visible or m.top.channel = "" then return
+    if m.disposed or not m.processingEnabled or not m.top.visible or m.top.channel = "" then return
     if m.EmoteJob <> invalid then return
     if m.emoteChannel = m.top.channel and m.emoteChannelId = m.top.channel_id then return
     m.EmoteJob = createObject("roSGNode", "EmoteJob")
@@ -729,10 +812,10 @@ function chatTextNode(text as string, highlighted = false as boolean) as object
     return node
 end function
 
-function chatWordParts(word as string, highlighted as boolean, isNotice as boolean) as object
+function chatWordParts(word as string, highlighted as boolean, isNotice as boolean, emoteCache as dynamic) as object
     ' Provider names are matched as whole words, before any Unicode splitting.
-    if not isNotice and m.global.emoteCache.doesExist(word)
-        uri = m.global.emoteCache[word]
+    if not isNotice and emoteCache.doesExist(word)
+        uri = emoteCache[word]
         if m.failedChatImages.doesExist(uri) then return [chatTextNode(word, highlighted)]
         return [buildEmote(uri, word)]
     end if
@@ -820,8 +903,50 @@ function buildChatGif(attachment as object) as object
     return wrapper
 end function
 
+' Keep code-point boundaries across native strings and UTF-16 simulators.
+function wrapChatTextNode(part as object, lineWidth as float) as object
+    positions = [0]
+    for each character in emojiCharacters(part.text)
+        positions.push(positions.peek() + character.len())
+    end for
+    runs = []
+    start = 0
+    while start < positions.count() - 1
+        label = chatTextNode("")
+        label.color = part.color
+        remaining = positions.count() - 1 - start
+        low = 1
+        high = 1
+        ' Find a nearby width bound before measuring longer prefixes.
+        while high < remaining
+            label.text = part.text.mid(positions[start], positions[start + high] - positions[start])
+            if label.localBoundingRect().width > lineWidth then exit while
+            low = high
+            high *= 2
+            if high > remaining then high = remaining
+        end while
+        best = 1
+        while low <= high
+            count = int((low + high) / 2)
+            label.text = part.text.mid(positions[start], positions[start + count] - positions[start])
+            if label.localBoundingRect().width <= lineWidth
+                best = count
+                low = count + 1
+            else
+                high = count - 1
+            end if
+        end while
+        label.text = part.text.mid(positions[start], positions[start + best] - positions[start])
+        runs.push(label)
+        start += best
+    end while
+    return runs
+end function
+
 function buildMessage(message, x_translation, isNotice = false, availableWidth = -1 as float, attachments = invalid as dynamic)
     if GetInterface(attachments, "ifArray") = invalid then attachments = []
+    emoteCache = invalid
+    if not isNotice then emoteCache = m.global.emoteCache
     message_group = createObject("roSGNode", "Group")
     message_group.addFields({ chatMessageText: message, chatMessageX: x_translation, chatNotice: isNotice, chatMessageWidth: availableWidth, chatAttachments: attachments })
     x = x_translation
@@ -840,7 +965,7 @@ function buildMessage(message, x_translation, isNotice = false, availableWidth =
         if unit.gif <> invalid
             parts = [buildChatGif(unit.gif)]
         else
-            parts = chatWordParts(word, highlighted, isNotice)
+            parts = chatWordParts(word, highlighted, isNotice, emoteCache)
         end if
         width = 0
         for each part in parts
@@ -855,11 +980,7 @@ function buildMessage(message, x_translation, isNotice = false, availableWidth =
         nodes = []
         for each part in parts
             if part.subtype() = "SimpleLabel" and part.localBoundingRect().width > lineWidth
-                for each char in emojiCharacters(part.text)
-                    character = chatTextNode(char)
-                    character.color = part.color
-                    nodes.push(character)
-                end for
+                nodes.append(wrapChatTextNode(part, lineWidth))
             else
                 nodes.push(part)
             end if
@@ -965,13 +1086,17 @@ sub onNewCommentObj(event = invalid as dynamic)
     if not currentChatEvent(event) then return
     chat = m.chat
     chat.readyForNextComment = false
+    m.renderWorkClock.mark()
     try
         renderComment()
     catch e
         ' A malformed message or unavailable font must not stall every subsequent message.
     end try
     if currentChatEvent(event)
-        if chat.isSameNode(m.chat) then chat.readyForNextComment = true
+        if chat.isSameNode(m.chat)
+            recordChatRenderWork(m.renderWorkClock.totalMilliseconds())
+            chat.readyForNextComment = true
+        end if
     end if
 end sub
 

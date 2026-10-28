@@ -19,6 +19,9 @@ sub main()
     seed(false)
     testFloatingFocus(scene)
     seed(false)
+    seed(true)
+    testStreamGrid(scene)
+    seed(false)
     testProxy(scene)
     testProxyTask()
     seed(true)
@@ -131,7 +134,18 @@ sub testRemoteSettings(scene as object)
     remote("back")
     check(s.menu.isInFocusChain() and not page.backPressed, "real remote Back returns options to native settings list")
     remote("back")
-    check(page.backPressed, "second real remote Back emits root-page navigation")
+    check(not page.backPressed and inspect(page).levels = 1 and inspect(page).menu.itemFocused = 1, "second real remote Back restores the Playback panel selection")
+    remote("back")
+    check(page.backPressed, "third real remote Back emits root-page navigation")
+    page.backPressed = false
+    page.callFunc("fixtureFocus", 2)
+    remote("ok")
+    check(inspect(page).levels = 2 and inspect(page).menu.itemFocused = 0, "real remote OK opens Chat at its first setting")
+    remote("up")
+    check(inspect(page).levels = 1 and inspect(page).menu.itemFocused = 2 and not page.backPressed, "real remote Up from the first Chat setting restores its parent panel selection")
+    page.callFunc("fixtureFocus", 0)
+    remote("up")
+    check(page.backPressed, "real remote Up from the root first row still leaves Settings")
     disposePage(scene, page)
 
     seed(true)
@@ -230,9 +244,43 @@ end function
 sub focusSetting(page as object, name as string)
     s = inspect(page)
     s.menu.setFocus(true)
-    page.callFunc("fixtureFocus", settingIndex(page, name))
+    index = settingIndex(page, name)
+    if index >= 0
+        page.callFunc("fixtureFocus", index)
+        return
+    end if
+    while inspect(page).levels > 1
+        page.callFunc("fixtureKey", "back")
+    end while
+    path = settingPath(GetConfigTree(), name)
+    if path = invalid
+        check(false, "setting exists in grouped schema: " + name)
+        return
+    end if
+    for i = 0 to path.count() - 1
+        page.callFunc("fixtureFocus", path[i])
+        if i < path.count() - 1 then page.callFunc("fixtureSelect")
+    end for
 end sub
+
+function settingPath(items as object, name as string) as dynamic
+    for i = 0 to items.count() - 1
+        item = items[i]
+        if item.settingName = name then return [i]
+        if item.children <> invalid
+            path = settingPath(item.children, name)
+            if path <> invalid
+                result = [i]
+                result.append(path)
+                return result
+            end if
+        end if
+    end for
+    return invalid
+end function
+
 function settingValue(page as object, name as string) as string
+    if settingIndex(page, name) < 0 then focusSetting(page, name)
     return inspect(page).menu.content.getChild(settingIndex(page, name)).shortDescriptionLine1
 end function
 
@@ -364,11 +412,14 @@ sub testSettings(scene as object)
     m.global.fixtureRegistry = registry
     page = addPage(scene, "Settings")
     s = inspect(page)
-    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 22, "actual Settings uses native MarkupList with all schema rows")
+    check(s.menu.subtype() = "MarkupList" and s.menu.content.getChildCount() = 6, "actual Settings shows account and five grouped panels")
+    check(page.findNode("sectionTitle").text = "Settings", "root Settings identifies its location")
     check(m.global.fixtureWrites = 0 and m.global.fixtureDeletes = 0, "opening Settings displays defaults without any storage writes")
     check(settingValue(page, "ChatFontSize") = "Large (16)", "new-install chat display defaults to authorized 16")
+    check(settingValue(page, "chat.enabled") = "On", "chat processing stays enabled by default")
     check(settingValue(page, "analytics.enabled") = "Off" and settingValue(page, "playback.lowLatency") = "Off", "diagnostics and experimental latency remain default off")
     check(settingValue(page, "BetterTTVEmote") = "On" and settingValue(page, "proxy.url") = "Not set", "bool/text defaults have readable current values")
+    focusSetting(page, "logout")
     check(s.menu.content.getChild(0).title = "Account" and settingValue(page, "logout") = "Not signed in", "signed-out Account row remains truthful")
     page.callFunc("fixtureSelect")
     check(inspect(page).dialog = invalid and not page.finished, "signed-out Account row has no sign-out action")
@@ -394,6 +445,13 @@ sub testSettings(scene as object)
     focusSetting(page, "playback.video.quality")
     page.callFunc("fixtureSelect")
     check(inspect(page).options.itemFocused = 5 and inspect(page).options.checkedItem = 5, "reopening quality choices restores the saved resolution focus")
+    page.callFunc("fixtureKey", "back")
+    focusSetting(page, "chat.enabled")
+    page.callFunc("fixtureSelect")
+    inspect(page).options.checkedItem = 0
+    check(get_user_setting("chat.enabled") = "false" and settingValue(page, "chat.enabled") = "Off", "the chat processing switch saves an explicit Off")
+    inspect(page).options.checkedItem = 1
+    check(get_user_setting("chat.enabled") = "true", "chat processing can be re-enabled")
     page.callFunc("fixtureKey", "back")
     focusSetting(page, "chat.timing")
     s = inspect(page)
@@ -436,11 +494,18 @@ sub testSettings(scene as object)
     check(settingValue(page, "proxy.builtin") = "Off" and inspect(page).options.checkedItem = 0, "existing community splitter Off preference is retained")
     set_user_setting("proxy.builtin", "true")
     check(page.findNode("supportQrPoster") = invalid, "donation QR poster is absent from the actual Settings page")
-    section = { children: [{ title: "Nested", settingName: "fixture.nested", type: "bool", default: "false" }] }
+    focusSetting(page, "logout")
+    page.callFunc("fixtureFocus", 2)
+    check(inspect(page).menu.content.getChild(2).id = "chat" and inspect(page).menu.content.getChild(2).shortDescriptionLine1 = "Open", "Chat is a root panel with an Open action")
+    page.callFunc("fixtureSelect")
+    check(inspect(page).levels = 2 and inspect(page).menu.itemFocused = 0 and inspect(page).menu.content.getChildCount() = 9 and page.findNode("sectionTitle").text = "Settings / Chat", "Chat opens its nine settings at the first row with a breadcrumb")
+    page.callFunc("fixtureKey", "back")
+    check(inspect(page).levels = 1 and inspect(page).menu.itemFocused = 2 and page.findNode("sectionTitle").text = "Settings" and not page.backPressed, "Back restores Chat panel selection before leaving Settings")
+    section = { title: "Nested", children: [{ title: "Nested", settingName: "fixture.nested", type: "bool", default: "false" }] }
     page.callFunc("fixtureHierarchy", section)
     check(inspect(page).levels = 2 and inspect(page).menu.content.getChildCount() = 1, "actual LoadMenu supports retained hierarchy")
     page.callFunc("fixtureKey", "back")
-    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 22 and not page.backPressed, "Back restores parent settings before page back")
+    check(inspect(page).levels = 1 and inspect(page).menu.content.getChildCount() = 6 and not page.backPressed, "Back restores parent settings before page back")
     page.callFunc("fixtureKey", "back")
     check(page.backPressed, "Back at root emits page back")
     page.backPressed = false
@@ -560,6 +625,7 @@ sub testFloatingFocus(scene as object)
     scene.callFunc("fixtureOpen", "Settings")
     settings = scene.callFunc("fixtureRead").active
     focusSetting(settings, "ui.floatingFocus")
+    check(inspect(settings).levels = 2 and inspect(settings).menu.content.getChildCount() = 4 and settings.findNode("sectionTitle").text = "Settings / Browsing", "floating focus remains available inside the grouped Browsing panel")
     check(settingValue(settings, "ui.floatingFocus") = "Off" and inspect(settings).options.checkedItem = 0, "floating focus defaults to Off in actual Settings")
     settings.callFunc("fixtureSelect")
     inspect(settings).options.checkedItem = 1
@@ -589,6 +655,64 @@ sub testFloatingFocus(scene as object)
         check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "turning floating focus Off restores existing content focus: " + page.name)
         check(row.itemSize[0] = page.fixedWidth and row.itemSize[1] = 295, "fixed focus preserves original XML geometry: " + page.name)
     end for
+    scene.callFunc("fixtureCleanup")
+end sub
+
+sub testStreamGrid(scene as object)
+    print "SECTION Stream grid"
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.gridDensity")
+    check(settingValue(settings, "ui.gridDensity") = "Comfortable" and inspect(settings).options.checkedItem = 0, "stream grid defaults to the comfortable layout")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 1
+    check(get_user_setting("ui.gridDensity") = "compact", "actual Settings observer saves the compact grid choice")
+    focusSetting(settings, "ui.floatingFocus")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 1
+    streams = []
+    edges = []
+    for index = 0 to 8
+        streams.push({ contentType: "LIVE", streamerLogin: "fixture-" + index.toStr(), contentTitle: "Fixture stream" })
+        edges.push({ node: { id: index.toStr(), broadcaster: { login: "fixture-" + index.toStr() } } })
+    end for
+    scene.callFunc("fixtureOpen", "Following")
+    following = scene.callFunc("fixtureRead").active
+    inspect(following).task.response = { liveFollows: streams, offlineFollows: [] }
+    rows = following.findNode("homeRowList")
+    check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 4 and rows.content.getChild(1).getChildCount() = 4 and rows.content.getChild(2).getChildCount() = 1, "actual Following chunks compact streams into four-column rows without losing the final item")
+    check(rows.rowItemSize[0][0] = 256 and rows.rowItemSize[0][1] = 144, "compact native rows use the shared 16:9 card size")
+    check(rows.rowFocusAnimationStyle = "floatingFocus" and rows.itemSize[0] = 1170, "compact Following preserves the saved floating focus and visible row width after content loads")
+    check(following.scale[0] = 1 and following.scale[1] = 1, "pages retain native logical geometry instead of stretching rendered text")
+    scene.callFunc("fixtureOpen", "GamePage")
+    directory = scene.callFunc("fixtureRead").active
+    content = createObject("roSGNode", "TwitchContentNode")
+    content.gameName = "Fixture Game"
+    directory.contentRequested = content
+    inspect(directory).task.response = { edges: edges }
+    rows = directory.findNode("homeRowList")
+    check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 4 and rows.content.getChild(1).getChildCount() = 4 and rows.content.getChild(2).getChildCount() = 1, "actual category directory preserves all compact streams in four-column rows")
+    check(rows.rowItemSize[0][0] = 256 and rows.rowItemSize[0][1] = 144, "compact directory rows match the compact card geometry")
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.gridDensity")
+    check(settingValue(settings, "ui.gridDensity") = "Compact" and inspect(settings).options.checkedItem = 1, "reopening Settings restores the saved compact grid")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 0
+    scene.callFunc("fixtureOpen", "Following")
+    following = scene.callFunc("fixtureRead").active
+    inspect(following).task.response = { liveFollows: streams, offlineFollows: [] }
+    rows = following.findNode("homeRowList")
+    check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 3 and rows.content.getChild(2).getChildCount() = 3, "comfortable mode restores three-column rows")
+    check(rows.rowItemSize[0][0] = 320 and rows.rowItemSize[0][1] = 180, "comfortable cards preserve the existing dimensions")
+    check(rows.rowFocusAnimationStyle = "floatingFocus" and rows.itemSize[0] = 1170, "changing grid density preserves the saved floating focus")
+    scene.callFunc("fixtureOpen", "GamePage")
+    directory = scene.callFunc("fixtureRead").active
+    directory.contentRequested = content
+    inspect(directory).task.response = { edges: edges }
+    rows = directory.findNode("homeRowList")
+    check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 3 and rows.content.getChild(2).getChildCount() = 3, "comfortable category directories restore three-column rows")
+    check(rows.rowItemSize[0][0] = 320 and rows.rowItemSize[0][1] = 180, "comfortable category directories preserve the existing card geometry")
     scene.callFunc("fixtureCleanup")
 end sub
 

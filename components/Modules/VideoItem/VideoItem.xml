@@ -15,6 +15,7 @@
     </interface>
 
     <script type="text/brightscript" uri="VideoItem.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/contentBuilder.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/config.brs" />
     <children>
         <!-- Focus lift: a purple slab stays behind the thumbnail, offset down

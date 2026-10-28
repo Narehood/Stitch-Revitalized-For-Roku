@@ -202,6 +202,15 @@ sub main()
     check(textOf(group) = "ordinary words " + string(70, "x") + " tail ", "wrapping preserves ASCII text and spaces")
     chat.callFunc("fixturePrune", group)
 
+    chat.width = 275
+    state = chat.callFunc("fixtureState")
+    longWord = string(256, "W")
+    group = chat.callFunc("fixtureBuild", longWord)
+    print "STITCH_CHAT_LONGWORD_NODES:"; group.getChildCount()
+    check(textOf(group) = longWord + " " and inBounds(group, state), "long-word line runs preserve every character and stay within chat bounds")
+    check(group.getChildCount() < 32, "long words use line runs instead of hundreds of individual character nodes")
+    chat.callFunc("fixturePrune", group)
+
     ' A native emote after a non-BMP character must be cached under its entire
     ' token, not a UTF-16 slice beginning at the preceding space.
     chat.width = 275
@@ -279,8 +288,21 @@ sub testEmojiLabel(heart as string, face as string)
     if parts.count() = 2
         poster = parts[1]
         check(poster.uri = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/72x72/2764.png", "EmojiLabel shares corrected VS16 URI normalization")
+        label.maxWidth = 20
+        label.repeatCount = -1
+        label.color = "0xFFFFFFFF"
+        check(label.callFunc("fixtureScrollState").pending, "a style update preserves a pending title marquee")
+        label.callFunc("fixtureScrollStart")
+        check(label.callFunc("fixtureScrollState").scrolling, "the title is scrolling before the late emoji failure")
         label.callFunc("fixtureImageStatus", poster, "failed")
         check(textOf(label) = "love <3", "EmojiLabel image decode failure gets a supported text fallback")
+        state = label.callFunc("fixtureScrollState")
+        check(state.pending and not state.scrolling, "a late emoji fallback restarts the title with a reading pause")
+        label.callFunc("fixtureScrollStart")
+        state = label.callFunc("fixtureScrollState")
+        distance = label.width - label.maxWidth
+        check(state.target = 0 - distance and distance / state.duration <= 40 and state.cycleDuration = state.duration + 1, "the restarted marquee uses only overflow at readable speed after image fallback")
+        label.repeatCount = 0
     end if
     label.text = face + face
     parts = label.callFunc("fixtureParts")

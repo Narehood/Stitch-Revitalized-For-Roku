@@ -236,12 +236,16 @@ test('Settings preserves retained storage contracts and excludes the removed don
     // Explicit stable schema contract, independent of Git or a second copy of
     // the current schema. Copy and ordering can evolve without changing ids.
     const before = JSON.parse(await fixture('original-setting-contracts.json'));
-    const after = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const schema = JSON.parse(await fs.readFile(path.join(root, 'settings/settings.json'), 'utf8'));
+    const leaves = items => items.flatMap(item => item.children ? leaves(item.children) : [item]);
+    const after = leaves(schema);
+    assert.deepEqual(schema.slice(1).map(item => item.id), ['playback', 'chat', 'emotes', 'browsing', 'advanced']);
+    assert.equal(schema[0].settingName, 'logout');
     const map = new Map(after.map(setting => [setting.settingName, setting]));
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before.filter(setting => setting.settingName !== 'support');
     assert.equal(retained.length, 12);
-    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ui.floatingFocus'];
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ui.gridDensity', 'chat.enabled', 'ui.floatingFocus'];
     assert.equal(after.length, retained.length + additions.length);
     assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.has('support'), false, 'donation action is removed');

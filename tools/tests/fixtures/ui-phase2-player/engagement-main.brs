@@ -12,6 +12,28 @@ sub main()
     chat = player.callFunc("fixtureEngagement").chat
     check(not chat.forceLive and not chat.visible and countChatWorkers(chat) = 0, "missing chat preferences default to Sync and hidden with no chat or emote job")
     closePlayer(player)
+    set_user_setting("chat.enabled", "false")
+    set_user_setting("ChatOption", "true")
+    set_user_setting("chat.hypeTrain", "true")
+    set_user_setting("chat.pinnedMessages", "true")
+    player = openPlayer("LIVE")
+    contentTask(player).response = playable("720p60")
+    video = waitVideo(player, invalid)
+    current = player.callFunc("fixtureEngagement")
+    check(current.chat.visible and countChatWorkers(current.chat) = 0 and current.chat.findNode("chatStatus").text = "Chat is disabled in Settings.", "disabled startup chat opens only its notice")
+    check(current.worker = invalid, "disabled processing suppresses Hype Train and pinned-message polling")
+    set_user_setting("playback.watchCredit", "true")
+    player.callFunc("fixtureResume", 0)
+    video = waitVideo(player, video)
+    current = player.callFunc("fixtureEngagement")
+    check(current.worker <> invalid and current.worker.watchEnabled and not current.worker.hypeEnabled and not current.worker.pinsEnabled, "disabled chat preserves independently enabled watch credit without chat-event polling")
+    closePlayer(player)
+    set_user_setting("chat.enabled", "true")
+    set_user_setting("ChatOption", "false")
+    set_user_setting("chat.hypeTrain", "false")
+    set_user_setting("chat.pinnedMessages", "false")
+    set_user_setting("playback.watchCredit", "false")
+    checkChatPerformancePause()
 
     for each timing in ["live", "sync"]
         set_user_setting("chat.timing", timing)
@@ -219,3 +241,62 @@ function countChatWorkers(chat as object) as integer
     end for
     return count
 end function
+
+sub checkChatPerformancePause()
+    set_user_setting("ChatOption", "true")
+    set_user_setting("chat.hypeTrain", "true")
+    set_user_setting("chat.pinnedMessages", "true")
+    set_user_setting("playback.watchCredit", "true")
+    for each reason in ["buffer_timeout", "source_transition", "stall"]
+        player = openPlayer("LIVE")
+        contentTask(player).response = playable("1080p60")
+        video = waitVideo(player, invalid)
+        current = player.callFunc("fixtureEngagement")
+        chat = current.chat
+        job = invalid
+        for each child in chat.getChildren(-1, 0)
+            if child.subtype() = "ChatJob" then job = child
+        end for
+        check(job <> invalid and current.worker.watchEnabled and current.worker.hypeEnabled and current.worker.pinsEnabled, "chat and independent watch reporting start before recovery: " + reason)
+        if job <> invalid
+            job.connectionState = "connected"
+            busyMs = 1500
+            if reason = "buffer_timeout" then busyMs = 20
+            job.workload = { observedAt: createObject("roDateTime").asSeconds(), windowMs: 5000, busyMs: busyMs, highWindows: 2 }
+        end if
+        player.callFunc("fixtureRecovery", reason)
+        current = player.callFunc("fixtureEngagement")
+        if reason <> "stall"
+            check(not current.autoPaused and not chat.pausedForPerformance and countChatWorkers(chat) = 2, "ordinary buffering or a source transition leaves chat running: " + reason)
+        else
+            check(current.autoPaused and chat.pausedForPerformance and countChatWorkers(chat) = 0, "accepted stall with fresh sustained chat overload latches the session pause")
+            check(current.worker <> invalid and current.worker.watchEnabled and not current.worker.hypeEnabled and not current.worker.pinsEnabled, "automatic pause keeps watch reporting and suppresses both chat metadata polls")
+            check(chat.findNode("chatStatus").text = "Chat is too fast for this TV. Chat is paused for this stream.", "automatic pause explains the stopped chat")
+            player.callFunc("fixtureResume", 0)
+            video = waitVideo(player, video)
+            current = player.callFunc("fixtureEngagement")
+            check(current.autoPaused and current.chat.pausedForPerformance and countChatWorkers(current.chat) = 0, "quality wrapper replacement cannot restart paused chat")
+            sameChannel = request("LIVE")
+            sameChannel.streamerLogin = ucase(sameChannel.streamerLogin)
+            player.contentRequested = sameChannel
+            contentTask(player).response = playable("720p60")
+            video = waitVideo(player, video)
+            current = player.callFunc("fixtureEngagement")
+            check(current.autoPaused and current.chat.pausedForPerformance and countChatWorkers(current.chat) = 0, "same-channel content rebuild preserves the pause regardless of login case")
+            replacement = request("LIVE")
+            replacement.streamerLogin = "anotherchannel"
+            replacement.streamerId = "43"
+            player.contentRequested = replacement
+            contentTask(player).response = playable("1080p60")
+            video = waitVideo(player, video)
+            current = player.callFunc("fixtureEngagement")
+            check(not current.autoPaused and not current.chat.pausedForPerformance and countChatWorkers(current.chat) = 2, "a new channel starts a fresh chat session")
+            check(current.worker.watchEnabled and current.worker.hypeEnabled and current.worker.pinsEnabled, "new channel restores enabled chat polling without changing watch preference")
+        end if
+        closePlayer(player)
+    end for
+    set_user_setting("ChatOption", "false")
+    set_user_setting("chat.hypeTrain", "false")
+    set_user_setting("chat.pinnedMessages", "false")
+    set_user_setting("playback.watchCredit", "false")
+end sub

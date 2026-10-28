@@ -156,6 +156,50 @@ async function withFixture(run) {
     }
 }
 
+test('demux regex reuse preserves alternating asset and session validation', async () => {
+    await withFixture(async ({ dir, sources, marker, execute }) => {
+        const common = sources.get('source/utils/rokuDemuxCommon.brs').toString();
+        const constructors = /\bCreateObject\(\s*"roRegex",\s*/gi;
+        assert.equal([...common.matchAll(constructors)].length, 2);
+        await fs.writeFile(path.join(dir, 'rokuDemuxCommon.brs'), common.replace(constructors, 'fixtureRegex('));
+        await fs.writeFile(path.join(dir, 'main.brs'), `sub main()
+    m.failures = 0
+    getGlobalAA().regexBuilds = 0
+    session = string(32, "a")
+    for index = 1 to 25
+        valid = "live-" + session + "-" + index.toStr()
+        check(loopbackAssetId(valid), "valid scoped asset")
+        check(not loopbackAssetId("live-" + session + "-0"), "zero asset rejected after warmup")
+        check(not loopbackAssetId("live-" + session + "-4294967296"), "numeric overflow rejected after warmup")
+        check(not loopbackAssetId("live-" + string(32, "A") + "-1"), "uppercase asset rejected after warmup")
+        check(loopbackAssetSession(valid) = session, "session extraction remains validated")
+        check(loopbackSteadySessionIdValid(session), "valid session")
+        check(not loopbackSteadySessionIdValid(string(32, "A")), "uppercase session rejected after warmup")
+        check(not loopbackSteadySessionIdValid(session + "a"), "overlong session rejected after warmup")
+    end for
+    check(loopbackAssetId("live-256") and not loopbackAssetId("live-257"), "finite asset bounds retained")
+    check(loopbackAssetId("live-" + session + "-4294967295"), "maximum identity retained")
+    check(getGlobalAA().regexBuilds = 2, "one real regex constructor per pattern in the execution context")
+    if m.failures = 0 then print "STITCH_REGEX_CACHE_PASS:${marker}"
+end sub
+sub check(value as boolean, label as string)
+    if not value
+        m.failures++
+        print "STITCH_REGEX_CACHE_FAIL:"; label
+    end if
+end sub
+function fixtureRegex(pattern as string, flags as string) as object
+    getGlobalAA().regexBuilds++
+    return CreateObject("roRegex", pattern, flags)
+end function
+`);
+        const result = await execute();
+        requireExecution(result);
+        assert.doesNotMatch(result.output, /STITCH_REGEX_CACHE_FAIL:/, result.output.slice(-4000));
+        assert.equal(result.output.split(`STITCH_REGEX_CACHE_PASS:${marker}`).length - 1, 1);
+    });
+});
+
 test('actual Bulk/Core bytes, rolling generations, cache leases, continuity and monotonic quotas', { timeout: 90000 }, async t => {
     await withFixture(async ({ marker, execute }) => {
         const result = await execute();
