@@ -461,7 +461,7 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
-    if key = "back" or key = "left"
+    if key = "back" or key = "left" or key = "up"
         if m.optionList.isInFocusChain()
             m.settingsMenu.setFocus(true)
             return true
@@ -471,16 +471,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
             return true
         end if
     end if
-    if key = "back"
+    if key = "back" or key = "up"
         m.top.backPressed = true
         return true
     end if
     if key = "right" and m.settingsMenu.isInFocusChain()
         settingSelected()
-        return true
-    end if
-    if key = "up"
-        m.top.backPressed = true
         return true
     end if
     return false

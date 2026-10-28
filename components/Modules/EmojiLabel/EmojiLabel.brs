@@ -138,21 +138,10 @@ sub updateComponents()
         if width = 0 or boundingWidth > width
             width = boundingWidth
         end if
-        innerWidth = 0 - width
         m.top.width = width * 1.1
         if m.top.maxWidth = 0
             m.top.maxWidth = m.top.width
         end if
-        if m.animation <> invalid
-            m.animation.duration = (m.top.width / m.top.maxWidth)
-        end if
-        if m.timer <> invalid
-            m.timer.duration = (m.top.width / m.top.maxWidth)
-        end if
-        if m.vector <> invalid
-            m.vector.keyValue = [[0, 0], [innerWidth, 0]]
-        end if
-
         if m.top.emojiSize > height
             height = m.top.emojiSize
         end if
@@ -183,6 +172,9 @@ sub updateComponents()
         }
         ' m.top.translation = [m.top.translation[0], m.top.translation[1] + (height / 2)]
         ' m.components.translation = [xTranslation, height]
+        if m.scrollStartPending = true or (m.animation <> invalid and m.animation.control = "start")
+            doScroll()
+        end if
     end if
 end sub
 

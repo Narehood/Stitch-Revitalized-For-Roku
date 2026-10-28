@@ -293,6 +293,21 @@ function buildNode(name)
 
     if newNode = invalid then return invalid
 
+    ' Content pages are rebuilt when leaving Settings, so the choice applies immediately.
+    rowList = newNode.findNode("homeRowList")
+    if rowList = invalid then rowList = newNode.findNode("browseRowList")
+    if rowList <> invalid and get_user_setting("ui.floatingFocus", "false") = "true"
+        ' Floating focus must scroll before a card leaves the HD picture.
+        rowX = 0
+        parentNode = rowList
+        while parentNode <> invalid
+            rowX += parentNode.translation[0]
+            parentNode = parentNode.getParent()
+        end while
+        rowList.itemSize = [1280 - rowX, rowList.itemSize[1]]
+        rowList.rowFocusAnimationStyle = "floatingFocus"
+    end if
+
     ' Shared observer wiring
     newNode.observeField("backPressed", "onBackPressed")
     newNode.observeField("contentSelected", "onContentSelected")

@@ -288,8 +288,21 @@ sub testEmojiLabel(heart as string, face as string)
     if parts.count() = 2
         poster = parts[1]
         check(poster.uri = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/72x72/2764.png", "EmojiLabel shares corrected VS16 URI normalization")
+        label.maxWidth = 20
+        label.repeatCount = -1
+        label.color = "0xFFFFFFFF"
+        check(label.callFunc("fixtureScrollState").pending, "a style update preserves a pending title marquee")
+        label.callFunc("fixtureScrollStart")
+        check(label.callFunc("fixtureScrollState").scrolling, "the title is scrolling before the late emoji failure")
         label.callFunc("fixtureImageStatus", poster, "failed")
         check(textOf(label) = "love <3", "EmojiLabel image decode failure gets a supported text fallback")
+        state = label.callFunc("fixtureScrollState")
+        check(state.pending and not state.scrolling, "a late emoji fallback restarts the title with a reading pause")
+        label.callFunc("fixtureScrollStart")
+        state = label.callFunc("fixtureScrollState")
+        distance = label.width - label.maxWidth
+        check(state.target = 0 - distance and distance / state.duration <= 40 and state.cycleDuration = state.duration + 1, "the restarted marquee uses only overflow at readable speed after image fallback")
+        label.repeatCount = 0
     end if
     label.text = face + face
     parts = label.callFunc("fixtureParts")

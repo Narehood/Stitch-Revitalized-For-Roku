@@ -17,6 +17,8 @@ sub main()
     seed(false)
     testSettings(scene)
     seed(false)
+    testFloatingFocus(scene)
+    seed(false)
     seed(true)
     testStreamGrid(scene)
     seed(false)
@@ -135,6 +137,15 @@ sub testRemoteSettings(scene as object)
     check(not page.backPressed and inspect(page).levels = 1 and inspect(page).menu.itemFocused = 1, "second real remote Back restores the Playback panel selection")
     remote("back")
     check(page.backPressed, "third real remote Back emits root-page navigation")
+    page.backPressed = false
+    page.callFunc("fixtureFocus", 2)
+    remote("ok")
+    check(inspect(page).levels = 2 and inspect(page).menu.itemFocused = 0, "real remote OK opens Chat at its first setting")
+    remote("up")
+    check(inspect(page).levels = 1 and inspect(page).menu.itemFocused = 2 and not page.backPressed, "real remote Up from the first Chat setting restores its parent panel selection")
+    page.callFunc("fixtureFocus", 0)
+    remote("up")
+    check(page.backPressed, "real remote Up from the root first row still leaves Settings")
     disposePage(scene, page)
 
     seed(true)
@@ -606,6 +617,47 @@ sub testProxy(scene as object)
     scene.removeChild(page)
 end sub
 
+sub testFloatingFocus(scene as object)
+    print "SECTION Floating focus"
+    scene.callFunc("fixtureOpen", "Following")
+    row = scene.callFunc("fixtureRead").active.findNode("homeRowList")
+    check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new installs keep existing fixed content focus")
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.floatingFocus")
+    check(inspect(settings).levels = 2 and inspect(settings).menu.content.getChildCount() = 4 and settings.findNode("sectionTitle").text = "Settings / Browsing", "floating focus remains available inside the grouped Browsing panel")
+    check(settingValue(settings, "ui.floatingFocus") = "Off" and inspect(settings).options.checkedItem = 0, "floating focus defaults to Off in actual Settings")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 1
+    check(get_user_setting("ui.floatingFocus") = "true" and settingValue(settings, "ui.floatingFocus") = "On", "actual option observer persists floating focus opt-in")
+    pages = [
+        { name: "Following", rowId: "homeRowList", width: 1170, fixedWidth: 1280 },
+        { name: "Browse", rowId: "browseRowList", width: 1170, fixedWidth: 1280 },
+        { name: "Search", rowId: "homeRowList", width: 780, fixedWidth: 1280 },
+        { name: "ChannelPage", rowId: "homeRowList", width: 1170, fixedWidth: 1980 },
+        { name: "GamePage", rowId: "homeRowList", width: 1170, fixedWidth: 1280 }
+    ]
+    for each page in pages
+        scene.callFunc("fixtureOpen", page.name)
+        row = scene.callFunc("fixtureRead").active.findNode(page.rowId)
+        check(row.rowFocusAnimationStyle = "floatingFocus" and row.vertFocusAnimationStyle = "fixedFocus", "new content page floats horizontally and keeps vertical focus: " + page.name)
+        check(row.itemSize[0] = page.width and row.itemSize[1] = 295, "floating rows fit the visible remainder without changing row height: " + page.name)
+    end for
+    scene.callFunc("fixtureOpen", "Settings")
+    settings = scene.callFunc("fixtureRead").active
+    focusSetting(settings, "ui.floatingFocus")
+    check(settingValue(settings, "ui.floatingFocus") = "On" and inspect(settings).options.checkedItem = 1, "reopened Settings restores floating focus preference")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 0
+    for each page in pages
+        scene.callFunc("fixtureOpen", page.name)
+        row = scene.callFunc("fixtureRead").active.findNode(page.rowId)
+        check(row.rowFocusAnimationStyle = "fixedFocus" and row.vertFocusAnimationStyle = "fixedFocus", "turning floating focus Off restores existing content focus: " + page.name)
+        check(row.itemSize[0] = page.fixedWidth and row.itemSize[1] = 295, "fixed focus preserves original XML geometry: " + page.name)
+    end for
+    scene.callFunc("fixtureCleanup")
+end sub
+
 sub testStreamGrid(scene as object)
     print "SECTION Stream grid"
     scene.callFunc("fixtureOpen", "Settings")
@@ -615,6 +667,9 @@ sub testStreamGrid(scene as object)
     settings.callFunc("fixtureSelect")
     inspect(settings).options.checkedItem = 1
     check(get_user_setting("ui.gridDensity") = "compact", "actual Settings observer saves the compact grid choice")
+    focusSetting(settings, "ui.floatingFocus")
+    settings.callFunc("fixtureSelect")
+    inspect(settings).options.checkedItem = 1
     streams = []
     edges = []
     for index = 0 to 8
@@ -627,6 +682,7 @@ sub testStreamGrid(scene as object)
     rows = following.findNode("homeRowList")
     check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 4 and rows.content.getChild(1).getChildCount() = 4 and rows.content.getChild(2).getChildCount() = 1, "actual Following chunks compact streams into four-column rows without losing the final item")
     check(rows.rowItemSize[0][0] = 256 and rows.rowItemSize[0][1] = 144, "compact native rows use the shared 16:9 card size")
+    check(rows.rowFocusAnimationStyle = "floatingFocus" and rows.itemSize[0] = 1170, "compact Following preserves the saved floating focus and visible row width after content loads")
     check(following.scale[0] = 1 and following.scale[1] = 1, "pages retain native logical geometry instead of stretching rendered text")
     scene.callFunc("fixtureOpen", "GamePage")
     directory = scene.callFunc("fixtureRead").active
@@ -649,6 +705,7 @@ sub testStreamGrid(scene as object)
     rows = following.findNode("homeRowList")
     check(rows.content.getChildCount() = 3 and rows.content.getChild(0).getChildCount() = 3 and rows.content.getChild(2).getChildCount() = 3, "comfortable mode restores three-column rows")
     check(rows.rowItemSize[0][0] = 320 and rows.rowItemSize[0][1] = 180, "comfortable cards preserve the existing dimensions")
+    check(rows.rowFocusAnimationStyle = "floatingFocus" and rows.itemSize[0] = 1170, "changing grid density preserves the saved floating focus")
     scene.callFunc("fixtureOpen", "GamePage")
     directory = scene.callFunc("fixtureRead").active
     directory.contentRequested = content

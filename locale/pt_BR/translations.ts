@@ -913,6 +913,14 @@
             <translation>Mostra emotes do FrankerFaceZ no chat ao vivo.</translation>
         </message>
         <message>
+            <source>Floating focus</source>
+            <translation>Foco flutuante</translation>
+        </message>
+        <message>
+            <source>Move the highlight left and right across channel, video and category rows. Off keeps the highlight in its current fixed position.</source>
+            <translation>Mova o destaque para a esquerda e a direita nas linhas de canais, vídeos e categorias. Quando desativado, o destaque permanece na posição fixa atual.</translation>
+        </message>
+        <message>
             <source>Stream grid</source>
             <translation>Grade de transmissões</translation>
         </message>

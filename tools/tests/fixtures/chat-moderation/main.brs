@@ -245,8 +245,10 @@ sub checkDisabledChat(scene as object)
     settle(80)
     state = chat.callFunc("fixtureRead")
     check(not state.job and state.emoteJob = invalid and state.statusVisible and state.status = "Chat is disabled in Settings.", "disabled chat opens its notice without a connection or emote worker")
+    m.global.setField("emoteCache", { previousChannelOnly: "pkg:/images/iconLogin.png" })
     chat.channel_id = "43"
     chat.channel = "still-disabled"
+    check(m.global.emoteCache.count() = 0, "a channel change clears the previous channel's emotes even while chat processing is disabled")
     chat.visible = false
     chat.visible = true
     settle(80)
@@ -262,6 +264,8 @@ sub checkDisabledChat(scene as object)
     job = chat.callFunc("fixtureJob")
     emotes = chat.callFunc("fixtureRead").emoteJob
     check(emotes <> invalid, "enabling chat restores its emote loader")
+    check(not m.global.emoteCache.doesExist("previousChannelOnly"), "re-enabling chat cannot resolve an emote left by the previous channel")
+    m.global.setField("emoteCache", { currentChannelOnly: "pkg:/images/iconLogin.png" })
     set_user_setting("chat.enabled", "false")
     chat.visible = false
     chat.visible = true
@@ -273,6 +277,11 @@ sub checkDisabledChat(scene as object)
     settle(50)
     state = chat.callFunc("fixtureRead")
     check(rows(chat).count() = 0 and state.status = "Chat is disabled in Settings." and state.statusVisible, "old workers cannot replace the disabled notice or render late messages")
+    set_user_setting("chat.enabled", "true")
+    chat.visible = false
+    chat.visible = true
+    waitUntil(chat, "job", true, "same-channel chat can restart")
+    check(m.global.emoteCache.doesExist("currentChannelOnly"), "same-channel disable and re-enable retains its emote cache")
     chat.callFunc("onDestroy")
     scene.removeChild(chat)
     set_user_setting("chat.enabled", "true")

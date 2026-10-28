@@ -519,9 +519,9 @@ sub onEnterChannel()
     m.emoteChannelId = ""
     m.animatedEmotes = {}
     m.gifAnimationKeys = []
+    m.global.setField("emoteCache", {})
     if not refreshChatProcessing() then return
     if m.top.channel = "" then return
-    m.global.setField("emoteCache", {})
     if m.top.visible
         openChatAnimations()
         startChatJob()

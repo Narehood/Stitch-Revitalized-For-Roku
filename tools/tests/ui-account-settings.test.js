@@ -245,7 +245,7 @@ test('Settings preserves retained storage contracts and excludes the removed don
     assert.equal(before.length, 13, 'historical schema snapshot remains intact');
     const retained = before.filter(setting => setting.settingName !== 'support');
     assert.equal(retained.length, 12);
-    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ui.gridDensity', 'chat.enabled'];
+    const additions = ['playback.watchCredit', 'chat.hypeTrain', 'chat.pinnedMessages', 'proxy.builtin', 'chat.timing', 'chat.animatedEmotes', 'chat.layout', 'chat.overlayPosition', 'chat.overlayOpacity', 'ui.gridDensity', 'chat.enabled', 'ui.floatingFocus'];
     assert.equal(after.length, retained.length + additions.length);
     assert.equal(map.size, after.length, 'setting keys must be unique');
     assert.equal(map.has('support'), false, 'donation action is removed');
