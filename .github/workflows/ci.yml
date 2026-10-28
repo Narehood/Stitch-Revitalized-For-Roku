@@ -10,11 +10,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -33,7 +29,6 @@ jobs:
       - name: Create channel package
         run: npm run package
       - uses: actions/upload-artifact@v7
-        if: matrix.os == 'ubuntu-latest'
         with:
           name: roku-package
           path: out/Stitch-Revitalized-For-Roku.zip

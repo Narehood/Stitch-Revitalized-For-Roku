@@ -84,7 +84,7 @@ The release also retains the 3.0.0 modernization:
 - **Twitch-inspired native interface:** dark surfaces, purple focus, redesigned navigation and cards, clearer loading and error states, current-value Settings, and named player controls. Browsing, account, bookmarks, quality, chat and emote features are retained.
 - **Quality and 1440p:** decoder-aware quality filtering, corrected HEVC negotiation and Twitch request formatting, and manual qualities that stay available. 1440p, including 60 fps, is offered when the device can decode it.
 - **Clearer chat:** live connection status, bounded reconnection, readable name colors and preserved emotes. VODs and clips explain that chat replay is unavailable.
-- **Maintained tooling:** current Node/Python dependencies, Windows and Linux CI, a patched decoder dependency, explicit cleanup of tasks and observers, and diagnostics and experimental lower latency off by default.
+- **Maintained tooling:** current Node/Python dependencies, Linux CI, a patched decoder dependency, explicit cleanup of tasks and observers, and diagnostics and experimental lower latency off by default.
 
 ## Known limitations
 
@@ -107,7 +107,7 @@ npm run test:compile
 npm run package
 ```
 
-The channel package is `out/Stitch-Revitalized-For-Roku.zip`. `npm test` executes offline BrightScript fixtures and Node tooling regressions. `test:compile` packages the separate Rooibos device tests; it does not deploy them. CI runs these checks on Windows and Linux.
+The channel package is `out/Stitch-Revitalized-For-Roku.zip`. `npm test` executes offline BrightScript fixtures and Node tooling regressions. `test:compile` packages the separate Rooibos device tests; it does not deploy them. CI runs these checks on Ubuntu.
 
 For development, `npm run build` compiles without a package and `npm run watch` watches source changes. Run `npm run fmt` and `npm run fmt:check` before committing. Keep device credentials outside tracked files; `bsconfig.json.example` shows a local development override.
 
