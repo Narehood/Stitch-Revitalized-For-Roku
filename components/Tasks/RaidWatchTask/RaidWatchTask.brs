@@ -6,6 +6,8 @@ sub main()
     m.socket = invalid
     m.candidate = invalid
     m.transfer = invalid
+    m.port = CreateObject("roMessagePort")
+    m.top.ObserveField("stopRequested", m.port)
     try
         runRaidWatch()
     catch e
@@ -14,6 +16,7 @@ sub main()
     end try
     closeRaidSockets()
     if m.transfer <> invalid then m.transfer.AsyncCancel()
+    m.top.UnobserveField("stopRequested")
     m.top.control = "stop"
 end sub
 
@@ -53,11 +56,11 @@ sub runRaidWatch()
     m.token = get_user_setting("access_token", "")
     if m.top.account = "$default$" or not raidString(m.token, 2048) or not raidId(m.top.channelId) then return
     if not raidWatchCurrent() then return
-    m.port = CreateObject("roMessagePort")
     m.seen = []
+    m.terminal = false
     m.unsupported = false
-    failures = 0
-    while raidWatchCurrent() and failures < 3
+    retrySeconds = 1
+    while raidWatchCurrent()
         m.top.status = "connecting"
         m.socket = openRaidSocket("wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30")
         if m.unsupported
@@ -68,12 +71,13 @@ sub runRaidWatch()
         if m.socket <> invalid then runRaidSession()
         closeRaidSockets()
         if m.terminal then exit while
-        if lifetime.TotalMilliseconds() >= 60000 then failures = 0
-        failures++
+        if lifetime.TotalMilliseconds() >= 60000 then retrySeconds = 1
         delay = CreateObject("roTimespan")
-        while raidWatchCurrent() and delay.TotalMilliseconds() < failures * 1000
-            wait(100, m.port)
+        while raidWatchCurrent() and delay.TotalMilliseconds() < retrySeconds * 1000
+            wait(1000, m.port)
         end while
+        retrySeconds *= 2
+        if retrySeconds > 30 then retrySeconds = 30
     end while
     m.top.status = "unavailable"
 end sub

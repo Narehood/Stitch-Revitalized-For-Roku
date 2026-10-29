@@ -22,7 +22,9 @@ function raidNotification(message as dynamic, sourceId as string, subscriptionId
     if meta.message_type <> "notification" or meta.subscription_type <> "channel.raid" or meta.subscription_version <> "1" then return invalid
     if not raidString(meta.message_id) or not raidString(meta.message_timestamp) then return invalid
     eventTime = CreateObject("roDateTime")
-    eventTime.FromISO8601String(meta.message_timestamp)
+    eventTime.FromSeconds(0)
+    ' Twitch uses UTC nanoseconds; freshness only needs whole seconds in Roku's supported format.
+    eventTime.FromISO8601String(meta.message_timestamp.Left(19) + ".000")
     age = nowSeconds - eventTime.AsSeconds()
     if age < -30 or age > 120 then return invalid
     subscription = payload.subscription

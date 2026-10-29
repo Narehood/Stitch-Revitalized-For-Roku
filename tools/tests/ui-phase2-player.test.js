@@ -175,7 +175,7 @@ async function buildRetryPackage(dir, marker) {
     for (const file of ['GetTwitchContent.xml', 'GetTwitchContentBoundary.brs', 'TwitchApiTask.xml',
         'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml', 'TwitchEngagementTask.xml', 'RaidWatchTask.xml']) await addFile(dir, `components/${file}`, await fixture(file));
     await addComponent(dir, 'components/Scenes/VideoPlayer', 'VideoPlayer', `function fixtureRead() as object
-    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer, raidTask: m.raidTask, raidDialog: m.raidDialog, raidOffer: m.raidOffer, raidEndTimer: m.raidEndTimer, raidOfferTimer: m.raidOfferTimer }
+    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, reconnectTimer: m.reconnectTimer, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer, raidTask: m.raidTask, raidDialog: m.raidDialog, raidOffer: m.raidOffer, raidEndTimer: m.raidEndTimer, raidOfferTimer: m.raidOfferTimer, bufferTimer: m.bufferCheckTimer }
 end function
 sub fixtureResume(position as integer)
     m.resumePosition = position
@@ -196,6 +196,19 @@ function fixtureEngagement() as object
 end function
 sub fixtureRecovery(reason as string)
     beginLiveReconnect(reason)
+end sub
+sub fixtureRecoverNow()
+    doLiveReconnect()
+end sub
+sub fixtureRaidStartup(pending as boolean)
+    m.rokuSessionId = ""
+    if not pending then return
+    m.rokuSessionId = "controlled-startup"
+    m.playbackHasAdvanced = false
+    m.playbackInitTime = { TotalMilliseconds: function() as integer
+        return 10000
+    end function }
+    startBufferCheckTimer(15)
 end sub
 sub fixtureRaidOffer()
     tryRaidOffer()

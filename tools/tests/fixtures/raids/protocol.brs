@@ -4,6 +4,14 @@ sub main()
     frame = { metadata: { message_id: "event-1", message_timestamp: CreateObject("roDateTime").ToISOString(), message_type: "notification", subscription_type: "channel.raid", subscription_version: "1" }, payload: { subscription: { id: "subscription-1", status: "enabled", type: "channel.raid", version: "1", condition: { from_broadcaster_user_id: "123" } }, event: { from_broadcaster_user_id: "123", to_broadcaster_user_id: "456", to_broadcaster_user_login: "Destination", to_broadcaster_user_name: "Destination Name" } } }
     result = raidNotification(frame, "123", "subscription-1", now)
     check(result <> invalid and result.login = "destination" and result.id = "456" and result.name = "Destination Name", "outgoing raid identity")
+    timestamp = frame.metadata.message_timestamp
+    frame.metadata.message_timestamp = "2026-10-29T12:00:00.634234626Z"
+    eventTime = CreateObject("roDateTime")
+    eventTime.FromISO8601String("2026-10-29T12:00:00.000")
+    check(raidNotification(frame, "123", "subscription-1", eventTime.AsSeconds()) <> invalid, "literal Twitch nanosecond timestamp uses Roku's supported format")
+    check(raidNotification(frame, "123", "subscription-1", eventTime.AsSeconds() + 121) = invalid, "literal Twitch timestamp still rejects stale events")
+    check(raidNotification(frame, "123", "subscription-1", eventTime.AsSeconds() - 31) = invalid, "literal Twitch timestamp still rejects future events")
+    frame.metadata.message_timestamp = timestamp
     for each kind in ["session_welcome", "session_keepalive", "USERNOTICE", "session_reconnect", "revocation"]
         bad = ParseJson(FormatJson(frame))
         bad.metadata.message_type = kind
@@ -62,6 +70,12 @@ end sub
 
 sub testRaidTransport(frame as object)
     m.top = { account: "viewer", channelId: "123", stopRequested: false, raid: invalid }
+    m.top.ObserveField = sub(field as string, port as object)
+        m.observed = field
+    end sub
+    m.top.UnobserveField = sub(field as string)
+        m.unobserved = field
+    end sub
     m.mockAccount = "viewer"
     m.events = []
     state = { opens: 0, closed: [], posts: [], canceled: 0, tls: 0 }
@@ -77,7 +91,7 @@ sub testRaidTransport(frame as object)
     m.events.Push(raidFixtureEvent("ws", 2, 5, FormatJson(welcome)))
     frame.metadata.message_id = "second"
     m.events.Push(raidFixtureEvent("ws", 2, 5, FormatJson(frame)))
-    runRaidWatch()
+    raidWorkerMain()
     captured = GetGlobalAA().raidFixture
     check(captured.opens = 2 and captured.posts.Count() = 1, "migration opens replacement but never resubscribes")
     body = ParseJson(captured.posts[0].body)
@@ -86,6 +100,7 @@ sub testRaidTransport(frame as object)
     check(captured.tls = 6, "initial and migrating sockets and HTTP all enable both TLS checks")
     check(m.seen.Count() = 2 and m.top.raid.messageId = "second", "early notification, duplicate and migrated delivery execute real worker")
     check(captured.closed.Count() = 2, "migration and stop close both socket owners")
+    check(m.top.observed = "stopRequested" and m.top.unobserved = "stopRequested" and captured.canceled = 1 and m.top.control = "stop", "worker observes stop wakeup and releases HTTP before stopping itself")
 
     m.top.stopRequested = false
     m.events = [raidFixtureEvent("ws", 3, 5, FormatJson(welcome)), raidFixtureEvent("http", 99, 401, "unauthorized")]
@@ -95,6 +110,37 @@ sub testRaidTransport(frame as object)
     m.top.account = "$default$"
     runRaidWatch()
     check(GetGlobalAA().raidFixture.opens = 3, "signed-out worker never opens a connection")
+
+    m.top.account = "viewer"
+    m.top.stopRequested = false
+    m.Delete("terminal")
+    m.events = []
+    state = GetGlobalAA().raidFixture
+    state.failOpen = true
+    GetGlobalAA().raidFixture = state
+    runRaidWatch()
+    check(GetGlobalAA().raidFixture.opens = 4 and m.top.stopRequested and m.terminal = false, "failed first socket reaches cancellable retry wait with a Boolean terminal flag")
+
+    m.top.stopRequested = false
+    state = { opens: 0, closed: [], posts: [], canceled: 0, tls: 0, failOpens: 4, skipRetryWait: true }
+    GetGlobalAA().raidFixture = state
+    m.events = [raidFixtureEvent("ws", 5, 5, FormatJson(welcome))]
+    m.events.Push(raidFixtureEvent("http", 99, 202, "{""data"":[{""id"":""subscription-1""}]}"))
+    runRaidWatch()
+    captured = GetGlobalAA().raidFixture
+    check(captured.opens = 5 and captured.posts.Count() = 1, "four opening failures still reconnect and subscribe for the current live owner")
+end sub
+
+function raidFixtureRetryMilliseconds(clock as object) as integer
+    if GetGlobalAA().raidFixture.skipRetryWait = true then return 30000
+    return clock.TotalMilliseconds()
+end function
+
+' Model the documented native parser boundary; the simulator accepts extra formats.
+sub raidFixtureFromISO(date as object, text as string)
+    if CreateObject("roRegex", "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}$", "").IsMatch(text)
+        date.FromISO8601String(text)
+    end if
 end sub
 
 function raidFixtureWait(timeout as integer, port as object) as dynamic
@@ -141,6 +187,13 @@ function raidFixtureSocket() as object
     socket.id = state.opens
     socket.GetSocketId = socket.GetIdentity
     socket.Open = function(timeout as integer) as boolean
+        if GetGlobalAA().raidFixture.failOpen = true then return false
+        state = GetGlobalAA().raidFixture
+        if state.failOpens <> invalid and state.failOpens > 0
+            state.failOpens--
+            GetGlobalAA().raidFixture = state
+            return false
+        end if
         return true
     end function
     socket.Close = sub()

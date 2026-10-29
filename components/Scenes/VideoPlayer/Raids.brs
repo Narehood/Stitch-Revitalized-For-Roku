@@ -41,6 +41,7 @@ sub onOutgoingRaid(event as object)
         end if
     end if
     m.raidOffer = raid
+    cancelRaidRecovery()
     m.raidOfferClock = CreateObject("roTimespan")
     tryRaidOffer()
     if m.raidOffer <> invalid and m.raidDialog = invalid and m.raidOfferTimer = invalid
@@ -106,8 +107,15 @@ sub dismissRaidOffer()
     closeRaidDialog()
     clearRaidOffer()
     if m.disposed or m.isExiting then return
-    if m.video <> invalid then ended = ended or m.video.state = "finished"
-    if ended then requestBack()
+    if m.video <> invalid then ended = ended or m.video.state = "finished" or m.video.state = "error"
+    if ended
+        requestBack()
+    else
+        onVideoStateChange()
+        if nativeStartupPending() and m.bufferCheckTimer = invalid
+            startBufferCheckTimer(25 - m.playbackInitTime.TotalMilliseconds() / 1000.0)
+        end if
+    end if
 end sub
 
 sub joinOutgoingRaid()
@@ -167,14 +175,14 @@ sub stopRaidWatch()
     stopRaidEndWait()
     closeRaidDialog(false)
     clearRaidOffer()
-    if m.raidTask <> invalid then m.raidTask.stopRequested = true
-    m.raidTask = destroyTask(m.raidTask, "raid")
+    m.raidTask = destroyTask(m.raidTask, "raid", true)
 end sub
 
 function beginRaidEndWait() as boolean
     if not raidOwnerCurrent() then return false
-    if m.raidTask.status <> "listening" then return false
     if m.raidWaiting or m.raidOffer <> invalid then return true
+    if m.raidTask.status <> "listening" then return false
+    cancelRaidRecovery()
     m.raidWaiting = true
     m.raidEndTimer = createTimer(120, "onRaidEndTimeout")
     scene = m.top.GetScene()
@@ -193,6 +201,19 @@ function beginRaidEndWait() as boolean
     dialog.SetFocus(true)
     return true
 end function
+
+sub cancelRaidRecovery()
+    m.liveReconnect = invalid
+    for each field in ["retryTimer", "reconnectTimer", "bufferCheckTimer"]
+        timer = m[field]
+        if timer <> invalid
+            timer.control = "stop"
+            timer.UnobserveField("fire")
+            m[field] = invalid
+        end if
+    end for
+    cleanupReconnectTask()
+end sub
 
 sub onRaidEndTimeout(event as object)
     if m.disposed or m.isExiting or not m.raidWaiting or m.raidEndTimer = invalid then return

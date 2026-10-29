@@ -892,6 +892,7 @@ sub onVideoStateChange(event = invalid as dynamic)
     if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
     if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
+    if m.raidOffer <> invalid then return
     if m.video.state = "playing" and not m.compatibilityNoticeShown
         m.compatibilityNoticeShown = true
         if m.top.content <> invalid and m.top.content.playbackNotice <> ""
@@ -937,6 +938,7 @@ sub onVideoStateChange(event = invalid as dynamic)
             exitPlayer()
         end if
     else if m.video.state = "error"
+        if beginRaidEndWait() then return
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
         ' A scheduled reconnect replaces this Video; the stopped Roku-only
         ' server can fail it first, which must not cancel or repeat recovery.
@@ -1284,6 +1286,7 @@ end sub
 
 sub beginLiveReconnect(reason as string)
     if m.disposed or m.isExiting then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
 
     ' If a reconnect is already scheduled/in-flight, don't stack them
     if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
@@ -1394,6 +1397,7 @@ end sub
 
 sub doLiveReconnect(event = invalid as dynamic)
     if m.disposed or m.isExiting then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
     if event <> invalid
         if m.reconnectTimer = invalid then return
         if not event.getRoSGNode().isSameNode(m.reconnectTimer) then return
@@ -1560,6 +1564,7 @@ end function
 ' that a retry cannot fix pass allowRetry=false and offer only Back.
 sub showErrorDialog(title as string, message as string, allowRetry = true as boolean)
     if m.disposed or m.errorDialog <> invalid then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
     rememberRetryState()
     stopPlaybackForDialog()
     m.manualRetryPending = false

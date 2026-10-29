@@ -42,44 +42,81 @@ sub main()
             check(player.state = "done" and player.raidRequested <> invalid, "join publishes only after normal exit")
             destination = player.raidRequested
             check(destination.contentType = "LIVE" and destination.streamerLogin = "destination" and destination.streamerId = "456", "handoff creates destination identity")
-            check(job.stopRequested and job.control = "stop", "handoff stops worker")
+            check(job.stopRequested and job.control = "run", "handoff stops worker")
         end if
         closePlayer(player)
     end for
-
     set_user_setting("playback.raids", "ask")
-    for each outcome in ["raid", "stay", "dismiss", "back", "timeout", "resume"]
+    player = openPlayer("LIVE")
+    contentTask(player).response = playable("source")
+    video = waitVideo(player, invalid)
+    job = player.CallFunc("fixtureRead").raidTask
+    video.state = "playing"
+    player.CallFunc("fixtureRaidStartup", true)
+    job.raid = raidEvent(job.channelId)
+    check(player.CallFunc("fixtureRead").bufferTimer = invalid, "raid offer cancels the pending native startup timer")
+    m.scene.dialog.buttonSelected = 1
+    timer = player.CallFunc("fixtureRead").bufferTimer
+    check(timer <> invalid and timer.duration = 15 and timer.control = "start", "Stay restores the remaining absolute startup deadline even when Video reports playing")
+    player.CallFunc("fixtureRaidStartup", false)
+    closePlayer(player)
+
+    for each endState in ["finished", "error"]
+        for each outcome in ["raid", "stay", "dismiss", "back", "timeout", "resume"]
+            player = openPlayer("LIVE")
+            contentTask(player).response = playable("source")
+            video = waitVideo(player, invalid)
+            job = player.CallFunc("fixtureRead").raidTask
+            video.state = endState
+            settle(50)
+            timer = player.CallFunc("fixtureRead").raidEndTimer
+            check(player.state <> "done" and timer <> invalid and timer.duration = 120 and m.scene.dialog.title = "Stream ended", "finished or error stream retains a bounded connected raid watcher")
+            if outcome = "raid" or outcome = "stay" or outcome = "dismiss"
+                job.raid = raidEvent(job.channelId)
+                check(m.scene.dialog.title = "Streamer raid" and timer.control = "stop", "completed raid replaces the owned end notice")
+                if outcome = "raid"
+                    m.scene.dialog.buttonSelected = 0
+                    check(player.raidRequested <> invalid and player.state = "done", "raid after stream end still hands off")
+                else
+                    if outcome = "stay"
+                        m.scene.dialog.buttonSelected = 1
+                    else
+                        m.scene.dialog.wasClosed = true
+                    end if
+                    check(player.state = "done" and player.raidRequested = invalid and job.stopRequested and job.control = "run", "declined post-end raid exits and stops its watcher")
+                end if
+            else if outcome = "back"
+                player.CallFunc("requestBack")
+                check(player.state = "done" and timer.control = "stop", "Back leaves the waiting player immediately")
+            else if outcome = "timeout"
+                player.CallFunc("fixtureRaidExpire")
+                check(player.state = "done" and timer.control = "stop", "waiting timeout leaves through normal cleanup")
+            else
+                video.state = "playing"
+                check(timer.control = "stop" and m.scene.dialog = invalid and video.IsInFocusChain(), "resumed playback cancels the waiting timer and restores focus")
+            end if
+            closePlayer(player)
+        end for
+    end for
+    for each action in ["join", "stay"]
         player = openPlayer("LIVE")
         contentTask(player).response = playable("source")
         video = waitVideo(player, invalid)
         job = player.CallFunc("fixtureRead").raidTask
-        video.state = "finished"
-        settle(50)
-        timer = player.CallFunc("fixtureRead").raidEndTimer
-        check(player.state <> "done" and timer <> invalid and timer.duration = 120 and m.scene.dialog.title = "Stream ended", "finished stream retains a bounded connected raid watcher")
-        if outcome = "raid" or outcome = "stay" or outcome = "dismiss"
-            job.raid = raidEvent(job.channelId)
-            check(m.scene.dialog.title = "Streamer raid" and timer.control = "stop", "completed raid replaces the owned end notice")
-            if outcome = "raid"
-                m.scene.dialog.buttonSelected = 0
-                check(player.raidRequested <> invalid and player.state = "done", "raid after stream end still hands off")
-            else
-                if outcome = "stay"
-                    m.scene.dialog.buttonSelected = 1
-                else
-                    m.scene.dialog.wasClosed = true
-                end if
-                check(player.state = "done" and player.raidRequested = invalid and job.stopRequested and job.control = "stop", "declined post-end raid exits and stops its watcher")
-            end if
-        else if outcome = "back"
-            player.CallFunc("requestBack")
-            check(player.state = "done" and timer.control = "stop", "Back leaves the waiting player immediately")
-        else if outcome = "timeout"
-            player.CallFunc("fixtureRaidExpire")
-            check(player.state = "done" and timer.control = "stop", "waiting timeout leaves through normal cleanup")
+        player.CallFunc("fixtureRecovery", "stall")
+        pending = player.CallFunc("fixtureRead").reconnectTimer
+        job.raid = raidEvent(job.channelId)
+        dialog = m.scene.dialog
+        check(pending <> invalid and pending.control = "stop" and player.CallFunc("fixtureRead").reconnectTimer = invalid, "raid arrival cancels scheduled recovery before it can replace the prompt")
+        video.state = "error"
+        player.CallFunc("fixtureRecoverNow")
+        check(m.scene.dialog.IsSameNode(dialog) and player.CallFunc("fixtureRead").video.IsSameNode(video) and player.CallFunc("fixtureRead").reconnectTask = invalid, "error after raid preserves prompt and Video without starting recovery")
+        if action = "join"
+            dialog.buttonSelected = 0
+            check(player.state = "done" and player.raidRequested <> invalid, "Join works after raid then error")
         else
-            video.state = "playing"
-            check(timer.control = "stop" and m.scene.dialog = invalid and video.IsInFocusChain(), "resumed playback cancels the waiting timer and restores focus")
+            dialog.buttonSelected = 1
+            check(player.state = "done" and player.raidRequested = invalid and job.stopRequested, "Stay after raid then error exits normally")
         end if
         closePlayer(player)
     end for
@@ -96,7 +133,7 @@ sub main()
     job.raid = raidEvent(job.channelId)
     check(player.CallFunc("fixtureRead").raidOfferTimer <> invalid and m.scene.dialog.IsSameNode(modal), "post-end raid stays deferred behind a foreign modal")
     player.CallFunc("fixtureExpireRaidOffer")
-    check(player.state = "done" and job.stopRequested and job.control = "stop", "expired deferred post-end offer exits and stops the watcher")
+    check(player.state = "done" and job.stopRequested and job.control = "run", "expired deferred post-end offer exits and stops the watcher")
     check(m.scene.dialog.IsSameNode(modal), "expiring a deferred offer never replaces the foreign modal")
     closePlayer(player)
     player = openPlayer("LIVE")
@@ -120,7 +157,7 @@ sub main()
     settle(100)
     check(player.raidRequested = invalid, "changed account cannot join old offer")
     closePlayer(player)
-    check(job.stopRequested and job.control = "stop", "destruction stops worker")
+    check(job.stopRequested and job.control = "run", "destruction stops worker")
     job.raid = raidEvent(job.channelId)
     settle(100)
     check(m.scene.dialog = invalid and player.raidRequested = invalid, "late worker delivery after destruction is ignored")

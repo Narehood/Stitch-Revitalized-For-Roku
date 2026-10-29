@@ -43,13 +43,18 @@ function createTimer(duration as float, callback as string, repeat = false as bo
     return timer
 end function
 
-' Unobserves then stops a Task and returns invalid.
+' Unobserves then stops a Task and returns invalid. Cooperative workers must
+' observe stopRequested on their port and return after releasing resources.
 ' Use: m.task = destroyTask(m.task, "response")
 ' Timers must be stopped before unobserving; do not pass them here.
-function destroyTask(task, observedField as string) as dynamic
+function destroyTask(task, observedField as string, cooperative = false as boolean) as dynamic
     if task <> invalid
         task.unobserveField(observedField)
-        task.control = "stop"
+        if cooperative
+            task.stopRequested = true
+        else
+            task.control = "stop"
+        end if
     end if
     return invalid
 end function
