@@ -26,6 +26,8 @@ sub main()
 end sub
 
 sub runScenarios()
+    testPlayerRaids()
+    if m.failures > 0 then return
     ' Failed prerequisites return to Main's teardown and failure summary.
     for each kind in ["LIVE", "VOD", "CLIP"]
         request = channelRequest(kind)
@@ -199,6 +201,45 @@ sub runScenarios()
         check(not manager.busy and manager.cleanupBlocked, "late genuine acknowledgment releases owner without clearing cleanup blockage")
         goBackToPrior()
     end if
+end sub
+
+sub testPlayerRaids()
+    set_setting("active_user", "raid-viewer")
+    set_user_setting("access_token", "fixture-token")
+    set_user_setting("playback.raids", "auto")
+    for each local in [false, true]
+        if local then manager = m.scene.CallFunc("fixtureNewManager")
+        request = channelRequest("LIVE")
+        player = openPlayer(request, local)
+        if local
+            owned = manager.CallFunc("fixtureManager")
+            worker = owned.worker
+            id = owned.currentId
+            worker.ready = readyFor(id, "LIVE")
+            settle(40)
+        end if
+        video = player.CallFunc("fixturePlayer").video
+        job = player.CallFunc("fixturePlayer").raidTask
+        depth = hero().footprints
+        job.raid = { sourceId: request.streamerId, messageId: "raid-1", id: "456", login: "destination", name: "Destination" }
+        if local
+            check(hero().active.IsSameNode(player) and player.CallFunc("fixturePlayer").exitPending, "raid waits for local playback cleanup")
+            worker.result = cleanupFor(id)
+            worker.state = "stop"
+            check(hero().active.IsSameNode(player), "raid cannot navigate before attached Video stops")
+            video.state = "stopped"
+        end if
+        settle(50)
+        nextPlayer = hero().active
+        check(not nextPlayer.IsSameNode(player) and nextPlayer.id = "VideoPlayer" and hero().players = 1, "actual Hero replaces the finished raid source once")
+        check(nextPlayer.contentRequested.streamerLogin = "destination" and nextPlayer.contentRequested.streamerId = "456", "Hero starts the destination playback request")
+        check(hero().footprints = depth and player.CallFunc("fixturePlayer").disposed, "raid keeps Back history and disposes the old player")
+        job.raid = { sourceId: request.streamerId, messageId: "late", id: "999", login: "late", name: "Late" }
+        check(hero().active.IsSameNode(nextPlayer), "old raid worker cannot replace the destination player")
+        goBackToPrior()
+    end for
+    set_user_setting("playback.raids", "ask")
+    set_setting("active_user", "$default$")
 end sub
 
 ' The StandardMessageDialog selection is the explicit simulator boundary.

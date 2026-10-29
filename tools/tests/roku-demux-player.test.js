@@ -105,6 +105,8 @@ async function buildPackage(dir, marker, mode = 'normal') {
     await addFile(dir, 'components/PlayerProbe.brs', probe);
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/ChannelFollow.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/Raids.brs');
+    await copyFile(dir, 'source/utils/raidEvents.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
     for (const file of [snapshotFiles[0], snapshotFiles[2]]) {
         await copyFile(dir, file);

@@ -1117,5 +1117,15 @@
         <message><source>Choose emote providers and animation for live chat.</source><translation>Choose emote providers and animation for live chat.</translation></message>
         <message><source>Choose stream card size and channel order.</source><translation>Choose stream card size and channel order.</translation></message>
         <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configure playback compatibility and optional diagnostics.</translation></message>
+        <message><source>Raids</source><translation>Raids</translation></message>
+        <message><source>Choose whether to ask before joining an outgoing raid, follow automatically, or stay here. Requires Twitch sign-in and Roku OS 16 or newer. Works independently of chat.</source><translation>Choose whether to ask before joining an outgoing raid, follow automatically, or stay here. Requires Twitch sign-in and Roku OS 16 or newer. Works independently of chat.</translation></message>
+        <message><source>Ask to join</source><translation>Ask to join</translation></message>
+        <message><source>Follow automatically</source><translation>Follow automatically</translation></message>
+        <message><source>Streamer raid</source><translation>Streamer raid</translation></message>
+        <message><source>This streamer is raiding {0}. Join their stream?</source><translation>This streamer is raiding {0}. Join their stream?</translation></message>
+        <message><source>Join raid</source><translation>Join raid</translation></message>
+        <message><source>Stay here</source><translation>Stay here</translation></message>
+        <message><source>Stream ended</source><translation>Stream ended</translation></message>
+        <message><source>Waiting up to two minutes for a raid. Press Back to leave.</source><translation>Waiting up to two minutes for a raid. Press Back to leave.</translation></message>
     </context>
 </TS>

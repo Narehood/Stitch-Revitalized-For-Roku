@@ -173,9 +173,9 @@ async function buildRetryPackage(dir, marker) {
     // Inert task boundaries with the production interfaces: no worker,
     // network, socket or registry writes.
     for (const file of ['GetTwitchContent.xml', 'GetTwitchContentBoundary.brs', 'TwitchApiTask.xml',
-        'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml', 'TwitchEngagementTask.xml']) await addFile(dir, `components/${file}`, await fixture(file));
+        'RW_AddTask.xml', 'ChatJob.xml', 'EmoteJob.xml', 'TwitchEngagementTask.xml', 'RaidWatchTask.xml']) await addFile(dir, `components/${file}`, await fixture(file));
     await addComponent(dir, 'components/Scenes/VideoPlayer', 'VideoPlayer', `function fixtureRead() as object
-    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer }
+    return { task: m.PlayVideo, video: m.video, pending: m.manualRetryPending <> invalid and m.manualRetryPending, dialog: m.errorDialog, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, retryTimer: m.retryTimer, reconnectTask: m.reconnectTask, bookmarksTask: m.bookmarksTask, bookmarkPending: m.bookmarkPlayPending = true, bookmarkTimer: m.bookmarkWaitTimer, raidTask: m.raidTask, raidDialog: m.raidDialog, raidOffer: m.raidOffer, raidEndTimer: m.raidEndTimer, raidOfferTimer: m.raidOfferTimer }
 end function
 sub fixtureResume(position as integer)
     m.resumePosition = position
@@ -197,11 +197,28 @@ end function
 sub fixtureRecovery(reason as string)
     beginLiveReconnect(reason)
 end sub
+sub fixtureRaidOffer()
+    tryRaidOffer()
+end sub
+sub fixtureExpireRaidOffer()
+    m.raidOfferClock = { TotalMilliseconds: function() as integer
+        return 61000
+    end function }
+    tryRaidOffer()
+end sub
+sub fixtureRaidExpire()
+    event = { owner: m.raidEndTimer, GetRoSGNode: function() as object
+        return m.owner
+    end function }
+    onRaidEndTimeout(event)
+end sub
 `);
     await copyFile(dir, 'components/Scenes/VideoPlayer/RokuPlayback.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/ChatLayout.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs');
     await copyFile(dir, 'components/Scenes/VideoPlayer/ChannelFollow.brs');
+    await copyFile(dir, 'components/Scenes/VideoPlayer/Raids.brs');
+    await copyFile(dir, 'source/utils/raidEvents.brs');
     for (const file of ['source/utils/recentlyWatched.brs', 'source/utils/rokuDemuxDescriptor.brs', 'source/utils/rokuVodIndex.brs',
         'source/utils/rokuVodDescriptor.brs', 'source/utils/rokuVodRuntime.brs',
         'source/utils/playbackHls.brs', 'source/utils/deviceCapabilities.brs']) await copyFile(dir, file);
@@ -216,6 +233,18 @@ async function buildEngagementPackage(dir, marker) {
         return match[0];
     });
     await addFile(dir, 'source/main.brs', [await fixture('engagement-main.brs'), ...bodies].join('\n'));
+}
+
+async function buildRaidPackage(dir, marker) {
+    await buildRetryPackage(dir, marker);
+    await addFile(dir, 'components/RaidWatchTask.xml', await fixture('RaidWatchTask.xml'));
+    const helpers = await fixture('retry-main.brs');
+    const bodies = ['request', 'playable', 'openPlayer', 'closePlayer', 'contentTask', 'waitTasks', 'waitVideo'].map(name => {
+        const match = helpers.match(new RegExp(`^(?:sub|function) ${name}\\([^\\n]*\\r?\\n[\\s\\S]*?^end (?:sub|function)(?=\\r?$)`, 'm'));
+        assert.ok(match, `existing player fixture helper missing: ${name}`);
+        return match[0];
+    });
+    await addFile(dir, 'source/main.brs', [await fixture('raid-main.brs'), ...bodies].join('\n'));
 }
 
 async function buildChatPackage(dir, marker) {
@@ -405,6 +434,11 @@ async function runFixture(prefix, build) {
 test('seek preview apply/cancel, initial hold delay, fade, captions and quality marker on both wrappers', { timeout: 90000 }, async t => {
     const count = await runFixture('stitch-ui-phase2-player-', buildWrappersPackage);
     t.diagnostic(`${count} assertions; real engine keys and timers; no media is loaded, so playback state is a fixture input`);
+});
+
+test('outgoing raids prompt or hand off only the current live owner and release resources independently of chat', { timeout: 90000 }, async t => {
+    const result = await runFixture('stitch-raids-', buildRaidPackage);
+    t.diagnostic(`${result} actual Player/dialog/Task-field assertions; dialog selection events and EventSub transport are boundaries; no TV or live Twitch accessed`);
 });
 
 test('error dialog Try again makes one fresh request and keeps position, quality and chat layout', { timeout: 90000 }, async t => {

@@ -6,7 +6,7 @@ function TwitchGraphQLRequest(params as object) as object
     if params.query.InStr("ClipAccessToken") >= 0
         return { data: { clip: { playbackAccessToken: token, videoQualities: [{ frameRate: 30, quality: "480", sourceURL: "https://clips-media-assets2.twitch.tv/canned.mp4" }] } } }
     end if
-    return { data: { user: { stream: { playbackAccessToken: token, createdAt: "2026-10-27T18:00:00Z", game: { name: "fresh-category", displayName: "Fresh category", boxArtURL: "https://static-cdn.jtvnw.net/ttv-boxart/fixture-{width}x{height}.jpg" } } } } }
+    return { data: { user: { broadcastSettings: { title: "Fresh destination title" }, stream: { playbackAccessToken: token, createdAt: "2026-10-27T18:00:00Z", game: { name: "fresh-category", displayName: "Fresh category", boxArtURL: "https://static-cdn.jtvnw.net/ttv-boxart/fixture-{width}x{height}.jpg" } } } } }
 end function
 
 function getTwitchSupportedCodecs(device as object) as string
