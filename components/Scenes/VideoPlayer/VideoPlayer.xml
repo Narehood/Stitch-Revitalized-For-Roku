@@ -4,6 +4,7 @@
         <function name="onDestroy" />
         <function name="requestBack" />
         <field id="channelRequested" type="node" />
+        <field id="raidRequested" type="node" />
         <field id="channelPinChanged" type="boolean" alwaysNotify="true" />
         <field id="channelFollowChanged" type="boolean" alwaysNotify="true" />
         <field id="channelSignInRequested" type="boolean" alwaysNotify="true" />
@@ -23,6 +24,8 @@
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
     <script type="text/brightscript" uri="ChannelFollow.brs" />
+    <script type="text/brightscript" uri="Raids.brs" />
+    <script type="text/brightscript" uri="pkg:/source/utils/raidEvents.brs" />
     <script type="text/brightscript" uri="ChatLayout.brs" />
     <script type="text/brightscript" uri="RokuPlayback.brs" />
     <script type="text/brightscript" uri="LowLatencyPlayback.brs" />

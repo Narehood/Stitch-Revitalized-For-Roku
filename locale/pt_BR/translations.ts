@@ -1127,5 +1127,15 @@
         <message><source>Choose emote providers and animation for live chat.</source><translation>Escolha os provedores de emotes e as animações do chat ao vivo.</translation></message>
         <message><source>Choose stream card size and channel order.</source><translation>Escolha o tamanho dos cartões de transmissão e a ordem dos canais.</translation></message>
         <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configure a compatibilidade de reprodução e os diagnósticos opcionais.</translation></message>
+        <message><source>Raids</source><translation>Raids</translation></message>
+        <message><source>Choose whether to ask before joining an outgoing raid, follow automatically, or stay here. Requires Twitch sign-in and Roku OS 16 or newer. Works independently of chat.</source><translation>Escolha entre perguntar antes de participar de uma raid, seguir automaticamente ou continuar aqui. Requer login na Twitch e Roku OS 16 ou posterior. Funciona independentemente do chat.</translation></message>
+        <message><source>Ask to join</source><translation>Perguntar antes de participar</translation></message>
+        <message><source>Follow automatically</source><translation>Seguir automaticamente</translation></message>
+        <message><source>Streamer raid</source><translation>Raid do streamer</translation></message>
+        <message><source>This streamer is raiding {0}. Join their stream?</source><translation>Este streamer está fazendo uma raid para {0}. Participar da transmissão?</translation></message>
+        <message><source>Join raid</source><translation>Participar da raid</translation></message>
+        <message><source>Stay here</source><translation>Continuar aqui</translation></message>
+        <message><source>Stream ended</source><translation>A transmissão terminou</translation></message>
+        <message><source>Waiting up to two minutes for a raid. Press Back to leave.</source><translation>Aguardando uma raid por até dois minutos. Pressione Voltar para sair.</translation></message>
     </context>
 </TS>

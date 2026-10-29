@@ -1,6 +1,7 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    stopRaidWatch()
     chatOwner = m.top.contentRequested.streamerLogin
     if GetInterface(chatOwner, "ifString") = invalid then chatOwner = ""
     chatOwner = m.top.contentRequested.contentType + ":" + lcase(chatOwner)
@@ -94,6 +95,7 @@ sub onResponse()
 
     m.top.content = m.PlayVideo.response
     m.top.metadata = m.PlayVideo.metadata
+    startRaidWatch()
     applyPreferredQuality()
     m.PlayVideo = destroyTask(m.PlayVideo, "response")
 
@@ -193,6 +195,7 @@ end function
 ' and lower-latency preparation.
 sub playContent(isRecovery = false as boolean)
     if m.disposed then return
+    stopRaidEndWait()
     m.liveReconnect = invalid
     if m.reconnectTimer <> invalid
         m.reconnectTimer.control = "stop"
@@ -627,7 +630,11 @@ end sub
 sub finishPlayerExit()
     if m.disposed or m.top.state = "done" then return
     m.top.state = "done"
-    if m.pendingChannel <> invalid
+    if m.pendingRaid <> invalid
+        content = m.pendingRaid
+        m.pendingRaid = invalid
+        m.top.raidRequested = content
+    else if m.pendingChannel <> invalid
         content = m.pendingChannel
         m.pendingChannel = invalid
         m.top.channelRequested = content
@@ -650,6 +657,7 @@ sub exitPlayer()
     ' reconnects we set allowBreak=false before calling exitPlayer().
     if m.allowBreak
         m.isExiting = true
+        stopRaidWatch()
         stopLowLatencyRelay()
         m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
         ' Stop chat immediately so the IRC connection and ChatJob task are
@@ -720,6 +728,13 @@ function requestBack() as boolean
 end function
 
 sub init()
+    m.raidWaiting = false
+    m.raidEndTimer = invalid
+    m.raidTask = invalid
+    m.raidDialog = invalid
+    m.raidOffer = invalid
+    m.raidOfferTimer = invalid
+    m.pendingRaid = invalid
     m.chatAutoPaused = false
     m.chatOwner = ""
     m.disposed = false
@@ -866,10 +881,18 @@ sub onVideoStateChange(event = invalid as dynamic)
     if event <> invalid
         if not event.getRoSGNode().isSameNode(m.video) then return
     end if
+    if m.raidWaiting
+        if m.video.state = "playing" or m.video.state = "buffering"
+            stopRaidEndWait(true)
+        else if m.video.state = "error"
+            return
+        end if
+    end if
     publishTwitchPlayback()
     if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
     if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
+    if m.raidOffer <> invalid then return
     if m.video.state = "playing" and not m.compatibilityNoticeShown
         m.compatibilityNoticeShown = true
         if m.top.content <> invalid and m.top.content.playbackNotice <> ""
@@ -911,10 +934,11 @@ sub onVideoStateChange(event = invalid as dynamic)
     if m.video.state = "finished" and m.allowBreak
         if lowLatencyFinishedEarly()
             beginLiveReconnect("relay_finished")
-        else
+        else if not beginRaidEndWait()
             exitPlayer()
         end if
     else if m.video.state = "error"
+        if beginRaidEndWait() then return
         ? getLogTimestamp(); " [VideoPlayer] video.state=error code="; m.video.errorCode
         ' A scheduled reconnect replaces this Video; the stopped Roku-only
         ' server can fail it first, which must not cancel or repeat recovery.
@@ -1262,6 +1286,7 @@ end sub
 
 sub beginLiveReconnect(reason as string)
     if m.disposed or m.isExiting then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
 
     ' If a reconnect is already scheduled/in-flight, don't stack them
     if m.reconnectTimer <> invalid or m.reconnectTask <> invalid then return
@@ -1372,6 +1397,7 @@ end sub
 
 sub doLiveReconnect(event = invalid as dynamic)
     if m.disposed or m.isExiting then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
     if event <> invalid
         if m.reconnectTimer = invalid then return
         if not event.getRoSGNode().isSameNode(m.reconnectTimer) then return
@@ -1538,6 +1564,7 @@ end function
 ' that a retry cannot fix pass allowRetry=false and offer only Back.
 sub showErrorDialog(title as string, message as string, allowRetry = true as boolean)
     if m.disposed or m.errorDialog <> invalid then return
+    if m.raidWaiting or m.raidOffer <> invalid then return
     rememberRetryState()
     stopPlaybackForDialog()
     m.manualRetryPending = false
@@ -1780,15 +1807,21 @@ sub dismissChatNotice()
         m.infoDialog.unobserveField("wasClosed")
     end if
     scene = m.top.GetScene()
-    if scene <> invalid then scene.dialog = invalid
+    if scene <> invalid and scene.dialog <> invalid and m.infoDialog <> invalid
+        if scene.dialog.IsSameNode(m.infoDialog) then scene.dialog = invalid
+    end if
     m.infoDialog = invalid
-    if m.video <> invalid then m.video.SetFocus(true)
+    if m.video <> invalid and scene <> invalid
+        if scene.dialog = invalid then m.video.SetFocus(true)
+    end if
 end sub
 
 sub onDestroy()
     stopAdMetadata()
     if m.disposed then return
     m.disposed = true
+    stopRaidWatch()
+    m.pendingRaid = invalid
     m.pendingChannel = invalid
     m.pendingChannelSignIn = false
     m.channelFollowCache = invalid

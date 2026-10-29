@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="RaidWatchTask" extends="Task">
+    <interface>
+        <field id="channelId" type="string" />
+        <field id="account" type="string" />
+        <field id="stopRequested" type="boolean" value="false" />
+        <field id="raid" type="assocarray" alwaysNotify="true" />
+        <field id="status" type="string" />
+    </interface>
+    <script uri="RaidWatchTask.brs" />
+    <script uri="pkg:/source/utils/raidEvents.brs" />
+    <script uri="pkg:/source/utils/config.brs" />
+</component>

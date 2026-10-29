@@ -1,5 +1,5 @@
 function fixturePlayer() as object
-    return { task: m.PlayVideo, video: m.video, chat: m.chatWindow, engagement: m.engagementTask, relay: m.lowLatencyRelay, sessionId: m.rokuSessionId, exitPending: m.rokuExitPending, disposed: m.disposed, followTask: m.channelFollowTask, followTimer: m.channelFollowTimer, followCache: m.channelFollowCache, followGeneration: m.channelFollowGeneration, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, charges: m.sourceTransitionCharges }
+    return { task: m.PlayVideo, video: m.video, chat: m.chatWindow, engagement: m.engagementTask, relay: m.lowLatencyRelay, sessionId: m.rokuSessionId, exitPending: m.rokuExitPending, disposed: m.disposed, followTask: m.channelFollowTask, followTimer: m.channelFollowTimer, followCache: m.channelFollowCache, followGeneration: m.channelFollowGeneration, recovery: m.recoveryAttempts, reconnect: m.reconnectAttempts, charges: m.sourceTransitionCharges, raidTask: m.raidTask }
 end function
 
 sub fixtureReplaceWrapper()

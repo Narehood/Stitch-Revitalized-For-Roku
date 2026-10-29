@@ -62,6 +62,7 @@ end sub
 sub loadHlsContent(request as object)
     token = invalid
     liveStream = invalid
+    liveTitle = ""
     if request.contentType = "VOD"
         rsp = TwitchGraphQLRequest({
             query: "query VodPlayerWrapper_Query($videoId: ID!, $platform: String!, $playerType: String!, $skipPlayToken: Boolean!) { video(id: $videoId) @skip(if: $skipPlayToken) { playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } id } }",
@@ -72,12 +73,15 @@ sub loadHlsContent(request as object)
         signatureParam = "&nauthsig="
     else if request.contentType = "LIVE"
         rsp = TwitchGraphQLRequest({
-            query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { user(login: $login) { stream @skip(if: $skipPlayToken) { createdAt game { name displayName boxArtURL } playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } } } }",
+            query: "query StreamPlayer_Query($login: String!, $playerType: String!, $platform: String!, $skipPlayToken: Boolean!) { user(login: $login) { broadcastSettings { title } stream @skip(if: $skipPlayToken) { createdAt game { name displayName boxArtURL } playbackAccessToken(params: {platform: $platform, playerType: $playerType}) { signature value } } } }",
             variables: { login: request.streamerLogin, platform: "web_tv", "playerType": "roku", "skipPlayToken": false }
         })
         if rsp <> invalid and rsp.data <> invalid and rsp.data.user <> invalid and rsp.data.user.stream <> invalid
             liveStream = rsp.data.user.stream
             token = liveStream.playbackAccessToken
+            if GetInterface(rsp.data.user.broadcastSettings, "ifAssociativeArray") <> invalid
+                if GetInterface(rsp.data.user.broadcastSettings.title, "ifString") <> invalid then liveTitle = rsp.data.user.broadcastSettings.title
+            end if
         end if
         endpoint = "/api/v2/channel/hls/" + request.streamerLogin + ".m3u8?token="
         signatureParam = "&sig="
@@ -264,6 +268,7 @@ sub loadHlsContent(request as object)
     content = playbackRequestContent(request)
     content.SetFields(metadata[index])
     if liveStream <> invalid
+        if liveTitle <> "" then content.contentTitle = liveTitle
         if GetInterface(liveStream.createdAt, "ifString") <> invalid then content.createdAt = liveStream.createdAt
         if GetInterface(liveStream.game, "ifAssociativeArray") <> invalid
             if GetInterface(liveStream.game.name, "ifString") <> invalid then content.gameName = liveStream.game.name

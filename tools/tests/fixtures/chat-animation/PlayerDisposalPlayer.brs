@@ -32,6 +32,9 @@ end sub
 sub stopLowLatencyRelay()
 end sub
 
+sub stopRaidWatch()
+end sub
+
 sub closeOwnedPlayerDialogs()
 end sub
 

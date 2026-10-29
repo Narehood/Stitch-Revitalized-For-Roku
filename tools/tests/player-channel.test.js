@@ -83,6 +83,7 @@ async function build(dir, marker) {
     for (const file of ['TwitchApiTask.xml', 'RW_AddTask.xml', 'GetTwitchContent.xml', 'GetTwitchContentBoundary.brs',
         'ChatJob.xml', 'EmoteJob.xml']) await add(`components/${file}`, await fs.readFile(path.join(shared, file)));
     await add('components/TwitchEngagementTask.xml', await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/TwitchEngagementTask.xml')));
+    await add('components/RaidWatchTask.xml', await fs.readFile(path.join(__dirname, 'fixtures/ui-phase2-player/RaidWatchTask.xml')));
     await add('components/LowLatencyRelay.xml', `<component name="LowLatencyRelay" extends="Group"><interface>
       <field id="sourceUrl" type="string" /><field id="stopRequested" type="boolean" /><field id="control" type="string" />
       <field id="status" type="assocarray" /><field id="ended" type="boolean" /></interface></component>`);

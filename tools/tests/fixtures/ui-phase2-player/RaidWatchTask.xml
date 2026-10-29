@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="RaidWatchTask" extends="Node">
+    <interface>
+        <field id="channelId" type="string" />
+        <field id="account" type="string" />
+        <field id="stopRequested" type="boolean" value="false" />
+        <field id="raid" type="assocarray" alwaysNotify="true" />
+        <field id="status" type="string" value="listening" />
+        <field id="control" type="string" />
+    </interface>
+</component>

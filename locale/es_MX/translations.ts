@@ -1129,5 +1129,15 @@
         <message><source>Choose emote providers and animation for live chat.</source><translation>Elige los proveedores de emotes y las animaciones del chat en vivo.</translation></message>
         <message><source>Choose stream card size and channel order.</source><translation>Elige el tamaño de las tarjetas de transmisiones y el orden de los canales.</translation></message>
         <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configura la compatibilidad de reproducción y los diagnósticos opcionales.</translation></message>
+        <message><source>Raids</source><translation>Raids</translation></message>
+        <message><source>Choose whether to ask before joining an outgoing raid, follow automatically, or stay here. Requires Twitch sign-in and Roku OS 16 or newer. Works independently of chat.</source><translation>Elige si preguntar antes de unirte a una raid saliente, seguirla automáticamente o quedarte aquí. Requiere iniciar sesión en Twitch y Roku OS 16 o posterior. Funciona independientemente del chat.</translation></message>
+        <message><source>Ask to join</source><translation>Preguntar antes de unirse</translation></message>
+        <message><source>Follow automatically</source><translation>Seguir automáticamente</translation></message>
+        <message><source>Streamer raid</source><translation>Raid del streamer</translation></message>
+        <message><source>This streamer is raiding {0}. Join their stream?</source><translation>Este streamer está haciendo una raid a {0}. ¿Unirse a su transmisión?</translation></message>
+        <message><source>Join raid</source><translation>Unirse a la raid</translation></message>
+        <message><source>Stay here</source><translation>Quedarme aquí</translation></message>
+        <message><source>Stream ended</source><translation>La transmisión ha terminado</translation></message>
+        <message><source>Waiting up to two minutes for a raid. Press Back to leave.</source><translation>Esperando una raid hasta dos minutos. Pulsa Atrás para salir.</translation></message>
     </context>
 </TS>

@@ -313,6 +313,7 @@ function buildNode(name)
     newNode.observeField("contentSelected", "onContentSelected")
     if newNode.hasField("menuRequest") then newNode.observeField("menuRequest", "onMenuRequest")
     if name = "VideoPlayer" then newNode.observeField("channelRequested", "onPlayerChannelRequested")
+    if name = "VideoPlayer" then newNode.observeField("raidRequested", "onPlayerRaidRequested")
     if name = "VideoPlayer" then newNode.observeField("channelPinChanged", "onPlayerPinChanged")
     if name = "VideoPlayer" then newNode.observeField("channelFollowChanged", "onPlayerFollowChanged")
     if name = "VideoPlayer" then newNode.observeField("channelSignInRequested", "onPlayerSignInRequested")
@@ -346,6 +347,7 @@ sub discardScene(node as dynamic)
     node.unobserveField("backPressed")
     node.unobserveField("contentSelected")
     if node.hasField("channelRequested") then node.unobserveField("channelRequested")
+    if node.hasField("raidRequested") then node.unobserveField("raidRequested")
     if node.hasField("channelPinChanged") then node.unobserveField("channelPinChanged")
     if node.hasField("channelFollowChanged") then node.unobserveField("channelFollowChanged")
     if node.hasField("channelSignInRequested") then node.unobserveField("channelSignInRequested")
@@ -543,6 +545,20 @@ sub onPlayerSignInRequested(event as object)
 end sub
 
 ' A finished Player is replaced, never retained as a playable footprint.
+sub onPlayerRaidRequested(event as object)
+    if m.disposed or m.activeNode = invalid then return
+    player = event.GetRoSGNode()
+    if not player.IsSameNode(m.activeNode) or not player.IsSubtype("VideoPlayer") then return
+    if player.state <> "done" or player.raidRequested = invalid then return
+    content = player.raidRequested
+    m.activeNode = invalid
+    discardScene(player)
+    m.activeNode = buildNode("VideoPlayer")
+    if m.activeNode = invalid then return
+    m.activeNode.contentRequested = content
+    m.activeNode.SetFocus(true)
+end sub
+
 sub onPlayerChannelRequested(event as object)
     if m.disposed or m.activeNode = invalid then return
     player = event.getRoSGNode()

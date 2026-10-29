@@ -86,6 +86,12 @@ The release also retains the 3.0.0 modernization:
 - **Clearer chat:** live connection status, bounded reconnection, readable name colors and preserved emotes. VODs and clips explain that chat replay is unavailable.
 - **Maintained tooling:** current Node/Python dependencies, Linux CI, a patched decoder dependency, explicit cleanup of tasks and observers, and diagnostics and experimental lower latency off by default.
 
+## Raid handoff (development)
+
+Settings → Playback → Raids offers Ask to join (default), Follow automatically, and Off. Completed outgoing raids can hand playback to the destination after the current player has released its playback session. The watcher is independent of chat processing and visibility. It requires Twitch sign-in and Roku OS 16 or newer; anonymous viewing and older devices retain normal playback. Incoming raid chat notices do not redirect playback. A connected watcher waits up to two minutes after the video finishes or reports an error; Back leaves immediately. Declining or dismissing a raid after playback ends returns through normal Back navigation.
+
+Offline checks cover the protocol and player lifecycle. Controlled notifications on a Roku OS 15.3 TV verified the native prompt, Stay, Join, and return to browsing. Authenticated Twitch delivery on Roku OS 16 or newer remains unverified.
+
 ## Known limitations
 
 - **Watch credit and chat banners:** the three engagement settings remain experimental and off by default. Watch streaks and annual recap inclusion are unverified; the native reward result does not establish every Drops campaign or device. Pins currently display text, with polling delays.

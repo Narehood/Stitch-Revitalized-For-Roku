@@ -75,6 +75,27 @@
                 "settingName": "playback.watchCredit",
                 "type": "bool",
                 "default": "false"
+            },
+            {
+                "title": "Raids",
+                "description": "Choose whether to ask before joining an outgoing raid, follow automatically, or stay here. Requires Twitch sign-in and Roku OS 16 or newer. Works independently of chat.",
+                "settingName": "playback.raids",
+                "type": "radio",
+                "default": "ask",
+                "options": [
+                    {
+                        "title": "Ask to join",
+                        "id": "ask"
+                    },
+                    {
+                        "title": "Follow automatically",
+                        "id": "auto"
+                    },
+                    {
+                        "title": "Off",
+                        "id": "off"
+                    }
+                ]
             }
         ]
     },
