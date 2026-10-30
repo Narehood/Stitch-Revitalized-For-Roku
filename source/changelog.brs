@@ -3,6 +3,12 @@
 ' Versions are displayed in ascending order; multiple versions are shown when the user skipped an update.
 function getChangelog() as object
     return {
+        "3.2.1": [
+            "3.2.1: Live audience advisories and maintenance",
+            "New: Show Twitch content advisories when a labeled live stream starts",
+            "Advisories: Compact notices dismiss after five seconds without taking focus",
+            "Maintenance: Update the optional proxy's test and lint tools"
+        ],
         "3.2.0": [
             "3.2.0: Grouped Settings, stream grids and player details",
             "New: Settings panels for Playback, Chat, Emotes, Browsing and Advanced",
