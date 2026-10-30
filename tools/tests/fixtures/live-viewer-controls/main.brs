@@ -62,7 +62,9 @@ sub testContentAdvisory()
     pending = player.callFunc("fixtureRead").advisoryTask
     check(pending <> invalid and not pending.isSameNode(advisory), "opening another content request permits a fresh lookup")
     advisory.response = { labels: ["stale labels"] }
-    check(not panel.visible and player.callFunc("fixtureRead").advisoryTask.isSameNode(pending), "a late old-task response cannot replace the current notice")
+    check(not panel.visible and player.callFunc("fixtureRead").advisoryTask.isSameNode(pending), "cleanup suppresses an old task's observed response")
+    player.callFunc("fixtureDeliverAdvisoryResponse", advisory)
+    check(not panel.visible and player.callFunc("fixtureRead").advisoryTask.isSameNode(pending), "a delivered stale event preserves the current task and notice")
     pending.response = { labels: [] }
     check(not panel.visible and player.callFunc("fixtureRead").advisoryTimer = invalid, "an unflagged stream creates no notice timer")
     player.contentRequested = request("LIVE")

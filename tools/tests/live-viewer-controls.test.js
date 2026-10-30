@@ -60,12 +60,27 @@ async function buildPackage(dir, marker) {
     await addFile(dir, 'components/PhaseTwoHost.xml', await fs.readFile(path.join(shared, 'PhaseTwoHost.xml')));
     await addFile(dir, 'source/support.brs', (await fs.readFile(path.join(shared, 'support.brs'), 'utf8')).replaceAll('__PASS_MARKER__', marker));
     await addFile(dir, 'source/main.brs', await fs.readFile(path.join(fixtures, 'main.brs')));
-    // Read-only access to the actual response task and resulting wrapper.
+    // Read-only inspection and a queued response-event boundary; no production hooks.
     const xmlPath = 'components/Scenes/VideoPlayer/VideoPlayer.xml';
     const xml = await fs.readFile(path.join(root, xmlPath), 'utf8');
-    await addFile(dir, xmlPath, xml.replace('</interface>', '<function name="fixtureRead" /></interface>')
+    await addFile(dir, xmlPath, xml.replace('</interface>', '<function name="fixtureRead" /><function name="fixtureDeliverAdvisoryResponse" /></interface>')
         .replace('</component>', '<script uri="pkg:/components/ViewerProbe.brs" /></component>'));
-    await addFile(dir, 'components/ViewerProbe.brs', 'function fixtureRead() as object\n    return { task: m.PlayVideo, video: m.video, advisoryTask: m.advisoryTask, advisoryTimer: m.advisoryTimer }\nend function\n');
+    await addFile(dir, 'components/ViewerProbe.brs', `function fixtureRead() as object
+    return { task: m.PlayVideo, video: m.video, advisoryTask: m.advisoryTask, advisoryTimer: m.advisoryTimer }
+end function
+sub fixtureDeliverAdvisoryResponse(task as object)
+    event = {
+        node: task,
+        getRoSGNode: function() as object
+            return m.node
+        end function,
+        getData: function() as object
+            return { labels: ["stale labels"] }
+        end function
+    }
+    onContentAdvisoryResponse(event)
+end sub
+`);
 }
 
 function runPackage(zip, cwd, preload) {
