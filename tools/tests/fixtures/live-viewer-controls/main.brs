@@ -36,7 +36,8 @@ sub testContentAdvisory()
     timer = player.callFunc("fixtureRead").advisoryTimer
     check(panel.visible and player.callFunc("fixtureRead").advisoryTask = invalid, "a labeled response shows a notice and releases its completed task")
     check(player.findNode("advisoryTitle").text = "Intended for certain audiences" and player.findNode("advisoryLabels").text.InStr("Mature-rated game") >= 0 and player.findNode("advisoryLabels").text.InStr("Additional audience advisory") >= 0, "the actual labels and generic future-label fallback render")
-    check(timer.duration = 10 and not timer.repeat, "the notice has a ten-second one-shot lifetime")
+    check(timer.duration = 5 and not timer.repeat, "the notice has a five-second one-shot lifetime")
+    check(player.findNode("advisoryPlate").width = 600 and player.findNode("advisoryPlate").height < 200, "the narrower notice shrinks to its wrapped text instead of reserving an empty panel")
     check(panel.translation[0] + panel.getChild(0).width <= 960 and panel.translation[1] + panel.getChild(0).height < 720, "advisory geometry fits beside side chat and above player controls")
     check(video.hasFocus() and not panel.hasFocus(), "the informational notice does not steal player focus")
     video.QualityChangeRequest = 1
@@ -83,6 +84,7 @@ sub testContentAdvisory()
     player.callFunc("fixtureRead").advisoryTask.response = { labels: ["Mature-rated game"] }
     timer = player.callFunc("fixtureRead").advisoryTimer
     panel = player.findNode("contentAdvisory")
+    check(player.findNode("advisoryPlate").height <= 120, "a single classification uses a compact notice")
     player.callFunc("onDestroy")
     check(timer.control = "stop" and not panel.visible and player.callFunc("fixtureRead").advisoryTimer = invalid, "permanent removal stops the active notice timer and hides its panel")
     m.scene.removeChild(player)

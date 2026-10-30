@@ -86,7 +86,7 @@ The release also retains the 3.0.0 modernization:
 - **Clearer chat:** live connection status, bounded reconnection, readable name colors and preserved emotes. VODs and clips explain that chat replay is unavailable.
 - **Maintained tooling:** current Node/Python dependencies, Linux CI, a patched decoder dependency, explicit cleanup of tasks and observers, and diagnostics and experimental lower latency off by default.
 
-**Upcoming audience advisories:** labeled live streams show a ten-second notice with Twitch's content classification labels after playback starts. This informational notice does not block playback or repeat on quality changes. Label lookup is independent of chat and works without signing in; unavailable metadata stays silent. Labels are checked once when opening a live stream; VODs, clips, midstream label changes and Twitch's regional consent/age gates are outside this feature.
+**Upcoming audience advisories:** labeled live streams show a compact five-second notice with Twitch's content classification labels after playback starts. This informational notice does not block playback or repeat on quality changes. Label lookup is independent of chat and works without signing in; unavailable metadata stays silent. Labels are checked once when opening a live stream; VODs, clips, midstream label changes and Twitch's regional consent/age gates are outside this feature.
 
 ## Known limitations
 

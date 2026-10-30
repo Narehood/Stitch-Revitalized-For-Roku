@@ -30,13 +30,23 @@ sub updateContentAdvisory()
         if name = "" then name = tr("Additional audience advisory")
         names.Push(name)
     end for
-    m.top.findNode("advisoryLabels").text = names.Join(" " + Chr(183) + " ")
+    label = m.top.findNode("advisoryLabels")
+    label.text = names.Join(" " + Chr(183) + " ")
+    height = 192
+    try
+        height = label.translation[1] + label.boundingRect().height + 16
+    catch e
+    end try
+    if height < 96 then height = 96
+    if height > 232 then height = 232
+    m.top.findNode("advisoryPlate").height = height
+    m.top.findNode("advisoryAccent").height = height
     ' Playback wrappers are appended dynamically; keep this notice above them.
     m.top.removeChild(panel)
     m.top.appendChild(panel)
     panel.visible = true
     m.advisoryTimer = CreateObject("roSGNode", "Timer")
-    m.advisoryTimer.duration = 10
+    m.advisoryTimer.duration = 5
     m.advisoryTimer.repeat = false
     m.advisoryTimer.observeField("fire", "hideContentAdvisory")
     m.advisoryTimer.control = "start"
