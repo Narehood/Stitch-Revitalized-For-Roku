@@ -14,6 +14,9 @@ end function
 ' __PRODUCTION_HANDLERS__
 
 ' No media, network, account or dialog work runs in this fixture.
+sub resetContentAdvisory()
+end sub
+
 sub pauseTwitchEngagement()
 end sub
 

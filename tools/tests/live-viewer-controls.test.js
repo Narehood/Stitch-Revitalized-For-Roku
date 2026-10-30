@@ -65,7 +65,7 @@ async function buildPackage(dir, marker) {
     const xml = await fs.readFile(path.join(root, xmlPath), 'utf8');
     await addFile(dir, xmlPath, xml.replace('</interface>', '<function name="fixtureRead" /></interface>')
         .replace('</component>', '<script uri="pkg:/components/ViewerProbe.brs" /></component>'));
-    await addFile(dir, 'components/ViewerProbe.brs', 'function fixtureRead() as object\n    return { task: m.PlayVideo, video: m.video }\nend function\n');
+    await addFile(dir, 'components/ViewerProbe.brs', 'function fixtureRead() as object\n    return { task: m.PlayVideo, video: m.video, advisoryTask: m.advisoryTask, advisoryTimer: m.advisoryTimer }\nend function\n');
 }
 
 function runPackage(zip, cwd, preload) {

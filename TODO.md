@@ -2,6 +2,7 @@
 
 Active scope, owners and acceptance criteria are in [the plan](docs/MODERNIZATION_PLAN.md). These follow-ups do not replace the playback, audio, chat, compatibility and UI release gates.
 
+| P2 | Verify native content classification notices | An anonymous live metadata probe returned Twitch's MatureGame label. Verify flagged/unflagged streams, localized names, ten-second readability, quality changes and Back cleanup on Roku; offline UI and query tests do not establish native pixels or timing. Midstream label refresh and recorded-content advisories remain follow-ups |
 | Priority | Work | Evidence / acceptance |
 |---|---|---|
 | P1 | Verify busy-chat playback and automatic chat pause on hardware | Both 1080p and 720p reloads were reported. Parsing/rendering is bounded, with a session chat pause requiring sustained expensive work plus accepted playback recovery. Separate four-minute 1080p-selected Live/Sync runs had no buffering/reconnects, but under one incoming message per second; the original channel was offline. Test 30k, 40k and 50k viewer rooms and record actual message rates, work windows, GIF conversion and playback stress before claiming the stalls resolved |

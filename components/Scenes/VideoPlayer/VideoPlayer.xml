@@ -23,6 +23,7 @@
     </interface>
     <script type="text/brightscript" uri="VideoPlayer.brs" />
     <script type="text/brightscript" uri="ChannelFollow.brs" />
+    <script type="text/brightscript" uri="ContentAdvisory.brs" />
     <script type="text/brightscript" uri="ChatLayout.brs" />
     <script type="text/brightscript" uri="RokuPlayback.brs" />
     <script type="text/brightscript" uri="LowLatencyPlayback.brs" />
@@ -39,6 +40,16 @@
     <script type="text/brightscript" uri="pkg:/source/utils/taskFactory.brs" />
     <script type="text/brightscript" uri="pkg:/source/utils/analytics.brs" />
     <children>
+        <Group id="contentAdvisory" visible="false" translation="[48,40]">
+            <Rectangle width="800" height="200" color="0x18181BF2" />
+            <Rectangle width="4" height="200" color="0xA970FFFF" />
+            <Label id="advisoryTitle" width="752" height="36" translation="[24,16]" color="0xEFEFF1FF">
+                <Font role="font" uri="pkg:/fonts/Archivo-Bold.otf" size="26" />
+            </Label>
+            <Label id="advisoryLabels" width="752" height="130" translation="[24,56]" color="0xEFEFF1FF" wrap="true" maxLines="5">
+                <Font role="font" uri="pkg:/fonts/Archivo-Regular.otf" size="22" />
+            </Label>
+        </Group>
         <Chat
             id="chat"
             visible="false"
