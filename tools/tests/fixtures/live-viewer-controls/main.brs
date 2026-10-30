@@ -40,7 +40,9 @@ sub testContentAdvisory()
     check(panel.translation[0] + panel.getChild(0).width <= 960 and panel.translation[1] + panel.getChild(0).height < 720, "advisory geometry fits beside side chat and above player controls")
     check(video.hasFocus() and not panel.hasFocus(), "the informational notice does not steal player focus")
     video.QualityChangeRequest = 1
+    video.QualityChangeRequestFlag = true
     nextVideo = player.callFunc("fixtureRead").video
+    check(not nextVideo.isSameNode(video), "the observed quality-change flag replaces the actual Video wrapper")
     nextVideo.state = "playing"
     check(player.callFunc("fixtureRead").advisoryTask = invalid and player.callFunc("fixtureRead").advisoryTimer.isSameNode(timer), "quality replacement neither queries again nor restarts the notice lifetime")
     check(player.getChild(player.getChildCount() - 1).isSameNode(panel), "quality replacement keeps the active notice above the new Video wrapper")
