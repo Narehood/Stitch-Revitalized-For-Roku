@@ -12,7 +12,7 @@ const fixture = 'tools/tests/fixtures/upstream-integration';
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const original = JSON.parse(read(`${fixture}/upstream-contracts.json`));
 
-test('actual changelog preserves every upstream release and shows 3.1.0 and 3.2.0 after 2.9.0', () => {
+test('actual changelog preserves every upstream release and shows updates through 3.2.1 after 2.9.0', () => {
     const result = spawnSync(process.execPath, [
         path.join(root, 'node_modules/brs-node/bin/brs.cli.js'),
         '--no-sg', '--root', root, 'source/changelog.brs', `${fixture}/changelog-main.brs`,
@@ -27,8 +27,8 @@ test('actual changelog preserves every upstream release and shows 3.1.0 and 3.2.
     for (const [version, notes] of Object.entries(original.changelog)) {
         assert.deepEqual(actual.entries[version], notes, `upstream ${version} history`);
     }
-    assert.deepEqual(actual.versions, ['2.4.0', '2.5.0', '2.5.1', '2.6.0', '2.7.0', '2.8.0', '2.9.0', '3.1.0', '3.2.0']);
-    assert.deepEqual(actual.pending, ['3.1.0', '3.2.0']);
+    assert.deepEqual(actual.versions, ['2.4.0', '2.5.0', '2.5.1', '2.6.0', '2.7.0', '2.8.0', '2.9.0', '3.1.0', '3.2.0', '3.2.1']);
+    assert.deepEqual(actual.pending, ['3.1.0', '3.2.0', '3.2.1']);
     assert.match(actual.entries['3.1.0'][0], /^3\.1\.0:/);
     assert.ok(actual.entries['3.1.0'].some(line => line.includes('Support Stitch')));
 });
