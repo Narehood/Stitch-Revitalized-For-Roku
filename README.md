@@ -2,13 +2,18 @@
 
 Stitch is a community Twitch viewer built with BrightScript and Roku SceneGraph. It includes Following, Browse, Search, channel and category pages, recent channels, live streams, VODs, clips, bookmarks, quality selection, chat and emotes.
 
-**[3.2.0](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.2.0)** adds grouped Settings, optional floating focus and Compact stream grids, clearer previews, richer player details and bounded chat processing. Download `Stitch-Revitalized-For-Roku.zip` to sideload on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.2.0.
+**[3.2.1](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/tag/v3.2.1)** adds compact Twitch audience notices and updates the optional proxy's development tools. It includes 3.2.0's grouped Settings, optional floating focus and Compact stream grids, clearer previews, richer player details and bounded chat processing. Download `Stitch-Revitalized-For-Roku.zip` to sideload on a developer-mode Roku running OS 15.1 or later. Roku reports the package as version 3.2.1.
 
-**[Download the 3.2.0 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.2.0/Stitch-Revitalized-For-Roku.zip).** Earlier releases remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
+**[Download the 3.2.1 ZIP](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases/download/v3.2.1/Stitch-Revitalized-For-Roku.zip).** Earlier releases remain on the [Releases page](https://github.com/Narehood/Stitch-Revitalized-For-Roku/releases).
 
 This checkout incorporates work from [jeremy-albinet's maintained fork](https://github.com/jeremy-albinet/Stitch-Revitalized-For-Roku). Existing contributions and licensing remain intact.
 
-## What's new in 3.2.0
+## What's new in 3.2.1
+
+- **Audience advisories:** labeled live streams can show Twitch's content classification labels in a compact notice when playback starts. The notice dismisses after five seconds without taking focus and does not repeat during quality changes or recovery. Labels are optional metadata; this does not add consent gates or VOD/clip advisories.
+- **Proxy development tools:** update the locked pytest-asyncio dependency to 1.4.1 and Ruff to 0.17.3. These are test and lint tools; the proxy's runtime dependencies and version remain unchanged.
+
+### Also included from 3.2.0
 
 - **Grouped Settings:** Playback, Chat, Emotes, Browsing and Advanced panels have location breadcrumbs and retain the parent selection. Back, Left and Up from the first setting return through the hierarchy.
 - **Browsing:** **Settings → Browsing → Floating focus** moves selection across the visible cards; it defaults to Off and preserves saved choices. **Stream grid** offers the default three-column Comfortable layout or four-column Compact layout. Category directories share the selected density and thumbnail decoding follows the display scale.
@@ -86,7 +91,7 @@ The release also retains the 3.0.0 modernization:
 - **Clearer chat:** live connection status, bounded reconnection, readable name colors and preserved emotes. VODs and clips explain that chat replay is unavailable.
 - **Maintained tooling:** current Node/Python dependencies, Linux CI, a patched decoder dependency, explicit cleanup of tasks and observers, and diagnostics and experimental lower latency off by default.
 
-**Upcoming audience advisories:** labeled live streams show a compact five-second notice with Twitch's content classification labels after playback starts. This informational notice does not block playback or repeat on quality changes. Label lookup is independent of chat and works without signing in; unavailable metadata stays silent. Labels are checked once when opening a live stream; VODs, clips, midstream label changes and Twitch's regional consent/age gates are outside this feature.
+**Audience advisories:** labeled live streams show a compact five-second notice with Twitch's content classification labels after playback starts. This informational notice does not block playback or repeat on quality changes. Label lookup is independent of chat and works without signing in; unavailable metadata stays silent. Labels are checked once when opening a live stream; VODs, clips, midstream label changes and Twitch's regional consent/age gates are outside this feature.
 
 ## Known limitations
 
