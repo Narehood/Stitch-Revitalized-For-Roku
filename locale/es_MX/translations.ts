@@ -1137,5 +1137,7 @@
             <source>Stitch is a free, community-built Twitch client. If it's useful to you, scan the QR code to support development on Buy Me a Coffee. Thank you!</source>
             <translation>Stitch es un cliente de Twitch gratuito creado por la comunidad. Si te resulta útil, escanea el código QR para apoyar su desarrollo en Buy Me a Coffee. ¡Gracias!</translation>
         </message>
+        <message><source>Intended for certain audiences</source><translation>Contenido destinado a ciertas audiencias</translation></message>
+        <message><source>Additional audience advisory</source><translation>Aviso adicional sobre el contenido</translation></message>
     </context>
 </TS>

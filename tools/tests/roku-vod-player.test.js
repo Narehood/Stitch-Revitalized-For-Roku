@@ -87,7 +87,7 @@ async function build(dir, marker, capability, mutation) {
         await fs.readFile(path.join(root, 'tools/tests/fixtures/ui-phase2-player/TwitchEngagementTask.xml')));
     await add(dir, 'source/utils/config.brs', `${await fs.readFile(path.join(sharedFixtures, 'config.brs'), 'utf8')}\n${await fs.readFile(path.join(__dirname, 'fixtures/ui-account-settings/registry.brs'), 'utf8')}`);
     await add(dir, 'components/Modules/EmojiLabel/EmojiLabelRegex.brs', await fs.readFile(path.join(sharedFixtures, 'EmojiLabelRegex.brs')));
-    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs', 'components/Scenes/VideoPlayer/ChatLayout.brs', 'components/Scenes/VideoPlayer/ChannelFollow.brs']) {
+    for (const file of [managerPath, playerPath, 'components/Scenes/VideoPlayer/RokuPlayback.brs', 'components/Scenes/VideoPlayer/LowLatencyPlayback.brs', 'components/Scenes/VideoPlayer/ChatLayout.brs', 'components/Scenes/VideoPlayer/ChannelFollow.brs', 'components/Scenes/VideoPlayer/ContentAdvisory.brs']) {
         await copy(dir, file);
         assert.deepEqual(await fs.readFile(path.join(dir, file)), await fs.readFile(path.join(root, file)), 'actual owner/player handlers must execute unchanged');
     }
