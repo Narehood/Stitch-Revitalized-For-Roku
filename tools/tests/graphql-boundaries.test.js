@@ -47,6 +47,19 @@ const channelOffline = { streamerid: '', description: '', followercount: 0, isli
 // attributed: the expected outcome depends on matching an error to the null
 // field it explains. The negative control below disables only that matching.
 const cases = [
+    ['advisory network failure', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, null, isInvalid],
+    ['advisory errors-only', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, errorsOnly, isInvalid],
+    ['advisory missing labels', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: {} } } }, isInvalid],
+    ['advisory offline', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: null } } }, isInvalid],
+    ['advisory malformed labels', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: { contentClassificationLabels: {} } } } }, isInvalid],
+    ['advisory failed field', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: { contentClassificationLabels: null } } }, errors: [at('user', 'stream', 'contentClassificationLabels')] }, isInvalid],
+    ['advisory unflagged stream', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: { contentClassificationLabels: [] } } } }, rsp => assert.deepEqual(rsp, { labels: [] })],
+    ['advisory flags without login', 'getContentAdvisoryQuery', false, { params: { login: 'fixture' } }, { data: { user: { stream: { contentClassificationLabels: [
+        { id: 'MatureGame', localizedName: 'Mature-rated game' }, { id: 'ProfanityVulgarity', localizedName: 'Significant Profanity or Vulgarity' },
+    ] } } } }, rsp => assert.deepEqual(rsp, { labels: ['Mature-rated game', 'Significant Profanity or Vulgarity'] })],
+    ['advisory localized malformed duplicate and future labels', 'getContentAdvisoryQuery', true, { params: { login: 'fixture' } }, { data: { user: { stream: { contentClassificationLabels: [
+        null, {}, { id: 3 }, { id: ' ' }, { id: 'MatureGame', localizedName: '  Jeu\nmature\r ' }, { id: 'MatureGame', localizedName: 'duplicate' }, { id: 'FutureLabel' },
+    ] } } } }, rsp => assert.deepEqual(rsp, { labels: ['Jeu mature', ''] })],
     ['home errors-only', 'getHomePageQuery', false, {}, errorsOnly, isInvalid],
     ['home data null', 'getHomePageQuery', false, {}, dataNull, isInvalid],
     ['home network failure', 'getHomePageQuery', false, {}, null, isInvalid],

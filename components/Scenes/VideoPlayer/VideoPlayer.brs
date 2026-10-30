@@ -1,6 +1,7 @@
 sub handleContent()
     if m.disposed then return
     if m.top.contentRequested = invalid then return
+    resetContentAdvisory()
     chatOwner = m.top.contentRequested.streamerLogin
     if GetInterface(chatOwner, "ifString") = invalid then chatOwner = ""
     chatOwner = m.top.contentRequested.contentType + ":" + lcase(chatOwner)
@@ -650,6 +651,7 @@ sub exitPlayer()
     ' reconnects we set allowBreak=false before calling exitPlayer().
     if m.allowBreak
         m.isExiting = true
+        resetContentAdvisory()
         stopLowLatencyRelay()
         m.bookmarksTask = destroyTask(m.bookmarksTask, "response")
         ' Stop chat immediately so the IRC connection and ChatJob task are
@@ -867,6 +869,8 @@ sub onVideoStateChange(event = invalid as dynamic)
         if not event.getRoSGNode().isSameNode(m.video) then return
     end if
     publishTwitchPlayback()
+    updateContentAdvisory()
+    if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then hideContentAdvisory()
     if m.video.state = "error" or m.video.state = "finished" or m.video.state = "stopped" then stopAdMetadata()
     if m.video.state <> "playing" then resetLiveRecoveryHealth()
     if m.chatWindow <> invalid and m.video.state <> "playing" then m.chatWindow.delaySeconds = 0
@@ -1786,6 +1790,7 @@ sub dismissChatNotice()
 end sub
 
 sub onDestroy()
+    resetContentAdvisory()
     stopAdMetadata()
     if m.disposed then return
     m.disposed = true

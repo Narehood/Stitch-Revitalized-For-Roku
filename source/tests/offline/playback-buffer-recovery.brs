@@ -1,4 +1,5 @@
 ' @include components/Scenes/VideoPlayer/VideoPlayer.brs
+' @include components/Scenes/VideoPlayer/ContentAdvisory.brs
 sub main()
     m.disposed = false
     m.top = { contentRequested: { contentType: "VOD" } }

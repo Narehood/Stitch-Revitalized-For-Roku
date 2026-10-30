@@ -9,6 +9,7 @@ sub main()
         getBrowsePagePopularQuery: getBrowsePagePopularQuery,
         getBrowsePageQuery: getBrowsePageQuery,
         getChannelHomeQuery: getChannelHomeQuery,
+        getContentAdvisoryQuery: getContentAdvisoryQuery,
         getGameDirectoryQuery: getGameDirectoryQuery,
         getCategoryQuery: getCategoryQuery,
         getRecommendedSections: getRecommendedSections

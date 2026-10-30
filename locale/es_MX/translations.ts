@@ -1129,5 +1129,7 @@
         <message><source>Choose emote providers and animation for live chat.</source><translation>Elige los proveedores de emotes y las animaciones del chat en vivo.</translation></message>
         <message><source>Choose stream card size and channel order.</source><translation>Elige el tamaño de las tarjetas de transmisiones y el orden de los canales.</translation></message>
         <message><source>Configure playback compatibility and optional diagnostics.</source><translation>Configura la compatibilidad de reproducción y los diagnósticos opcionales.</translation></message>
+        <message><source>Intended for certain audiences</source><translation>Contenido destinado a ciertas audiencias</translation></message>
+        <message><source>Additional audience advisory</source><translation>Aviso adicional sobre el contenido</translation></message>
     </context>
 </TS>
