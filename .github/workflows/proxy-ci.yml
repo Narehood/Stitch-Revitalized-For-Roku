@@ -1,4 +1,4 @@
-﻿name: Proxy CI
+name: Proxy CI
 
 on:
   workflow_call:
@@ -29,7 +29,7 @@ jobs:
         working-directory: fmp4-demux-proxy
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: '0.13.5'
           working-directory: fmp4-demux-proxy
